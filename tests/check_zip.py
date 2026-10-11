@@ -125,6 +125,8 @@ def fuzz(exe, cases, work, rounds):
 
 
 def main(exe, work):
+    exe = os.path.abspath(exe)
+    work = os.path.abspath(work)
     os.makedirs(work, exist_ok=True)
     cases = build_cases(work)
     ok = all([check(exe, path, enc, work) for path, enc in cases])
