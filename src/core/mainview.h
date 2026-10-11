@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dialogs.h"
+#include "library.h"
 #include "settings.h"
 
 #include <array>
@@ -62,6 +63,9 @@ namespace rf
         void Select(int index);
         void PickColor(Color FrameColors::*field);
         void LoadCustomIcon();
+        void SetCustomIcon(const Image& picked);
+        void OpenLibrary();
+        void SyncLibrary();
         void LoadCorner();
         void EditTexts();
         void ResetSettings();
@@ -75,6 +79,8 @@ namespace rf
         Host& host_;
         AppSettings s_;
         std::vector<Photo> photos_;
+        std::vector<LibrarySource> library_;
+        int librarySource_ = 0;
         int current_ = -1;
         int mode_ = 0;
         int styleValue_ = 1;
@@ -95,7 +101,7 @@ namespace rf
         ui::ComboBox* kind_ = nullptr;
         ui::CheckBox* active_ = nullptr;
         ui::CheckBox* sunken_ = nullptr;
-        std::array<ui::IconCell*, 9> iconCells_{};
+        std::array<ui::IconCell*, 11> iconCells_{};
         ui::IconCell* customCell_ = nullptr;
         ui::ComboBox* scheme_ = nullptr;
         ui::Swatch* active1_ = nullptr;

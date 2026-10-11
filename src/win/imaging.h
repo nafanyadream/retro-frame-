@@ -11,6 +11,8 @@ namespace rf::win
 {
     bool LoadImageFile(const std::wstring& path, Image& out, std::wstring& error);
     bool LoadIconFile(const std::wstring& path, Image& out, std::wstring& error);
+    bool DecodeIconMemory(const std::vector<unsigned char>& data, Image& out, std::wstring& error);
+    bool LoadFileIcons(const std::wstring& path, std::vector<Image>& out, std::wstring& error);
     bool SaveImageFile(const std::wstring& path, const Image& image, ImageFormat format, int quality, std::wstring& error);
 
     bool GetClipboardImage(HWND owner, Image& out);

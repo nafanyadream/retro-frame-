@@ -1,5 +1,6 @@
 #include "win_host.h"
 
+#include "files.h"
 #include "imaging.h"
 
 #include "../core/utf.h"
@@ -681,7 +682,7 @@ namespace rf::win
     std::wstring WinHost::AskOpenIcon(const std::wstring& folder)
     {
         const auto r = RunOpen(Owner(), folder, L"Выбрать картинку",
-                               {{L"Иконки и картинки", L"*.ico;*.png;*.bmp;*.gif;*.jpg;*.jpeg;*.exe;*.dll"}, {L"Все файлы", L"*.*"}},
+                               {{L"Иконки, картинки и программы", L"*.ico;*.png;*.bmp;*.gif;*.jpg;*.jpeg;*.exe;*.dll;*.icl;*.cpl"}, {L"Все файлы", L"*.*"}},
                                false, false);
         return r.empty() ? std::wstring() : r.front();
     }
@@ -717,9 +718,17 @@ namespace rf::win
         return result;
     }
 
-    std::wstring WinHost::AskFolder(const std::wstring& folder)
+    std::wstring WinHost::AskFolder(const std::wstring& folder, const std::wstring& title)
     {
-        const auto r = RunOpen(Owner(), folder, L"Папка для сохранения", {}, false, true);
+        const auto r = RunOpen(Owner(), folder, title, {}, false, true);
+        return r.empty() ? std::wstring() : r.front();
+    }
+
+    std::wstring WinHost::AskOpenArchive(const std::wstring& folder)
+    {
+        const auto r = RunOpen(Owner(), folder, L"Архив с иконками",
+                               {{L"Архивы ZIP, 7z и RAR", L"*.zip;*.7z;*.rar"}, {L"Все файлы", L"*.*"}},
+                               false, false);
         return r.empty() ? std::wstring() : r.front();
     }
 
@@ -756,6 +765,16 @@ namespace rf::win
     bool WinHost::WriteImage(const std::wstring& path, const Image& image, ImageFormat format, int quality, std::wstring& error)
     {
         return SaveImageFile(path, image, format, quality, error);
+    }
+
+    bool WinHost::DecodeIcon(const std::vector<unsigned char>& data, Image& out, std::wstring& error)
+    {
+        return DecodeIconMemory(data, out, error);
+    }
+
+    bool WinHost::ReadFileIcons(const std::wstring& path, std::vector<Image>& out, std::wstring& error)
+    {
+        return LoadFileIcons(path, out, error);
     }
 
     bool WinHost::ClipboardImage(Image& out)
@@ -861,5 +880,41 @@ namespace rf::win
     bool WinHost::RemoveFile(const std::wstring& path)
     {
         return DeleteFileW(path.c_str()) != FALSE;
+    }
+
+    bool WinHost::ListFolder(const std::wstring& path, std::vector<FolderItem>& out)
+    {
+        return ListFolderItems(path, out);
+    }
+
+    std::unique_ptr<ByteSource> WinHost::OpenFile(const std::wstring& path)
+    {
+        return OpenFileSource(path);
+    }
+
+    std::wstring WinHost::SevenZipPath()
+    {
+        return FindSevenZip();
+    }
+
+    bool WinHost::ExtractArchive(const std::wstring& archive, const std::wstring& folder, const std::function<bool()>& keepGoing, std::wstring& error)
+    {
+        const std::wstring tool = FindSevenZip();
+        if (tool.empty())
+        {
+            error = L"нужна программа 7-Zip";
+            return false;
+        }
+        return RunSevenZip(tool, archive, folder, keepGoing, error);
+    }
+
+    std::wstring WinHost::NewTempFolder()
+    {
+        return CreateTempFolder();
+    }
+
+    void WinHost::RemoveFolder(const std::wstring& path)
+    {
+        DeleteTempFolder(path);
     }
 }

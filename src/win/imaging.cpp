@@ -391,6 +391,242 @@ namespace rf::win
             return true;
         }
 
+        int FrameScore(UINT w, UINT h, int bits)
+        {
+            int base = 0;
+            if (w == 16 && h == 16)
+            {
+                base = 3000;
+            }
+            else if (w >= 16 && h >= 16)
+            {
+                base = 2000 - int(std::min<UINT>(w, 1999));
+            }
+            else
+            {
+                base = int(std::max(w, h));
+            }
+            return base * 64 + std::clamp(bits, 0, 63);
+        }
+
+        int FormatBits(const WICPixelFormatGUID& fmt)
+        {
+            if (IsEqualGUID(fmt, GUID_WICPixelFormat32bppBGRA) || IsEqualGUID(fmt, GUID_WICPixelFormat32bppPBGRA) ||
+                IsEqualGUID(fmt, GUID_WICPixelFormat32bppRGBA))
+            {
+                return 32;
+            }
+            if (IsEqualGUID(fmt, GUID_WICPixelFormat24bppBGR) || IsEqualGUID(fmt, GUID_WICPixelFormat32bppBGR))
+            {
+                return 24;
+            }
+            if (IsEqualGUID(fmt, GUID_WICPixelFormat8bppIndexed))
+            {
+                return 8;
+            }
+            if (IsEqualGUID(fmt, GUID_WICPixelFormat4bppIndexed))
+            {
+                return 4;
+            }
+            return 1;
+        }
+
+        bool DecodeBestFrame(IWICBitmapDecoder* decoder, Image& out, std::wstring& error)
+        {
+            GUID container{};
+            decoder->GetContainerFormat(&container);
+            const bool ico = IsEqualGUID(container, GUID_ContainerFormatIco) != FALSE;
+            UINT count = 0;
+            decoder->GetFrameCount(&count);
+            if (!ico || count <= 1)
+            {
+                return DecodeFrame(decoder, 0, out, error, !ico);
+            }
+            int best = 0;
+            int bestScore = -1;
+            for (UINT i = 0; i < count; ++i)
+            {
+                Com<IWICBitmapFrameDecode> frame;
+                if (FAILED(decoder->GetFrame(i, frame.Put())))
+                {
+                    continue;
+                }
+                UINT w = 0;
+                UINT h = 0;
+                frame->GetSize(&w, &h);
+                WICPixelFormatGUID fmt{};
+                frame->GetPixelFormat(&fmt);
+                const int score = FrameScore(w, h, FormatBits(fmt));
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = int(i);
+                }
+            }
+            return DecodeFrame(decoder, UINT(best), out, error, false);
+        }
+
+#pragma pack(push, 2)
+        struct GroupIconEntry
+        {
+            BYTE width;
+            BYTE height;
+            BYTE colors;
+            BYTE reserved;
+            WORD planes;
+            WORD bitCount;
+            DWORD bytes;
+            WORD id;
+        };
+
+        struct GroupIconHeader
+        {
+            WORD reserved;
+            WORD type;
+            WORD count;
+        };
+#pragma pack(pop)
+
+        struct ResourceName
+        {
+            ULONG_PTR id = 0;
+            std::wstring text;
+            LPCWSTR Get() const { return id != 0 ? MAKEINTRESOURCEW(id) : text.c_str(); }
+        };
+
+        BOOL CALLBACK CollectGroup(HMODULE, LPCWSTR, LPWSTR name, LONG_PTR param)
+        {
+            auto* names = reinterpret_cast<std::vector<ResourceName>*>(param);
+            ResourceName n;
+            if (IS_INTRESOURCE(name))
+            {
+                n.id = reinterpret_cast<ULONG_PTR>(name);
+            }
+            else
+            {
+                n.text = name;
+            }
+            names->push_back(std::move(n));
+            return names->size() < 4000 ? TRUE : FALSE;
+        }
+
+        bool ResourceBytes(HMODULE module, LPCWSTR name, LPCWSTR type, const BYTE*& data, DWORD& size)
+        {
+            HRSRC res = FindResourceW(module, name, type);
+            if (res == nullptr)
+            {
+                return false;
+            }
+            HGLOBAL mem = LoadResource(module, res);
+            size = SizeofResource(module, res);
+            data = mem != nullptr ? static_cast<const BYTE*>(LockResource(mem)) : nullptr;
+            return data != nullptr && size > 0;
+        }
+
+        bool DecodeIconEntry(const BYTE* data, DWORD size, Image& out)
+        {
+            if (size >= 8 && data[0] == 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G')
+            {
+                return DecodeMemory(data, size, out);
+            }
+            if (size < sizeof(BITMAPINFOHEADER))
+            {
+                return false;
+            }
+            const auto* bih = reinterpret_cast<const BITMAPINFOHEADER*>(data);
+            const int w = bih->biWidth;
+            const int h = (bih->biHeight < 0 ? -bih->biHeight : bih->biHeight) / 2;
+            if (w <= 0 || h <= 0 || w > 1024 || h > 1024)
+            {
+                return false;
+            }
+            HICON icon = CreateIconFromResourceEx(const_cast<PBYTE>(data), size, TRUE, 0x00030000, w, h, LR_DEFAULTCOLOR);
+            if (icon == nullptr)
+            {
+                return false;
+            }
+            const bool ok = IconToImage(icon, out);
+            DestroyIcon(icon);
+            return ok;
+        }
+
+        bool ReadIconResources(const std::wstring& path, std::vector<Image>& out)
+        {
+            HMODULE module = LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+            if (module == nullptr)
+            {
+                return false;
+            }
+            std::vector<ResourceName> groups;
+            EnumResourceNamesW(module, MAKEINTRESOURCEW(14), CollectGroup, reinterpret_cast<LONG_PTR>(&groups));
+            for (const auto& g : groups)
+            {
+                const BYTE* data = nullptr;
+                DWORD size = 0;
+                if (!ResourceBytes(module, g.Get(), MAKEINTRESOURCEW(14), data, size) || size < sizeof(GroupIconHeader))
+                {
+                    continue;
+                }
+                const auto* header = reinterpret_cast<const GroupIconHeader*>(data);
+                const std::size_t count = std::min<std::size_t>(header->count, (size - sizeof(GroupIconHeader)) / sizeof(GroupIconEntry));
+                const auto* entries = reinterpret_cast<const GroupIconEntry*>(data + sizeof(GroupIconHeader));
+                std::vector<std::size_t> order(count);
+                for (std::size_t i = 0; i < count; ++i)
+                {
+                    order[i] = i;
+                }
+                const auto score = [&](std::size_t i) {
+                    const UINT w = entries[i].width == 0 ? 256u : entries[i].width;
+                    const UINT h = entries[i].height == 0 ? 256u : entries[i].height;
+                    return FrameScore(w, h, entries[i].bitCount);
+                };
+                std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return score(a) > score(b); });
+                for (const std::size_t i : order)
+                {
+                    const BYTE* icon = nullptr;
+                    DWORD iconSize = 0;
+                    Image img;
+                    if (ResourceBytes(module, MAKEINTRESOURCEW(entries[i].id), MAKEINTRESOURCEW(3), icon, iconSize) && DecodeIconEntry(icon, iconSize, img))
+                    {
+                        out.push_back(std::move(img));
+                        break;
+                    }
+                }
+            }
+            FreeLibrary(module);
+            return true;
+        }
+
+        std::wstring MunPath(const std::wstring& path)
+        {
+            wchar_t windows[MAX_PATH] = {};
+            if (GetWindowsDirectoryW(windows, MAX_PATH) == 0)
+            {
+                return L"";
+            }
+            const std::wstring mun = std::wstring(windows) + L"\\SystemResources\\" + FileNameOf(path) + L".mun";
+            return GetFileAttributesW(mun.c_str()) != INVALID_FILE_ATTRIBUTES ? mun : std::wstring();
+        }
+
+        void ExtractEachIcon(const std::wstring& path, std::vector<Image>& out)
+        {
+            const UINT total = ExtractIconExW(path.c_str(), -1, nullptr, nullptr, 0);
+            for (UINT i = 0; i < total && i < 4000; ++i)
+            {
+                HICON icon = nullptr;
+                UINT id = 0;
+                if (PrivateExtractIconsW(path.c_str(), int(i), 16, 16, &icon, &id, 1, LR_DEFAULTCOLOR) == 1 && icon != nullptr)
+                {
+                    Image img;
+                    if (IconToImage(icon, img))
+                    {
+                        out.push_back(std::move(img));
+                    }
+                    DestroyIcon(icon);
+                }
+            }
+        }
+
         class ClipboardLock
         {
         public:
@@ -442,21 +678,19 @@ namespace rf::win
     bool LoadIconFile(const std::wstring& path, Image& out, std::wstring& error)
     {
         const std::wstring ext = LowerExt(path);
-        if (ext == L".exe" || ext == L".dll" || ext == L".cpl" || ext == L".icl")
+        if (ext == L".exe" || ext == L".dll" || ext == L".icl" || ext == L".cpl" || ext == L".ocx" || ext == L".scr" || ext == L".mun")
         {
-            HICON smallIcon = nullptr;
-            if (ExtractIconExW(path.c_str(), 0, nullptr, &smallIcon, 1) == 0 || smallIcon == nullptr)
+            std::vector<Image> icons;
+            if (!LoadFileIcons(path, icons, error) || icons.empty())
             {
-                error = L"в файле нет иконок";
+                if (error.empty())
+                {
+                    error = L"в файле нет иконок";
+                }
                 return false;
             }
-            const bool ok = IconToImage(smallIcon, out);
-            DestroyIcon(smallIcon);
-            if (!ok)
-            {
-                error = L"не удалось прочитать иконку";
-            }
-            return ok;
+            out = std::move(icons.front());
+            return true;
         }
         IWICImagingFactory* f = Factory();
         if (f == nullptr)
@@ -471,53 +705,65 @@ namespace rf::win
             error = HrText(hr);
             return false;
         }
-        UINT count = 0;
-        decoder->GetFrameCount(&count);
-        if (ext == L".ico" && count > 1)
+        return DecodeBestFrame(decoder.Get(), out, error);
+    }
+
+    bool DecodeIconMemory(const std::vector<unsigned char>& data, Image& out, std::wstring& error)
+    {
+        IWICImagingFactory* f = Factory();
+        if (f == nullptr)
         {
-            int best = -1;
-            int bestScore = -1;
-            for (UINT i = 0; i < count; ++i)
-            {
-                Com<IWICBitmapFrameDecode> frame;
-                if (FAILED(decoder->GetFrame(i, frame.Put())))
-                {
-                    continue;
-                }
-                UINT w = 0;
-                UINT h = 0;
-                frame->GetSize(&w, &h);
-                WICPixelFormatGUID fmt{};
-                frame->GetPixelFormat(&fmt);
-                int score = 0;
-                if (w == 16 && h == 16)
-                {
-                    score = 1000;
-                }
-                else if (w >= 16)
-                {
-                    score = 500 - int(w);
-                }
-                else
-                {
-                    score = int(w);
-                }
-                if (IsEqualGUID(fmt, GUID_WICPixelFormat32bppBGRA))
-                {
-                    score += 10;
-                }
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    best = int(i);
-                }
-            }
-            if (best >= 0)
-            {
-                return DecodeFrame(decoder.Get(), UINT(best), out, error, false);
-            }
+            error = L"компонент WIC недоступен";
+            return false;
         }
-        return DecodeFrame(decoder.Get(), 0, out, error, true);
+        if (data.empty())
+        {
+            error = L"пустой файл";
+            return false;
+        }
+        Com<IWICStream> stream;
+        HRESULT hr = f->CreateStream(stream.Put());
+        if (SUCCEEDED(hr))
+        {
+            hr = stream->InitializeFromMemory(const_cast<BYTE*>(data.data()), DWORD(data.size()));
+        }
+        Com<IWICBitmapDecoder> decoder;
+        if (SUCCEEDED(hr))
+        {
+            hr = f->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.Put());
+        }
+        if (FAILED(hr))
+        {
+            error = HrText(hr);
+            return false;
+        }
+        return DecodeBestFrame(decoder.Get(), out, error);
+    }
+
+    bool LoadFileIcons(const std::wstring& path, std::vector<Image>& out, std::wstring& error)
+    {
+        out.clear();
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        {
+            error = L"файл не найден";
+            return false;
+        }
+        if (ReadIconResources(path, out) && !out.empty())
+        {
+            return true;
+        }
+        const std::wstring mun = MunPath(path);
+        if (!mun.empty() && ReadIconResources(mun, out) && !out.empty())
+        {
+            return true;
+        }
+        ExtractEachIcon(path, out);
+        if (out.empty())
+        {
+            error = L"в файле нет иконок";
+            return false;
+        }
+        return true;
     }
 
     bool SaveImageFile(const std::wstring& path, const Image& img, ImageFormat format, int quality, std::wstring& error)

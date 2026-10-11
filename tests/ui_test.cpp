@@ -13,7 +13,8 @@ namespace
         std::vector<std::wstring> AskOpenImages(const std::wstring&) override { return {}; }
         std::wstring AskOpenIcon(const std::wstring&) override { return L""; }
         std::wstring AskSavePath(const std::wstring&, const std::wstring&, rf::ImageFormat) override { return L""; }
-        std::wstring AskFolder(const std::wstring&) override { return L""; }
+        std::wstring AskFolder(const std::wstring&, const std::wstring&) override { return L""; }
+        std::wstring AskOpenArchive(const std::wstring&) override { return L""; }
         bool AskColor(rf::Color, rf::Color&) override { return false; }
         bool ReadImage(const std::wstring&, rf::Image&, std::wstring& e) override
         {
@@ -22,6 +23,8 @@ namespace
         }
         bool ReadIcon(const std::wstring&, rf::Image&, std::wstring&) override { return false; }
         bool WriteImage(const std::wstring&, const rf::Image&, rf::ImageFormat, int, std::wstring&) override { return true; }
+        bool DecodeIcon(const std::vector<unsigned char>&, rf::Image&, std::wstring&) override { return false; }
+        bool ReadFileIcons(const std::wstring&, std::vector<rf::Image>&, std::wstring&) override { return false; }
         bool ClipboardImage(rf::Image&) override { return false; }
         std::vector<std::wstring> ClipboardFiles() override { return {}; }
         bool SetClipboardImage(const rf::Image&) override { return true; }
@@ -30,6 +33,12 @@ namespace
         bool ReadText(const std::wstring&, std::string&) override { return false; }
         bool WriteText(const std::wstring&, const std::string&) override { return true; }
         bool RemoveFile(const std::wstring&) override { return true; }
+        bool ListFolder(const std::wstring&, std::vector<rf::FolderItem>&) override { return false; }
+        std::unique_ptr<rf::ByteSource> OpenFile(const std::wstring&) override { return nullptr; }
+        std::wstring SevenZipPath() override { return L""; }
+        bool ExtractArchive(const std::wstring&, const std::wstring&, const std::function<bool()>&, std::wstring&) override { return false; }
+        std::wstring NewTempFolder() override { return L""; }
+        void RemoveFolder(const std::wstring&) override {}
         int RunModal(rf::View&) override { return 0; }
         void* OpenModeless(rf::View&) override { return nullptr; }
         void CloseModeless(void*) override {}

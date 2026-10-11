@@ -54,6 +54,66 @@ namespace rf
             }
             return taps;
         }
+
+        constexpr int IconAlphaCut = 110;
+
+        Image ShrinkPixels(const Image& src, int width, int height)
+        {
+            Image out(width, height, 0);
+            std::vector<Color> block;
+            for (int y = 0; y < height; ++y)
+            {
+                const int y0 = y * src.height / height;
+                const int y1 = std::max(y0 + 1, (y + 1) * src.height / height);
+                for (int x = 0; x < width; ++x)
+                {
+                    const int x0 = x * src.width / width;
+                    const int x1 = std::max(x0 + 1, (x + 1) * src.width / width);
+                    block.clear();
+                    for (int sy = y0; sy < y1; ++sy)
+                    {
+                        for (int sx = x0; sx < x1; ++sx)
+                        {
+                            const Color c = src.Get(sx, sy);
+                            if (Alpha(c) >= IconAlphaCut)
+                            {
+                                block.push_back(Opaque(c));
+                            }
+                        }
+                    }
+                    const int area = (x1 - x0) * (y1 - y0);
+                    if (block.empty() || int(block.size()) * 2 < area)
+                    {
+                        continue;
+                    }
+                    Color best = block.front();
+                    int bestCount = 0;
+                    for (const Color c : block)
+                    {
+                        const int n = int(std::count(block.begin(), block.end(), c));
+                        if (n > bestCount || (n == bestCount && Luminance(c) < Luminance(best)))
+                        {
+                            best = c;
+                            bestCount = n;
+                        }
+                    }
+                    if (bestCount < 2 && block.size() > 1)
+                    {
+                        int r = 0, g = 0, b = 0;
+                        for (const Color c : block)
+                        {
+                            r += Red(c);
+                            g += Green(c);
+                            b += Blue(c);
+                        }
+                        const int n = int(block.size());
+                        best = Rgb((r + n / 2) / n, (g + n / 2) / n, (b + n / 2) / n);
+                    }
+                    out.Set(x, y, best);
+                }
+            }
+            return out;
+        }
     }
 
     Color Mix(Color a, Color b, double t)
@@ -203,10 +263,17 @@ namespace rf
         {
             return out;
         }
-        Image fitted = src;
-        if (src.width != 16 || src.height != 16)
+        Image fitted;
+        if (src.width <= 16 && src.height <= 16)
         {
-            fitted = FitInside(src, 16, 16, true);
+            fitted = src;
+        }
+        else
+        {
+            const double k = std::min(16.0 / src.width, 16.0 / src.height);
+            const int w = std::clamp(int(std::lround(src.width * k)), 1, 16);
+            const int h = std::clamp(int(std::lround(src.height * k)), 1, 16);
+            fitted = std::max(src.width, src.height) <= 64 ? ShrinkPixels(src, w, h) : ResizeSmooth(src, w, h);
         }
         const int ox = (16 - fitted.width) / 2;
         const int oy = (16 - fitted.height) / 2;
@@ -215,7 +282,7 @@ namespace rf
             for (int x = 0; x < fitted.width; ++x)
             {
                 const Color c = fitted.Get(x, y);
-                if (Alpha(c) >= 110)
+                if (Alpha(c) >= IconAlphaCut)
                 {
                     out.Set(ox + x, oy + y, Opaque(c));
                 }

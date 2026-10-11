@@ -23,7 +23,9 @@ namespace rf
         Copy,
         Paste,
         Film,
-        Speaker
+        Speaker,
+        Disc,
+        Archive
     };
 
     const Image& BuiltinIcon(IconId id);

@@ -17,6 +17,8 @@ namespace rf
         int format = 0;
         std::wstring openFolder;
         std::wstring saveFolder;
+        std::wstring libraryFolder;
+        std::vector<std::wstring> library;
         int windowX = -100000;
         int windowY = -100000;
         Image customIcon;

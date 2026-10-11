@@ -26,23 +26,23 @@ namespace rf
             out.push_back(cur);
             return out;
         }
+    }
 
-        void InstallDialogKeys(View& view, std::function<void()> onEnter, std::function<void()> onEscape)
-        {
-            view.root.keyHook = [onEnter, onEscape](const ui::KeyEvent& e) {
-                if (e.key == ui::KeyCode::Enter && onEnter)
-                {
-                    onEnter();
-                    return true;
-                }
-                if (e.key == ui::KeyCode::Escape && onEscape)
-                {
-                    onEscape();
-                    return true;
-                }
-                return false;
-            };
-        }
+    void InstallDialogKeys(View& view, std::function<void()> onEnter, std::function<void()> onEscape)
+    {
+        view.root.keyHook = [onEnter, onEscape](const ui::KeyEvent& e) {
+            if (e.key == ui::KeyCode::Enter && onEnter)
+            {
+                onEnter();
+                return true;
+            }
+            if (e.key == ui::KeyCode::Escape && onEscape)
+            {
+                onEscape();
+                return true;
+            }
+            return false;
+        };
     }
 
     ui::TitleBar* AddDialogChrome(View& view, const std::wstring& title)

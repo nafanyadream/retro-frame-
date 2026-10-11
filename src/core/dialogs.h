@@ -7,6 +7,7 @@
 namespace rf
 {
     ui::TitleBar* AddDialogChrome(View& view, const std::wstring& title);
+    void InstallDialogKeys(View& view, std::function<void()> onEnter, std::function<void()> onEscape);
 
     class MessageView : public View
     {

@@ -61,12 +61,15 @@ namespace rf::win
         std::vector<std::wstring> AskOpenImages(const std::wstring& folder) override;
         std::wstring AskOpenIcon(const std::wstring& folder) override;
         std::wstring AskSavePath(const std::wstring& folder, const std::wstring& suggested, ImageFormat format) override;
-        std::wstring AskFolder(const std::wstring& folder) override;
+        std::wstring AskFolder(const std::wstring& folder, const std::wstring& title) override;
+        std::wstring AskOpenArchive(const std::wstring& folder) override;
         bool AskColor(Color initial, Color& result) override;
 
         bool ReadImage(const std::wstring& path, Image& out, std::wstring& error) override;
         bool ReadIcon(const std::wstring& path, Image& out, std::wstring& error) override;
         bool WriteImage(const std::wstring& path, const Image& image, ImageFormat format, int quality, std::wstring& error) override;
+        bool DecodeIcon(const std::vector<unsigned char>& data, Image& out, std::wstring& error) override;
+        bool ReadFileIcons(const std::wstring& path, std::vector<Image>& out, std::wstring& error) override;
 
         bool ClipboardImage(Image& out) override;
         std::vector<std::wstring> ClipboardFiles() override;
@@ -77,6 +80,12 @@ namespace rf::win
         bool ReadText(const std::wstring& path, std::string& utf8) override;
         bool WriteText(const std::wstring& path, const std::string& utf8) override;
         bool RemoveFile(const std::wstring& path) override;
+        bool ListFolder(const std::wstring& path, std::vector<FolderItem>& out) override;
+        std::unique_ptr<ByteSource> OpenFile(const std::wstring& path) override;
+        std::wstring SevenZipPath() override;
+        bool ExtractArchive(const std::wstring& archive, const std::wstring& folder, const std::function<bool()>& keepGoing, std::wstring& error) override;
+        std::wstring NewTempFolder() override;
+        void RemoveFolder(const std::wstring& path) override;
 
         int RunModal(View& view) override;
         void* OpenModeless(View& view) override;

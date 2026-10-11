@@ -360,6 +360,96 @@ namespace rf::ui
         void Paint(Painter& p) override;
     };
 
+    class ScrollBar
+    {
+    public:
+        Rect area;
+        int content = 0;
+        int view = 0;
+        int pos = 0;
+        int line = 16;
+
+        bool Needed() const { return content > view; }
+        int Max() const { return std::max(0, content - view); }
+        bool SetPos(int value);
+        void Paint(Painter& p, const Shades& sh) const;
+        bool MouseDown(int x, int y);
+        bool MouseMove(int x, int y);
+        void MouseUp();
+
+    private:
+        Rect UpRect() const;
+        Rect DownRect() const;
+        Rect TrackRect() const;
+        Rect ThumbRect() const;
+
+        bool dragging_ = false;
+        int dragY_ = 0;
+        int dragPos_ = 0;
+        int pressed_ = 0;
+    };
+
+    struct ListItem
+    {
+        Image icon;
+        std::wstring text;
+    };
+
+    class ListBox : public Widget
+    {
+    public:
+        std::vector<ListItem> items;
+        int selected = -1;
+        std::function<void(int)> onSelect;
+
+        void Paint(Painter& p) override;
+        bool Focusable() const override { return enabled; }
+        void OnMouseDown(const MouseEvent& e) override;
+        void OnMouseMove(const MouseEvent& e) override;
+        void OnMouseUp(const MouseEvent& e) override;
+        void OnWheel(int delta) override;
+        bool OnKey(const KeyEvent& e) override;
+        void OnFocus(bool) override { Invalidate(); }
+        void EnsureVisible(int index);
+
+        static constexpr int ItemHeight = 18;
+
+    private:
+        void Layout();
+        void Pick(int index);
+        ScrollBar bar_;
+    };
+
+    class IconGrid : public Widget
+    {
+    public:
+        std::vector<const Image*> icons;
+        int selected = -1;
+        std::wstring emptyText;
+        std::function<void(int)> onSelect;
+        std::function<void(int)> onActivate;
+
+        void Paint(Painter& p) override;
+        bool Focusable() const override { return enabled; }
+        void OnMouseDown(const MouseEvent& e) override;
+        void OnMouseMove(const MouseEvent& e) override;
+        void OnMouseUp(const MouseEvent& e) override;
+        void OnWheel(int delta) override;
+        bool OnKey(const KeyEvent& e) override;
+        void OnFocus(bool) override { Invalidate(); }
+        void EnsureVisible(int index);
+        void ScrollTop();
+        int Columns() const;
+
+        static constexpr int Cell = 26;
+
+    private:
+        void Layout();
+        void Pick(int index);
+        int CellAt(int x, int y) const;
+        ScrollBar bar_;
+    };
+
     class GlyphView : public Widget
     {
     public:

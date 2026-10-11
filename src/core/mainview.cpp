@@ -1,6 +1,7 @@
 #include "mainview.h"
 
 #include "icons.h"
+#include "library_view.h"
 #include "utf.h"
 
 namespace rf
@@ -11,7 +12,7 @@ namespace rf
         constexpr int WindowH = 640;
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
-        const wchar_t* const AppVersion = L"0.1.0";
+        const wchar_t* const AppVersion = L"0.2.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
@@ -176,9 +177,11 @@ namespace rf
 
         y = 274;
         Place<ui::GroupBox>(r, gx, y, gw, 78)->text = L"Иконка";
-        for (int i = 0; i < 9; ++i)
+        for (int i = 0; i < int(iconCells_.size()); ++i)
         {
-            auto* cell = Place<ui::IconCell>(r, gx + 8 + i * 26, y + 16, 24, 24);
+            const int row = i / 9;
+            const int col = i % 9;
+            auto* cell = Place<ui::IconCell>(r, gx + 8 + col * 26, y + 16 + row * 26, 24, 24);
             if (i < FrameIconCount())
             {
                 cell->icon = BuiltinIcon(FrameIconAt(i));
@@ -199,8 +202,8 @@ namespace rf
             }
             iconCells_[std::size_t(i)] = cell;
         }
-        AddLabel(r, gx + 10, y + 52, 36, L"Своя:");
-        customCell_ = Place<ui::IconCell>(r, gx + 44, y + 46, 24, 24);
+        const int cx = gx + 8 + 2 * 26 + 10;
+        customCell_ = Place<ui::IconCell>(r, cx, y + 42, 24, 24);
         customCell_->emptyText = L"?";
         customCell_->onClick = [this]() {
             if (s_.customIcon.Empty())
@@ -212,12 +215,13 @@ namespace rf
             SyncControls();
             Changed();
         };
-        auto* loadIcon = Place<ui::Button>(r, gx + 74, y + 47, 84, 22);
-        loadIcon->text = L"Загрузить...";
+        Place<ui::Panel>(r, cx - 6, y + 44, 2, 20)->kind = ui::Panel::Kind::EtchedV;
+        auto* loadIcon = Place<ui::Button>(r, cx + 28, y + 43, 64, 22);
+        loadIcon->text = L"Своя...";
         loadIcon->onClick = [this]() { LoadCustomIcon(); };
-        auto* library = Place<ui::Button>(r, gx + 162, y + 47, gw - 172, 22);
+        auto* library = Place<ui::Button>(r, cx + 28 + 68, y + 43, gx + gw - 8 - (cx + 28 + 68), 22);
         library->text = L"Библиотека...";
-        library->enabled = false;
+        library->onClick = [this]() { OpenLibrary(); };
 
         y = 358;
         Place<ui::GroupBox>(r, gx, y, gw, 96)->text = L"Цвета";
@@ -379,6 +383,15 @@ namespace rf
         {
             s_.iconIndex = 0;
         }
+        library_.clear();
+        for (const auto& entry : s_.library)
+        {
+            LibrarySource source;
+            if (DecodeSource(entry, source))
+            {
+                library_.push_back(std::move(source));
+            }
+        }
     }
 
     void MainView::SaveSettings()
@@ -440,7 +453,7 @@ namespace rf
         kind_->index = int(s_.frame.kind);
         active_->checked = s_.frame.active;
         sunken_->checked = s_.frame.sunken;
-        for (int i = 0; i < 9; ++i)
+        for (int i = 0; i < int(iconCells_.size()); ++i)
         {
             const int idx = i < FrameIconCount() ? i : NoIconIndex;
             iconCells_[std::size_t(i)]->selected = s_.iconIndex == idx;
@@ -771,7 +784,7 @@ namespace rf
             Warn(L"Сначала добавьте фото.");
             return;
         }
-        const std::wstring dir = host_.AskFolder(s_.saveFolder);
+        const std::wstring dir = host_.AskFolder(s_.saveFolder, L"Папка для сохранения");
         if (dir.empty())
         {
             return;
@@ -891,21 +904,77 @@ namespace rf
         {
             return;
         }
-        Image img;
         std::wstring err;
+        if (IsProgramFile(path))
+        {
+            std::vector<Image> icons;
+            if (!host_.ReadFileIcons(path, icons, err) || icons.empty())
+            {
+                Warn(L"Не удалось достать иконки из файла «" + FileNameOf(path) + L"»:\n" + (err.empty() ? std::wstring(L"в файле нет иконок") : err));
+                return;
+            }
+            int index = 0;
+            if (icons.size() > 1)
+            {
+                IconPickerView picker(FileNameOf(path), icons);
+                if (host_.RunModal(picker) != 1 || picker.Picked() < 0)
+                {
+                    return;
+                }
+                index = picker.Picked();
+            }
+            SetCustomIcon(MakeIcon16(icons[std::size_t(index)]));
+            return;
+        }
+        Image img;
         if (!host_.ReadIcon(path, img, err))
         {
             Warn(L"Не удалось открыть картинку для иконки:\n" + err);
             return;
         }
-        s_.customIcon = MakeIcon16(img);
+        SetCustomIcon(MakeIcon16(img));
+    }
+
+    void MainView::SetCustomIcon(const Image& picked)
+    {
+        s_.customIcon = picked;
         s_.iconIndex = CustomIconIndex;
         const std::wstring dir = host_.SettingsFolder();
         if (!dir.empty())
         {
+            std::wstring err;
             host_.WriteImage(JoinPath(dir, L"icon.png"), s_.customIcon, ImageFormat::Png, 100, err);
         }
         Changed();
+    }
+
+    void MainView::SyncLibrary()
+    {
+        s_.library.clear();
+        for (const auto& source : library_)
+        {
+            s_.library.push_back(EncodeSource(source));
+        }
+        dirty_ = true;
+        dirtyAt_ = host_.Ticks();
+    }
+
+    void MainView::OpenLibrary()
+    {
+        std::wstring folder = s_.libraryFolder.empty() ? s_.openFolder : s_.libraryFolder;
+        LibraryView view(host_, library_, folder, librarySource_);
+        view.onSourcesChanged = [this]() { SyncLibrary(); };
+        const int answer = host_.RunModal(view);
+        librarySource_ = view.CurrentSource();
+        if (folder != s_.libraryFolder)
+        {
+            s_.libraryFolder = folder;
+            SyncLibrary();
+        }
+        if (answer == 1 && view.HasPick())
+        {
+            SetCustomIcon(view.Picked().icon);
+        }
     }
 
     void MainView::LoadCorner()

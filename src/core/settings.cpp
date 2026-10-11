@@ -197,6 +197,8 @@ namespace rf
         o << "format=" << s.format << "\n";
         o << "openFolder=" << Escape(s.openFolder) << "\n";
         o << "saveFolder=" << Escape(s.saveFolder) << "\n";
+        o << "libraryFolder=" << Escape(s.libraryFolder) << "\n";
+        o << "library=" << EscapeList(s.library) << "\n";
         o << "windowX=" << s.windowX << "\n";
         o << "windowY=" << s.windowY << "\n";
         return o.str();
@@ -301,6 +303,21 @@ namespace rf
         if (const std::string* v = get("saveFolder"))
         {
             s.saveFolder = Unescape(*v);
+        }
+        if (const std::string* v = get("libraryFolder"))
+        {
+            s.libraryFolder = Unescape(*v);
+        }
+        if (const std::string* v = get("library"))
+        {
+            s.library.clear();
+            for (const auto& item : UnescapeList(*v))
+            {
+                if (!item.empty())
+                {
+                    s.library.push_back(item);
+                }
+            }
         }
         getInt("windowX", s.windowX, -100000, 100000);
         getInt("windowY", s.windowY, -100000, 100000);

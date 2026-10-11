@@ -1654,6 +1654,486 @@ namespace rf::ui
         }
     }
 
+    Rect ScrollBar::UpRect() const
+    {
+        return Rect{area.x, area.y, area.w, std::min(16, area.h / 2)};
+    }
+
+    Rect ScrollBar::DownRect() const
+    {
+        const int h = std::min(16, area.h / 2);
+        return Rect{area.x, area.Bottom() - h, area.w, h};
+    }
+
+    Rect ScrollBar::TrackRect() const
+    {
+        const Rect up = UpRect();
+        const Rect down = DownRect();
+        return Rect{area.x, up.Bottom(), area.w, std::max(0, down.y - up.Bottom())};
+    }
+
+    Rect ScrollBar::ThumbRect() const
+    {
+        const Rect t = TrackRect();
+        const int size = std::min(t.h, std::max(8, int((long long)t.h * view / std::max(1, content))));
+        const int range = std::max(1, Max());
+        const int top = t.y + int((long long)(t.h - size) * pos / range);
+        return Rect{t.x, top, t.w, size};
+    }
+
+    bool ScrollBar::SetPos(int value)
+    {
+        const int v = std::clamp(value, 0, Max());
+        if (v == pos)
+        {
+            return false;
+        }
+        pos = v;
+        return true;
+    }
+
+    void ScrollBar::Paint(Painter& p, const Shades& sh) const
+    {
+        const bool on = Needed();
+        const auto arrow = [&](const Rect& r, const Glyph& g, bool down) {
+            if (down)
+            {
+                p.Pressed(r, sh);
+            }
+            else
+            {
+                p.Raised(r, sh);
+            }
+            const int o = down ? 1 : 0;
+            const int gx = r.x + (r.w - GlyphWidth(g)) / 2 + o;
+            const int gy = r.y + (r.h - GlyphHeight(g)) / 2 + o;
+            if (on)
+            {
+                p.DrawGlyph(gx, gy, g, Black);
+            }
+            else
+            {
+                p.DrawGlyph(gx + 1, gy + 1, g, sh.hilite);
+                p.DrawGlyph(gx, gy, g, sh.shadow);
+            }
+        };
+        p.Dither(TrackRect(), sh.hilite, sh.face);
+        arrow(UpRect(), glyphs::Up, pressed_ == 1);
+        arrow(DownRect(), glyphs::Down, pressed_ == 2);
+        if (on)
+        {
+            p.Raised(ThumbRect(), sh);
+        }
+    }
+
+    bool ScrollBar::MouseDown(int x, int y)
+    {
+        if (!area.Contains(x, y))
+        {
+            return false;
+        }
+        if (!Needed())
+        {
+            return true;
+        }
+        if (UpRect().Contains(x, y))
+        {
+            pressed_ = 1;
+            SetPos(pos - line);
+        }
+        else if (DownRect().Contains(x, y))
+        {
+            pressed_ = 2;
+            SetPos(pos + line);
+        }
+        else
+        {
+            const Rect th = ThumbRect();
+            if (th.Contains(x, y))
+            {
+                dragging_ = true;
+                dragY_ = y;
+                dragPos_ = pos;
+            }
+            else
+            {
+                SetPos(y < th.y ? pos - view : pos + view);
+            }
+        }
+        return true;
+    }
+
+    bool ScrollBar::MouseMove(int, int y)
+    {
+        if (!dragging_)
+        {
+            return false;
+        }
+        const int room = std::max(1, TrackRect().h - ThumbRect().h);
+        SetPos(dragPos_ + int((long long)(y - dragY_) * Max() / room));
+        return true;
+    }
+
+    void ScrollBar::MouseUp()
+    {
+        dragging_ = false;
+        pressed_ = 0;
+    }
+
+    void ListBox::Layout()
+    {
+        bar_.area = Rect{rect.w - 2 - 16, 2, 16, rect.h - 4};
+        bar_.content = int(items.size()) * ItemHeight;
+        bar_.view = rect.h - 4;
+        bar_.line = ItemHeight;
+        bar_.SetPos(bar_.pos);
+    }
+
+    void ListBox::Paint(Painter& p)
+    {
+        Layout();
+        const Shades& sh = Sh();
+        p.Sunken(Rect{0, 0, rect.w, rect.h}, sh, &White);
+        const int innerW = rect.w - 4 - 16;
+        Painter c = p.Clipped(Rect{2, 2, innerW, rect.h - 4});
+        for (int i = 0; i < int(items.size()); ++i)
+        {
+            const int y = 2 + i * ItemHeight - bar_.pos;
+            if (y + ItemHeight < 0 || y > rect.h)
+            {
+                continue;
+            }
+            const ListItem& it = items[std::size_t(i)];
+            if (!it.icon.Empty())
+            {
+                c.Draw(it.icon, 4, y + (ItemHeight - it.icon.height) / 2);
+            }
+            const std::wstring text = Ellipsize(it.text, UiFont(), innerW - 28);
+            const int tw = TextW(text, UiFont());
+            if (i == selected)
+            {
+                const Rect hl{22, y + 1, tw + 4, ItemHeight - 2};
+                c.Fill(hl, IsFocused() ? Navy : sh.face);
+                c.Text(24, y + 3, text, UiFont(), IsFocused() ? White : Black);
+            }
+            else
+            {
+                c.Text(24, y + 3, text, UiFont(), Black);
+            }
+        }
+        bar_.Paint(p, sh);
+    }
+
+    void ListBox::Pick(int index)
+    {
+        if (items.empty())
+        {
+            return;
+        }
+        index = std::clamp(index, 0, int(items.size()) - 1);
+        EnsureVisible(index);
+        Invalidate();
+        if (index == selected)
+        {
+            return;
+        }
+        selected = index;
+        if (onSelect)
+        {
+            auto cb = onSelect;
+            root->Post([cb, index]() { cb(index); });
+        }
+    }
+
+    void ListBox::EnsureVisible(int index)
+    {
+        Layout();
+        const int top = index * ItemHeight;
+        if (top < bar_.pos)
+        {
+            bar_.SetPos(top);
+        }
+        else if (top + ItemHeight > bar_.pos + bar_.view)
+        {
+            bar_.SetPos(top + ItemHeight - bar_.view);
+        }
+        Invalidate();
+    }
+
+    void ListBox::OnMouseDown(const MouseEvent& e)
+    {
+        Layout();
+        if (bar_.MouseDown(e.x, e.y))
+        {
+            Invalidate();
+            return;
+        }
+        if (e.y < 2 || e.y >= rect.h - 2)
+        {
+            return;
+        }
+        const int index = (e.y - 2 + bar_.pos) / ItemHeight;
+        if (index >= 0 && index < int(items.size()))
+        {
+            Pick(index);
+        }
+    }
+
+    void ListBox::OnMouseMove(const MouseEvent& e)
+    {
+        if (bar_.MouseMove(e.x, e.y))
+        {
+            Invalidate();
+        }
+    }
+
+    void ListBox::OnMouseUp(const MouseEvent&)
+    {
+        bar_.MouseUp();
+        Invalidate();
+    }
+
+    void ListBox::OnWheel(int delta)
+    {
+        Layout();
+        if (bar_.SetPos(bar_.pos + (delta > 0 ? -3 : 3) * ItemHeight))
+        {
+            Invalidate();
+        }
+    }
+
+    bool ListBox::OnKey(const KeyEvent& e)
+    {
+        const int page = std::max(1, (rect.h - 4) / ItemHeight - 1);
+        switch (e.key)
+        {
+        case KeyCode::Up:
+            Pick(selected - 1);
+            return true;
+        case KeyCode::Down:
+            Pick(selected + 1);
+            return true;
+        case KeyCode::Home:
+            Pick(0);
+            return true;
+        case KeyCode::End:
+            Pick(int(items.size()) - 1);
+            return true;
+        case KeyCode::PageUp:
+            Pick(selected - page);
+            return true;
+        case KeyCode::PageDown:
+            Pick(selected + page);
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    int IconGrid::Columns() const
+    {
+        return std::max(1, (rect.w - 4 - 16 - 4) / Cell);
+    }
+
+    void IconGrid::Layout()
+    {
+        const int cols = Columns();
+        const int rows = (int(icons.size()) + cols - 1) / cols;
+        bar_.area = Rect{rect.w - 2 - 16, 2, 16, rect.h - 4};
+        bar_.content = rows * Cell + 4;
+        bar_.view = rect.h - 4;
+        bar_.line = Cell;
+        bar_.SetPos(bar_.pos);
+    }
+
+    int IconGrid::CellAt(int x, int y) const
+    {
+        const int cols = Columns();
+        const int ox = 2 + (rect.w - 4 - 16 - cols * Cell) / 2;
+        if (x < ox || x >= ox + cols * Cell || y < 2 || y >= rect.h - 2)
+        {
+            return -1;
+        }
+        const int row = (y - 4 + bar_.pos) / Cell;
+        if (y - 4 + bar_.pos < 0)
+        {
+            return -1;
+        }
+        const int index = row * cols + (x - ox) / Cell;
+        return index < int(icons.size()) ? index : -1;
+    }
+
+    void IconGrid::Paint(Painter& p)
+    {
+        Layout();
+        const Shades& sh = Sh();
+        p.Sunken(Rect{0, 0, rect.w, rect.h}, sh, &White);
+        const int innerW = rect.w - 4 - 16;
+        Painter c = p.Clipped(Rect{2, 2, innerW, rect.h - 4});
+        if (icons.empty())
+        {
+            const auto lines = SplitLines(emptyText);
+            int y = (rect.h - int(lines.size()) * 15) / 2;
+            for (const auto& line : lines)
+            {
+                const int tw = TextW(line, UiFont());
+                c.Text(2 + (innerW - tw) / 2, y, line, UiFont(), enabled ? Black : sh.shadow);
+                y += 15;
+            }
+        }
+        const int cols = Columns();
+        const int ox = 2 + (innerW - cols * Cell) / 2;
+        const int first = std::max(0, (bar_.pos - 4) / Cell) * cols;
+        for (int i = first; i < int(icons.size()); ++i)
+        {
+            const int x = ox + (i % cols) * Cell;
+            const int y = 4 + (i / cols) * Cell - bar_.pos;
+            if (y > rect.h)
+            {
+                break;
+            }
+            if (i == selected)
+            {
+                const Rect r{x + 1, y + 1, Cell - 2, Cell - 2};
+                const Color frame = IsFocused() ? Navy : sh.shadow;
+                c.Frame(r, frame);
+                c.Frame(r.Inflate(-1), frame);
+            }
+            const Image* img = icons[std::size_t(i)];
+            if (img != nullptr && !img->Empty())
+            {
+                c.Draw(*img, x + (Cell - img->width) / 2, y + (Cell - img->height) / 2);
+            }
+        }
+        bar_.Paint(p, sh);
+    }
+
+    void IconGrid::Pick(int index)
+    {
+        if (icons.empty())
+        {
+            return;
+        }
+        index = std::clamp(index, 0, int(icons.size()) - 1);
+        EnsureVisible(index);
+        Invalidate();
+        if (index == selected)
+        {
+            return;
+        }
+        selected = index;
+        if (onSelect)
+        {
+            auto cb = onSelect;
+            root->Post([cb, index]() { cb(index); });
+        }
+    }
+
+    void IconGrid::EnsureVisible(int index)
+    {
+        Layout();
+        if (index < 0)
+        {
+            return;
+        }
+        const int top = (index / Columns()) * Cell;
+        if (top < bar_.pos)
+        {
+            bar_.SetPos(top);
+        }
+        else if (top + Cell + 4 > bar_.pos + bar_.view)
+        {
+            bar_.SetPos(top + Cell + 4 - bar_.view);
+        }
+        Invalidate();
+    }
+
+    void IconGrid::ScrollTop()
+    {
+        bar_.pos = 0;
+        Invalidate();
+    }
+
+    void IconGrid::OnMouseDown(const MouseEvent& e)
+    {
+        Layout();
+        if (bar_.MouseDown(e.x, e.y))
+        {
+            Invalidate();
+            return;
+        }
+        const int index = CellAt(e.x, e.y);
+        if (index < 0)
+        {
+            return;
+        }
+        Pick(index);
+        if (e.clicks >= 2 && onActivate)
+        {
+            auto cb = onActivate;
+            root->Post([cb, index]() { cb(index); });
+        }
+    }
+
+    void IconGrid::OnMouseMove(const MouseEvent& e)
+    {
+        if (bar_.MouseMove(e.x, e.y))
+        {
+            Invalidate();
+        }
+    }
+
+    void IconGrid::OnMouseUp(const MouseEvent&)
+    {
+        bar_.MouseUp();
+        Invalidate();
+    }
+
+    void IconGrid::OnWheel(int delta)
+    {
+        Layout();
+        if (bar_.SetPos(bar_.pos + (delta > 0 ? -3 : 3) * Cell))
+        {
+            Invalidate();
+        }
+    }
+
+    bool IconGrid::OnKey(const KeyEvent& e)
+    {
+        const int cols = Columns();
+        const int page = std::max(1, (rect.h - 4) / Cell - 1) * cols;
+        const int cur = selected < 0 ? 0 : selected;
+        switch (e.key)
+        {
+        case KeyCode::Left:
+            Pick(selected < 0 ? 0 : cur - 1);
+            return true;
+        case KeyCode::Right:
+            Pick(selected < 0 ? 0 : cur + 1);
+            return true;
+        case KeyCode::Up:
+            Pick(selected < 0 ? 0 : (cur - cols >= 0 ? cur - cols : cur));
+            return true;
+        case KeyCode::Down:
+            Pick(selected < 0 ? 0 : (cur + cols < int(icons.size()) ? cur + cols : cur));
+            return true;
+        case KeyCode::Home:
+            Pick(0);
+            return true;
+        case KeyCode::End:
+            Pick(int(icons.size()) - 1);
+            return true;
+        case KeyCode::PageUp:
+            Pick(cur - page);
+            return true;
+        case KeyCode::PageDown:
+            Pick(cur + page);
+            return true;
+        default:
+            return false;
+        }
+    }
+
     void GlyphView::Paint(Painter& p)
     {
         if (!image.Empty())
