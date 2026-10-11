@@ -1,0 +1,42 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        run: msbuild src/RetroFrame/RetroFrame.csproj /restore /p:Configuration=Release /v:minimal
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item src/RetroFrame/bin/Release/net48/RetroFrame.exe out/
+          Copy-Item src/RetroFrame/bin/Release/net48/RetroFrame.exe.config out/ -ErrorAction SilentlyContinue
+          Get-ChildItem out | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RetroFrame
+          path: out/
+
+      - name: Publish latest release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>$null
+          $global:LASTEXITCODE = 0
+          gh release create latest out/RetroFrame.exe --title "Последняя сборка" --notes "Собрано автоматически из коммита ${{ github.sha }}." --target ${{ github.sha }}
