@@ -218,10 +218,11 @@ namespace rf::win
             {
                 return false;
             }
+            const bool mono = info.hbmColor == nullptr;
             BITMAP bm{};
-            GetObjectW(info.hbmColor != nullptr ? info.hbmColor : info.hbmMask, sizeof(bm), &bm);
+            GetObjectW(mono ? info.hbmMask : info.hbmColor, sizeof(bm), &bm);
             const int w = bm.bmWidth;
-            const int h = info.hbmColor != nullptr ? bm.bmHeight : bm.bmHeight / 2;
+            const int h = mono ? bm.bmHeight / 2 : bm.bmHeight;
             bool ok = w > 0 && h > 0;
             if (ok)
             {
@@ -234,27 +235,41 @@ namespace rf::win
                 bi.bmiHeader.biPlanes = 1;
                 bi.bmiHeader.biBitCount = 32;
                 bi.bmiHeader.biCompression = BI_RGB;
-                if (info.hbmColor != nullptr)
+                if (mono)
                 {
-                    GetDIBits(dc, info.hbmColor, 0, UINT(h), out.pixels.data(), &bi, DIB_RGB_COLORS);
-                }
-                bool anyAlpha = false;
-                for (Color c : out.pixels)
-                {
-                    if (Alpha(c) != 0)
+                    const std::size_t n = out.pixels.size();
+                    std::vector<std::uint32_t> bits(n * 2u);
+                    BITMAPINFO both = bi;
+                    both.bmiHeader.biHeight = -h * 2;
+                    GetDIBits(dc, info.hbmMask, 0, UINT(h * 2), bits.data(), &both, DIB_RGB_COLORS);
+                    for (std::size_t i = 0; i < n; ++i)
                     {
-                        anyAlpha = true;
-                        break;
+                        const bool clear = (bits[i] & 0x00FFFFFFu) != 0;
+                        const bool white = (bits[i + n] & 0x00FFFFFFu) != 0;
+                        out.pixels[i] = clear && !white ? 0 : (white && !clear ? Rgb(255, 255, 255) : Rgb(0, 0, 0));
                     }
                 }
-                if (!anyAlpha)
+                else
                 {
-                    std::vector<std::uint32_t> mask(std::size_t(w) * std::size_t(h));
-                    GetDIBits(dc, info.hbmMask, 0, UINT(h), mask.data(), &bi, DIB_RGB_COLORS);
-                    for (std::size_t i = 0; i < out.pixels.size(); ++i)
+                    GetDIBits(dc, info.hbmColor, 0, UINT(h), out.pixels.data(), &bi, DIB_RGB_COLORS);
+                    bool anyAlpha = false;
+                    for (Color c : out.pixels)
                     {
-                        const bool transparent = (mask[i] & 0x00FFFFFFu) != 0;
-                        out.pixels[i] = transparent ? 0 : Opaque(out.pixels[i]);
+                        if (Alpha(c) != 0)
+                        {
+                            anyAlpha = true;
+                            break;
+                        }
+                    }
+                    if (!anyAlpha)
+                    {
+                        std::vector<std::uint32_t> mask(std::size_t(w) * std::size_t(h));
+                        GetDIBits(dc, info.hbmMask, 0, UINT(h), mask.data(), &bi, DIB_RGB_COLORS);
+                        for (std::size_t i = 0; i < out.pixels.size(); ++i)
+                        {
+                            const bool transparent = (mask[i] & 0x00FFFFFFu) != 0;
+                            out.pixels[i] = transparent ? 0 : Opaque(out.pixels[i]);
+                        }
                     }
                 }
                 DeleteDC(dc);
