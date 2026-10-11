@@ -12,7 +12,7 @@ namespace rf
         constexpr int WindowH = 640;
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
-        const wchar_t* const AppVersion = L"0.2.0";
+        const wchar_t* const AppVersion = L"0.3.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
@@ -50,6 +50,7 @@ namespace rf
         icon = BuiltinIcon(IconId::Picture);
         Build();
         LoadSettings();
+        UpdateFormatItems();
         SyncControls();
         UpdatePreview();
         UpdateStatus();
@@ -83,15 +84,24 @@ namespace rf
         toolButton(L"Вставить", 78, [this]() { Paste(); }, false);
         Place<ui::Panel>(r, bx + 2, 50, 2, 19)->kind = ui::Panel::Kind::EtchedV;
         bx += 10;
-        photoOnly_.push_back(toolButton(L"Сохранить...", 96, [this]() { SaveCurrent(); }, true));
-        photoOnly_.push_back(toolButton(L"Сохранить все в папку...", 160, [this]() { SaveAll(); }, false));
-        photoOnly_.push_back(toolButton(L"Копировать", 88, [this]() { CopyCurrent(); }, false));
+        toolButton(L"Сохранить...", 96, [this]() { SaveCurrent(); }, true);
+        saveAllButton_ = toolButton(L"Сохранить все в папку...", 160, [this]() { SaveAll(); }, false);
+        copyButton_ = toolButton(L"Копировать", 88, [this]() { CopyCurrent(); }, false);
+        photoOnly_.push_back(saveAllButton_);
+        photoOnly_.push_back(copyButton_);
 
         AddLabel(r, WindowW - 4 - 6 - 150 - 52, 53, 50, L"Формат:");
         format_ = Place<ui::ComboBox>(r, WindowW - 4 - 6 - 150, 49, 150, 21);
         format_->items = {L"PNG", L"JPG, высокое качество", L"JPG, среднее качество"};
         format_->onChange = [this](int i) {
-            s_.format = i;
+            if (mode_ == VideoMode)
+            {
+                s_.video.format = i;
+            }
+            else
+            {
+                s_.format = i;
+            }
             Changed();
         };
         Place<ui::Panel>(r, 4, 76, WindowW - 8, 2)->kind = ui::Panel::Kind::EtchedH;
@@ -100,12 +110,7 @@ namespace rf
         page->kind = ui::Panel::Kind::Raised;
         tabs_ = Place<ui::TabStrip>(r, 8, 82, 618, 21);
         tabs_->tabs = {L"Фото", L"Видео", L"Музыка"};
-        tabs_->onChange = [this](int i) {
-            mode_ = i;
-            SyncControls();
-            UpdatePreview();
-            UpdateStatus();
-        };
+        tabs_->onChange = [this](int i) { SetMode(i); };
         preview_ = Place<ui::PreviewPane>(r, 16, 112, 602, 350);
         filesLabel_ = AddLabel(r, 18, 474, 200, L"Файлы:");
         auto* add = Place<ui::Button>(r, 618 - 84 - 4 - 84 - 4 - 84, 468, 84, 21);
@@ -124,6 +129,7 @@ namespace rf
         photoOnly_.push_back(removeButton_);
         photoOnly_.push_back(clear);
         photoOnly_.push_back(thumbs_);
+        BuildVideo();
 
         const int gx = 636;
         const int gw = WindowW - 4 - 4 - gx;
@@ -146,12 +152,12 @@ namespace rf
         AddLabel(r, gx + 10, y + 20, 60, L"Заголовок:");
         titleField_ = Place<ui::TextField>(r, gx + 72, y + 16, gw - 82, 21);
         titleField_->onChange = [this](const std::wstring& t) {
-            s_.customTitle = t;
+            Look().customTitle = t;
             Changed();
         };
         fromName_ = AddCheck(r, gx + 72, y + 40, gw - 82, L"Имя файла");
         fromName_->onChange = [this](bool v) {
-            s_.titleFromName = v;
+            Look().titleFromName = v;
             SyncControls();
             Changed();
         };
@@ -161,7 +167,7 @@ namespace rf
         kind_->items[1] = L"Диалог: только закрыть";
         kind_->items[2] = L"Свойства: справка и закрыть";
         kind_->onChange = [this](int i) {
-            s_.frame.kind = static_cast<WindowKind>(i);
+            Look().kind = static_cast<WindowKind>(i);
             Changed();
         };
         active_ = AddCheck(r, gx + 10, y + 86, gw - 20, L"Активное окно");
@@ -186,7 +192,7 @@ namespace rf
             {
                 cell->icon = BuiltinIcon(FrameIconAt(i));
                 cell->onClick = [this, i]() {
-                    s_.iconIndex = i;
+                    Look().iconIndex = i;
                     SyncControls();
                     Changed();
                 };
@@ -195,7 +201,7 @@ namespace rf
             {
                 cell->emptyText = L"нет";
                 cell->onClick = [this]() {
-                    s_.iconIndex = NoIconIndex;
+                    Look().iconIndex = NoIconIndex;
                     SyncControls();
                     Changed();
                 };
@@ -211,7 +217,7 @@ namespace rf
                 LoadCustomIcon();
                 return;
             }
-            s_.iconIndex = CustomIconIndex;
+            Look().iconIndex = CustomIconIndex;
             SyncControls();
             Changed();
         };
@@ -262,29 +268,29 @@ namespace rf
         const int cw = gw - 128 - 4;
         menuCheck_ = AddCheck(r, c1, y + 16, 116, L"Строка меню");
         menuCheck_->onChange = [this](bool v) {
-            s_.frame.menu = v;
+            Look().menu = v;
             SyncControls();
             Changed();
         };
         statusCheck_ = AddCheck(r, c2, y + 16, cw, L"Строка состояния");
         statusCheck_->onChange = [this](bool v) {
-            s_.frame.status = v;
+            Look().status = v;
             SyncControls();
             Changed();
         };
         addressCheck_ = AddCheck(r, c1, y + 34, 116, L"Адресная строка");
         addressCheck_->onChange = [this](bool v) {
-            s_.frame.address = v;
+            Look().address = v;
             Changed();
         };
         toolbarCheck_ = AddCheck(r, c2, y + 34, cw, L"Панель кнопок");
         toolbarCheck_->onChange = [this](bool v) {
-            s_.frame.toolbar = v;
+            Look().toolbar = v;
             Changed();
         };
         cornerCheck_ = AddCheck(r, c1, y + 52, 116, L"Картинка в углу");
         cornerCheck_->onChange = [this](bool v) {
-            s_.frame.corner = v;
+            Look().corner = v;
             if (v && s_.cornerImage.Empty())
             {
                 LoadCorner();
@@ -379,9 +385,18 @@ namespace rf
         {
             s_.cornerImage = MakeIcon16(img);
         }
-        if (s_.iconIndex == CustomIconIndex && s_.customIcon.Empty())
+        for (int m = 0; m < 3; ++m)
         {
-            s_.iconIndex = 0;
+            ModeLook& look = s_.looks[std::size_t(m)];
+            if (look.iconIndex == CustomIconIndex && s_.customIcon.Empty())
+            {
+                look.iconIndex = DefaultLook(m).iconIndex;
+            }
+        }
+        const std::wstring backgroundPath = JoinPath(dir, L"background.png");
+        if (host_.FileExists(backgroundPath) && host_.ReadImage(backgroundPath, img, err))
+        {
+            s_.backgroundImage = SquareBackground(img, s_.background, SquareSizes[0]);
         }
         library_.clear();
         for (const auto& entry : s_.library)
@@ -392,6 +407,9 @@ namespace rf
                 library_.push_back(std::move(source));
             }
         }
+        mode_ = s_.mode;
+        tabs_->index = mode_;
+        preview_->rect.h = mode_ == VideoMode ? 296 : 350;
     }
 
     void MainView::SaveSettings()
@@ -416,22 +434,52 @@ namespace rf
             flash_.clear();
             UpdateStatus();
         }
+        PollVideo(ms);
     }
 
     bool MainView::OnCloseRequest()
     {
+        StopPlay();
+        fetch_.reset();
         SaveSettings();
         return true;
     }
 
     void MainView::OnDropFiles(const std::vector<std::wstring>& paths)
     {
-        if (mode_ != 0)
+        std::vector<std::wstring> images;
+        std::wstring video;
+        bool audio = false;
+        for (const auto& path : paths)
         {
-            mode_ = 0;
-            tabs_->index = 0;
+            const std::wstring lower = ToLower(path);
+            const bool gif = lower.size() >= 4 && lower.compare(lower.size() - 4, 4, L".gif") == 0;
+            if (video.empty() && (IsVideoFile(path) || (gif && mode_ == VideoMode)))
+            {
+                video = path;
+            }
+            else if (IsAudioFile(path))
+            {
+                audio = true;
+            }
+            else
+            {
+                images.push_back(path);
+            }
         }
-        AddFiles(paths);
+        if (!video.empty())
+        {
+            OpenVideo(video);
+            return;
+        }
+        if (images.empty() && audio)
+        {
+            SetMode(MusicMode);
+            Warn(L"Режим «Музыка» появится на следующем этапе.");
+            return;
+        }
+        SetMode(PhotoMode);
+        AddFiles(images);
     }
 
     void MainView::Refresh()
@@ -444,22 +492,23 @@ namespace rf
     void MainView::SyncControls()
     {
         styleValue_ = int(s_.frame.style);
-        titleField_->enabled = !s_.titleFromName;
-        if (titleField_->text != s_.customTitle)
+        const ModeLook& look = Look();
+        titleField_->enabled = !look.titleFromName;
+        if (titleField_->text != look.customTitle)
         {
-            titleField_->SetText(s_.customTitle);
+            titleField_->SetText(look.customTitle);
         }
-        fromName_->checked = s_.titleFromName;
-        kind_->index = int(s_.frame.kind);
+        fromName_->checked = look.titleFromName;
+        kind_->index = int(look.kind);
         active_->checked = s_.frame.active;
         sunken_->checked = s_.frame.sunken;
         for (int i = 0; i < int(iconCells_.size()); ++i)
         {
             const int idx = i < FrameIconCount() ? i : NoIconIndex;
-            iconCells_[std::size_t(i)]->selected = s_.iconIndex == idx;
+            iconCells_[std::size_t(i)]->selected = look.iconIndex == idx;
         }
         customCell_->icon = s_.customIcon;
-        customCell_->selected = s_.iconIndex == CustomIconIndex;
+        customCell_->selected = look.iconIndex == CustomIconIndex;
         scheme_->index = s_.scheme >= 0 && s_.scheme < SchemeCount() ? s_.scheme : SchemeCount();
         const FrameColors& c = s_.frame.colors;
         active1_->color = c.active1;
@@ -470,21 +519,23 @@ namespace rf
         face_->color = c.face;
         active2_->enabled = HasGradient(s_.frame.style);
         inactive2_->enabled = HasGradient(s_.frame.style);
-        menuCheck_->checked = s_.frame.menu;
-        statusCheck_->checked = s_.frame.status;
-        addressCheck_->checked = s_.frame.address;
-        toolbarCheck_->checked = s_.frame.toolbar;
-        cornerCheck_->checked = s_.frame.corner;
-        cornerCheck_->enabled = s_.frame.menu;
+        menuCheck_->checked = look.menu;
+        statusCheck_->checked = look.status;
+        addressCheck_->checked = look.address;
+        toolbarCheck_->checked = look.toolbar;
+        cornerCheck_->checked = look.corner;
+        cornerCheck_->enabled = look.menu;
         gripCheck_->checked = s_.frame.grip;
-        gripCheck_->enabled = s_.frame.status;
+        gripCheck_->enabled = look.status;
         scale_->index = std::clamp(s_.frame.scale, 0, 4);
         format_->index = std::clamp(s_.format, 0, 2);
         for (ui::Widget* w : photoOnly_)
         {
-            w->visible = mode_ == 0;
+            w->visible = mode_ == PhotoMode;
         }
         removeButton_->enabled = current_ >= 0;
+        sunken_->text = mode_ == VideoMode ? L"Видео во вдавленной области" : L"Фото во вдавленной области";
+        SyncVideoControls();
         root.dirty = true;
     }
 
@@ -497,17 +548,24 @@ namespace rf
         UpdateStatus();
     }
 
-    FrameSettings MainView::FrameFor(const Photo& photo) const
+    FrameSettings MainView::LookFrame(int mode, const std::wstring& name) const
     {
+        const ModeLook& look = s_.looks[std::size_t(mode)];
         FrameSettings f = s_.frame;
-        f.title = s_.titleFromName ? photo.name : s_.customTitle;
-        if (s_.iconIndex == CustomIconIndex)
+        f.title = look.titleFromName ? name : look.customTitle;
+        f.kind = look.kind;
+        f.menu = look.menu;
+        f.status = look.status;
+        f.toolbar = look.toolbar;
+        f.address = look.address;
+        f.corner = look.corner;
+        if (look.iconIndex == CustomIconIndex)
         {
             f.icon = s_.customIcon;
         }
-        else if (s_.iconIndex >= 0 && s_.iconIndex < FrameIconCount())
+        else if (look.iconIndex >= 0 && look.iconIndex < FrameIconCount())
         {
-            f.icon = BuiltinIcon(FrameIconAt(s_.iconIndex));
+            f.icon = BuiltinIcon(FrameIconAt(look.iconIndex));
         }
         else
         {
@@ -517,17 +575,27 @@ namespace rf
         return f;
     }
 
+    FrameSettings MainView::FrameFor(const Photo& photo) const
+    {
+        return LookFrame(PhotoMode, photo.name);
+    }
+
     FrameVars MainView::VarsFor(const Photo& photo) const
     {
-        return FrameVars{photo.name, photo.width, photo.height};
+        return FrameVars{photo.name, photo.width, photo.height, L""};
     }
 
     void MainView::UpdatePreview()
     {
-        if (mode_ == 1 || mode_ == 2)
+        if (mode_ == VideoMode)
+        {
+            UpdateVideoPreview();
+            return;
+        }
+        if (mode_ == MusicMode)
         {
             preview_->image = Image();
-            preview_->message = mode_ == 1 ? L"Режим «Видео» появится на следующем этапе." : L"Режим «Музыка» появится на следующем этапе.";
+            preview_->message = L"Режим «Музыка» появится на следующем этапе.";
             root.dirty = true;
             return;
         }
@@ -575,7 +643,11 @@ namespace rf
             second = L"Рамка в файле: авто";
             scale_->items[0] = L"Авто";
         }
-        if (mode_ != 0)
+        if (mode_ == VideoMode)
+        {
+            UpdateVideoStatus(first, second, third);
+        }
+        else if (mode_ == MusicMode)
         {
             first = L"Этот режим пока в разработке";
         }
@@ -713,14 +785,19 @@ namespace rf
 
     void MainView::Open()
     {
+        if (mode_ == VideoMode)
+        {
+            const std::wstring path = host_.AskOpenVideo(s_.videoFolder.empty() ? s_.openFolder : s_.videoFolder);
+            if (!path.empty())
+            {
+                OpenVideo(path);
+            }
+            return;
+        }
         const auto paths = host_.AskOpenImages(s_.openFolder);
         if (!paths.empty())
         {
-            if (mode_ != 0)
-            {
-                mode_ = 0;
-                tabs_->index = 0;
-            }
+            SetMode(PhotoMode);
             AddFiles(paths);
         }
     }
@@ -730,7 +807,12 @@ namespace rf
         const auto files = host_.ClipboardFiles();
         if (!files.empty())
         {
-            AddFiles(files);
+            OnDropFiles(files);
+            return;
+        }
+        if (mode_ == VideoMode)
+        {
+            Warn(L"В буфере обмена нет видеофайла.\nСкопируйте ролик в Проводнике и вставьте снова.");
             return;
         }
         Image img;
@@ -745,6 +827,11 @@ namespace rf
 
     void MainView::SaveCurrent()
     {
+        if (mode_ == VideoMode)
+        {
+            SaveVideo();
+            return;
+        }
         if (current_ < 0)
         {
             Warn(L"Сначала добавьте фото.");
@@ -779,6 +866,11 @@ namespace rf
 
     void MainView::SaveAll()
     {
+        if (mode_ == VideoMode)
+        {
+            Warn(L"Видео сохраняется по одному: нажмите «Сохранить...».");
+            return;
+        }
         if (photos_.empty())
         {
             Warn(L"Сначала добавьте фото.");
@@ -837,6 +929,11 @@ namespace rf
 
     void MainView::CopyCurrent()
     {
+        if (mode_ == VideoMode)
+        {
+            Warn(L"Видео нельзя положить в буфер обмена: нажмите «Сохранить...».");
+            return;
+        }
         if (current_ < 0)
         {
             Warn(L"Сначала добавьте фото.");
@@ -938,7 +1035,7 @@ namespace rf
     void MainView::SetCustomIcon(const Image& picked)
     {
         s_.customIcon = picked;
-        s_.iconIndex = CustomIconIndex;
+        Look().iconIndex = CustomIconIndex;
         const std::wstring dir = host_.SettingsFolder();
         if (!dir.empty())
         {
@@ -984,7 +1081,7 @@ namespace rf
         {
             if (s_.cornerImage.Empty())
             {
-                s_.frame.corner = false;
+                Look().corner = false;
                 SyncControls();
             }
             return;
@@ -997,11 +1094,8 @@ namespace rf
             return;
         }
         s_.cornerImage = MakeIcon16(img);
-        s_.frame.corner = true;
-        if (!s_.frame.menu)
-        {
-            s_.frame.menu = true;
-        }
+        Look().corner = true;
+        Look().menu = true;
         const std::wstring dir = host_.SettingsFolder();
         if (!dir.empty())
         {
@@ -1012,6 +1106,19 @@ namespace rf
 
     void MainView::EditTexts()
     {
+        if (mode_ == VideoMode)
+        {
+            PlayerTextsView dialog(s_.playerMenu, s_.playerStatus, s_.playerTime, s_.frame.addressText);
+            if (host_.RunModal(dialog) == 1)
+            {
+                s_.playerMenu = dialog.Menu();
+                s_.playerStatus = dialog.Status();
+                s_.playerTime = dialog.Time();
+                s_.frame.addressText = dialog.Address();
+                Changed();
+            }
+            return;
+        }
         TextsView dialog(s_.frame);
         if (host_.RunModal(dialog) == 1)
         {
@@ -1038,12 +1145,14 @@ namespace rf
     {
         ShowMessage(host_, L"О программе",
                     std::wstring(L"Ретро-рамка, версия ") + AppVersion +
-                        L"\n\nОформляет фото в окна в стиле Windows 95, 98 и 2000.\nВидео и музыка появятся в следующих версиях.",
+                        L"\n\nОформляет фото и видео в окна в стиле Windows 95, 98 и 2000.\nМузыка появится в следующей версии.",
                     MessageKind::Info);
     }
 
     void MainView::Exit()
     {
+        StopPlay();
+        fetch_.reset();
         SaveSettings();
         host_.Quit();
     }
@@ -1103,6 +1212,16 @@ namespace rf
         }
         if (textFocus)
         {
+            return false;
+        }
+        if (mode_ == VideoMode)
+        {
+            if (clip_ && (e.key == ui::KeyCode::Left || e.key == ui::KeyCode::Right))
+            {
+                StopPlay();
+                SetPosition(clip_->position + (e.key == ui::KeyCode::Left ? -1.0 : 1.0));
+                return true;
+            }
             return false;
         }
         if (e.key == ui::KeyCode::Delete)

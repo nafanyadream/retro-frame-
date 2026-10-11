@@ -15,6 +15,13 @@ namespace rf::glyphs
     inline const Glyph Check = {"......x", ".....xx", "x...xxx", "xx.xxx.", "xxxxx..", ".xxx...", "..x...."};
     inline const Glyph Dot = {".xx.", "xxxx", "xxxx", ".xx."};
     inline const Glyph MenuArrow = {"x...", "xx..", "xxx.", "xxxx", "xxx.", "xx..", "x..."};
+    inline const Glyph Play = {"x....", "xx...", "xxx..", "xxxx.", "xxxxx", "xxxx.", "xxx..", "xx...", "x...."};
+    inline const Glyph Pause = {"xx.xx", "xx.xx", "xx.xx", "xx.xx", "xx.xx", "xx.xx", "xx.xx", "xx.xx"};
+    inline const Glyph Stop = {"xxxxxxx", "xxxxxxx", "xxxxxxx", "xxxxxxx", "xxxxxxx", "xxxxxxx", "xxxxxxx"};
+    inline const Glyph Previous = {"xx...x", "xx..xx", "xx.xxx", "xxxxxx", "xx.xxx", "xx..xx", "xx...x"};
+    inline const Glyph Rewind = {"...x...x", "..xx..xx", ".xxx.xxx", "xxxxxxxx", ".xxx.xxx", "..xx..xx", "...x...x"};
+    inline const Glyph FastForward = {"x...x...", "xx..xx..", "xxx.xxx.", "xxxxxxxx", "xxx.xxx.", "xx..xx..", "x...x..."};
+    inline const Glyph Next = {"x...xx", "xx..xx", "xxx.xx", "xxxxxx", "xxx.xx", "xx..xx", "x...xx"};
     inline const Glyph Info = {
         "...........xxxxxxxxxx...........",
         "........xxxxxxxxxxxxxxxx........",

@@ -53,6 +53,20 @@ namespace rf
         std::uint64_t size = 0;
     };
 
+    class Process
+    {
+    public:
+        virtual ~Process() = default;
+        virtual bool Write(const void* data, std::size_t size) = 0;
+        virtual void CloseInput() = 0;
+        virtual std::size_t Available() = 0;
+        virtual bool Read(void* data, std::size_t size) = 0;
+        virtual bool Running() = 0;
+        virtual bool Finish(int& exitCode, const std::function<bool()>& keepGoing) = 0;
+        virtual void Kill() = 0;
+        virtual std::string Log() = 0;
+    };
+
     class Host
     {
     public:
@@ -63,6 +77,8 @@ namespace rf
         virtual std::wstring AskSavePath(const std::wstring& folder, const std::wstring& suggested, ImageFormat format) = 0;
         virtual std::wstring AskFolder(const std::wstring& folder, const std::wstring& title) = 0;
         virtual std::wstring AskOpenArchive(const std::wstring& folder) = 0;
+        virtual std::wstring AskOpenVideo(const std::wstring& folder) = 0;
+        virtual std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) = 0;
         virtual bool AskColor(Color initial, Color& result) = 0;
 
         virtual bool ReadImage(const std::wstring& path, Image& out, std::wstring& error) = 0;
@@ -86,6 +102,8 @@ namespace rf
         virtual bool ExtractArchive(const std::wstring& archive, const std::wstring& folder, const std::function<bool()>& keepGoing, std::wstring& error) = 0;
         virtual std::wstring NewTempFolder() = 0;
         virtual void RemoveFolder(const std::wstring& path) = 0;
+        virtual std::wstring FfmpegPath() = 0;
+        virtual std::unique_ptr<Process> StartProcess(const std::wstring& exe, const std::vector<std::wstring>& args, bool input, bool output) = 0;
 
         virtual int RunModal(View& view) = 0;
         virtual void* OpenModeless(View& view) = 0;

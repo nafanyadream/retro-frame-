@@ -2,6 +2,7 @@
 
 #include "files.h"
 #include "imaging.h"
+#include "process.h"
 
 #include "../core/utf.h"
 
@@ -190,6 +191,37 @@ namespace rf::win
                         }
                     }
                     items->Release();
+                }
+            }
+            dlg->Release();
+            return result;
+        }
+
+        std::wstring RunSave(HWND owner, const std::wstring& folder, const std::wstring& suggested, const wchar_t* title, const wchar_t* typeName,
+                             const wchar_t* pattern, const wchar_t* ext)
+        {
+            std::wstring result;
+            IFileSaveDialog* dlg = nullptr;
+            if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))) || dlg == nullptr)
+            {
+                return result;
+            }
+            FILEOPENDIALOGOPTIONS options = 0;
+            dlg->GetOptions(&options);
+            dlg->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST);
+            dlg->SetTitle(title);
+            COMDLG_FILTERSPEC spec{typeName, pattern};
+            dlg->SetFileTypes(1, &spec);
+            dlg->SetDefaultExtension(ext);
+            dlg->SetFileName(suggested.c_str());
+            SetStartFolder(dlg, folder);
+            if (SUCCEEDED(dlg->Show(owner)))
+            {
+                IShellItem* item = nullptr;
+                if (SUCCEEDED(dlg->GetResult(&item)) && item != nullptr)
+                {
+                    result = ItemPath(item);
+                    item->Release();
                 }
             }
             dlg->Release();
@@ -689,33 +721,21 @@ namespace rf::win
 
     std::wstring WinHost::AskSavePath(const std::wstring& folder, const std::wstring& suggested, ImageFormat format)
     {
-        std::wstring result;
-        IFileSaveDialog* dlg = nullptr;
-        if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))) || dlg == nullptr)
-        {
-            return result;
-        }
-        FILEOPENDIALOGOPTIONS options = 0;
-        dlg->GetOptions(&options);
-        dlg->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST);
-        dlg->SetTitle(L"Сохранить результат");
         const bool png = format == ImageFormat::Png;
-        COMDLG_FILTERSPEC spec{png ? L"Картинка PNG" : L"Картинка JPG", png ? L"*.png" : L"*.jpg;*.jpeg"};
-        dlg->SetFileTypes(1, &spec);
-        dlg->SetDefaultExtension(png ? L"png" : L"jpg");
-        dlg->SetFileName(suggested.c_str());
-        SetStartFolder(dlg, folder);
-        if (SUCCEEDED(dlg->Show(Owner())))
-        {
-            IShellItem* item = nullptr;
-            if (SUCCEEDED(dlg->GetResult(&item)) && item != nullptr)
-            {
-                result = ItemPath(item);
-                item->Release();
-            }
-        }
-        dlg->Release();
-        return result;
+        return RunSave(Owner(), folder, suggested, L"Сохранить результат", png ? L"Картинка PNG" : L"Картинка JPG", png ? L"*.png" : L"*.jpg;*.jpeg", png ? L"png" : L"jpg");
+    }
+
+    std::wstring WinHost::AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif)
+    {
+        return RunSave(Owner(), folder, suggested, L"Сохранить видео", gif ? L"Анимация GIF" : L"Видео MP4", gif ? L"*.gif" : L"*.mp4", gif ? L"gif" : L"mp4");
+    }
+
+    std::wstring WinHost::AskOpenVideo(const std::wstring& folder)
+    {
+        const auto r = RunOpen(Owner(), folder, L"Открыть видео",
+                               {{L"Видео и GIF", L"*.mp4;*.mov;*.avi;*.mkv;*.webm;*.m4v;*.wmv;*.mpg;*.mpeg;*.3gp;*.flv;*.ts;*.gif"}, {L"Все файлы", L"*.*"}},
+                               false, false);
+        return r.empty() ? std::wstring() : r.front();
     }
 
     std::wstring WinHost::AskFolder(const std::wstring& folder, const std::wstring& title)
@@ -916,5 +936,15 @@ namespace rf::win
     void WinHost::RemoveFolder(const std::wstring& path)
     {
         DeleteTempFolder(path);
+    }
+
+    std::wstring WinHost::FfmpegPath()
+    {
+        return FindFfmpeg();
+    }
+
+    std::unique_ptr<Process> WinHost::StartProcess(const std::wstring& exe, const std::vector<std::wstring>& args, bool input, bool output)
+    {
+        return StartChild(exe, args, input, output);
     }
 }

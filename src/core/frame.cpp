@@ -32,6 +32,7 @@ namespace rf
             int width = 0;
             int height = 0;
             int statusY = 0;
+            int playerY = 0;
             bool hasStatus = false;
             Rect client;
             std::vector<BandItem> bands;
@@ -93,6 +94,11 @@ namespace rf
             }
             const int clientY = cur;
             cur += ch + 2 * L.inset;
+            if (s.player)
+            {
+                L.playerY = cur;
+                cur += PlayerPanelHeight;
+            }
             L.hasStatus = hasStatus;
             if (hasStatus)
             {
@@ -338,6 +344,60 @@ namespace rf
                 DrawGrip(p, sh, x + w - 13, y + 7);
             }
         }
+
+        void PlayerButton(Painter& p, const Shades& sh, Color ink, const Rect& r, const Glyph& g, bool pressed)
+        {
+            const int o = pressed ? 1 : 0;
+            if (pressed)
+            {
+                p.Dither(r.Inflate(-1), sh.face, sh.hilite);
+                p.Edge(r, sh.dark, sh.hilite);
+                p.Edge(r.Inflate(-1), sh.shadow, sh.light);
+            }
+            p.DrawGlyph(r.x + (r.w - GlyphWidth(g)) / 2 + o, r.y + (r.h - GlyphHeight(g)) / 2 + o, g, ink);
+        }
+
+        void DrawPlayer(Painter& p, const FrameSettings& s, const Shades& sh, int left, int right, int y)
+        {
+            const Color ink = s.colors.text;
+            const int x0 = left + 8;
+            const int w = std::max(20, right - left - 16);
+            p.Sunken(Rect{x0, y + 9, w, 4}, sh);
+            const int tw = 11;
+            const double pos = std::clamp(s.playerPosition, 0.0, 1.0);
+            const int tx = x0 + int(std::lround(pos * (w - tw)));
+            p.Raised(Rect{tx, y + 2, tw, 18}, sh);
+            const int by = y + 26;
+            const Glyph* glyphsRow[] = {&glyphs::Play, &glyphs::Pause, &glyphs::Stop, nullptr, &glyphs::Previous, &glyphs::Rewind, &glyphs::FastForward, &glyphs::Next};
+            int bx = left + 6;
+            for (std::size_t i = 0; i < 8; ++i)
+            {
+                if (glyphsRow[i] == nullptr)
+                {
+                    p.EtchedV(bx + 3, by + 2, 18, sh);
+                    bx += 9;
+                    continue;
+                }
+                PlayerButton(p, sh, ink, Rect{bx, by, 23, 22}, *glyphsRow[i], i == 0);
+                bx += 24;
+            }
+            const int vw = 44;
+            const int vx = right - 8 - vw;
+            if (vx - 22 > bx + 4)
+            {
+                p.Draw(BuiltinIcon(IconId::Speaker), vx - 22, by + 3);
+                const int vy = by + 4;
+                const int vh = 14;
+                for (int i = 0; i < vw; ++i)
+                {
+                    const int top = vy + vh - 1 - (i * (vh - 1)) / (vw - 1);
+                    p.Pixel(vx + i, top, sh.shadow);
+                    p.Pixel(vx + i, vy + vh, sh.hilite);
+                }
+                p.VLine(vx + vw, vy, vh + 1, sh.hilite);
+                p.Raised(Rect{vx + vw * 3 / 4 - 3, vy - 2, 7, vh + 4}, sh);
+            }
+        }
     }
 
     std::wstring ExpandVars(const std::wstring& text, const FrameVars& vars)
@@ -354,6 +414,7 @@ namespace rf
         replace(L"{имя}", vars.name);
         replace(L"{ширина}", std::to_wstring(vars.width));
         replace(L"{высота}", std::to_wstring(vars.height));
+        replace(L"{время}", vars.time);
         return out;
     }
 
@@ -431,7 +492,11 @@ namespace rf
         {
             p.Sunken(Rect{L.client.x - 2, L.client.y - 2, cw + 4, ch + 4}, sh);
         }
-        p.Fill(L.client, s.colors.window);
+        p.Fill(L.client, s.player ? Rgb(0, 0, 0) : s.colors.window);
+        if (s.player)
+        {
+            DrawPlayer(p, s, sh, left, right, L.playerY);
+        }
         if (L.hasStatus)
         {
             DrawStatus(p, s, sh, statusTexts, left, L.statusY, right - left);

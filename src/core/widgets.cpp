@@ -3,6 +3,8 @@
 #include "glyphs.h"
 #include "icons.h"
 
+#include <cmath>
+
 namespace rf::ui
 {
     namespace
@@ -2131,6 +2133,116 @@ namespace rf::ui
             return true;
         default:
             return false;
+        }
+    }
+
+    Rect TrackBar::Channel() const
+    {
+        return Rect{5, rect.h / 2 - 3, std::max(10, rect.w - 10), 6};
+    }
+
+    Rect TrackBar::Thumb() const
+    {
+        const Rect c = Channel();
+        const int tw = 11;
+        const int x = c.x + int(std::lround(std::clamp(value, 0.0, 1.0) * (c.w - tw)));
+        return Rect{x, 1, tw, rect.h - 2};
+    }
+
+    double TrackBar::ValueAt(int x) const
+    {
+        const Rect c = Channel();
+        return std::clamp(double(x - c.x - 5) / double(std::max(1, c.w - 11)), 0.0, 1.0);
+    }
+
+    void TrackBar::Set(double v)
+    {
+        v = std::clamp(v, 0.0, 1.0);
+        if (v == value)
+        {
+            return;
+        }
+        value = v;
+        Invalidate();
+        if (onChange)
+        {
+            auto cb = onChange;
+            root->Post([cb, v]() { cb(v); });
+        }
+    }
+
+    void TrackBar::Paint(Painter& p)
+    {
+        const Shades& sh = Sh();
+        const Rect c = Channel();
+        const Color fill = enabled ? White : sh.face;
+        p.Sunken(c, sh, &fill);
+        if (range && enabled)
+        {
+            const int inner = c.w - 4;
+            const int a = c.x + 2 + int(std::lround(std::clamp(rangeStart, 0.0, 1.0) * inner));
+            const int b = c.x + 2 + int(std::lround(std::clamp(rangeEnd, 0.0, 1.0) * inner));
+            if (b > a)
+            {
+                p.Fill(Rect{a, c.y + 2, b - a, c.h - 4}, Navy);
+            }
+        }
+        const Rect t = Thumb();
+        p.Raised(t, sh);
+        if (dragging_)
+        {
+            p.Dither(t.Inflate(-2), sh.face, sh.hilite);
+        }
+    }
+
+    void TrackBar::OnMouseDown(const MouseEvent& e)
+    {
+        const Rect t = Thumb();
+        dragging_ = true;
+        if (t.Contains(e.x, e.y))
+        {
+            grab_ = e.x - t.x - 5;
+        }
+        else
+        {
+            grab_ = 0;
+            Set(ValueAt(e.x));
+        }
+        Invalidate();
+    }
+
+    void TrackBar::OnMouseMove(const MouseEvent& e)
+    {
+        if (dragging_)
+        {
+            Set(ValueAt(e.x - grab_));
+        }
+    }
+
+    void TrackBar::OnMouseUp(const MouseEvent&)
+    {
+        if (!dragging_)
+        {
+            return;
+        }
+        dragging_ = false;
+        Invalidate();
+        if (onRelease)
+        {
+            auto cb = onRelease;
+            const double v = value;
+            root->Post([cb, v]() { cb(v); });
+        }
+    }
+
+    void TrackBar::OnWheel(int delta)
+    {
+        Set(value + (delta > 0 ? -0.02 : 0.02));
+        if (onRelease)
+        {
+            auto cb = onRelease;
+            const double v = value;
+            root->Post([cb, v]() { cb(v); });
         }
     }
 

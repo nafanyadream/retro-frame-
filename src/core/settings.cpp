@@ -151,11 +151,39 @@ namespace rf
         }
     }
 
+    ModeLook DefaultLook(int mode)
+    {
+        ModeLook look;
+        if (mode == VideoMode)
+        {
+            look.iconIndex = 8;
+            look.customTitle = L"Мой ролик";
+            look.menu = true;
+            look.status = true;
+        }
+        else if (mode == MusicMode)
+        {
+            look.iconIndex = 6;
+            look.titleFromName = false;
+            look.customTitle = L"Песня";
+            look.kind = WindowKind::Bare;
+        }
+        else
+        {
+            look.customTitle = L"Моё фото";
+        }
+        return look;
+    }
+
     AppSettings DefaultSettings()
     {
         AppSettings s;
         s.frame.style = Style::Win98;
         s.frame.colors = SchemeColors(0, Style::Win98);
+        for (int m = 0; m < 3; ++m)
+        {
+            s.looks[std::size_t(m)] = DefaultLook(m);
+        }
         return s;
     }
 
@@ -164,9 +192,9 @@ namespace rf
         std::ostringstream o;
         const FrameSettings& f = s.frame;
         const FrameColors& c = f.colors;
-        o << "version=1\n";
+        o << "version=2\n";
+        o << "mode=" << s.mode << "\n";
         o << "style=" << int(f.style) << "\n";
-        o << "kind=" << int(f.kind) << "\n";
         o << "active=" << (f.active ? 1 : 0) << "\n";
         o << "face=" << Hex(c.face) << "\n";
         o << "active1=" << Hex(c.active1) << "\n";
@@ -178,25 +206,43 @@ namespace rf
         o << "text=" << Hex(c.text) << "\n";
         o << "window=" << Hex(c.window) << "\n";
         o << "select=" << Hex(c.select) << "\n";
-        o << "menu=" << (f.menu ? 1 : 0) << "\n";
         o << "menuItems=" << EscapeList(f.menuItems) << "\n";
-        o << "status=" << (f.status ? 1 : 0) << "\n";
         o << "statusFields=" << EscapeList(f.statusFields) << "\n";
         o << "statusIcon=" << (f.statusIcon ? 1 : 0) << "\n";
         o << "grip=" << (f.grip ? 1 : 0) << "\n";
-        o << "address=" << (f.address ? 1 : 0) << "\n";
         o << "addressText=" << Escape(f.addressText) << "\n";
-        o << "toolbar=" << (f.toolbar ? 1 : 0) << "\n";
-        o << "corner=" << (f.corner ? 1 : 0) << "\n";
         o << "sunken=" << (f.sunken ? 1 : 0) << "\n";
         o << "scale=" << f.scale << "\n";
         o << "scheme=" << s.scheme << "\n";
-        o << "icon=" << s.iconIndex << "\n";
-        o << "titleFromName=" << (s.titleFromName ? 1 : 0) << "\n";
-        o << "customTitle=" << Escape(s.customTitle) << "\n";
+        const char* prefixes[] = {"", "video.", "music."};
+        for (int m = 0; m < 3; ++m)
+        {
+            const ModeLook& l = s.looks[std::size_t(m)];
+            const std::string p = prefixes[m];
+            o << p << "icon=" << l.iconIndex << "\n";
+            o << p << "titleFromName=" << (l.titleFromName ? 1 : 0) << "\n";
+            o << p << "customTitle=" << Escape(l.customTitle) << "\n";
+            o << p << "kind=" << int(l.kind) << "\n";
+            o << p << "menu=" << (l.menu ? 1 : 0) << "\n";
+            o << p << "status=" << (l.status ? 1 : 0) << "\n";
+            o << p << "toolbar=" << (l.toolbar ? 1 : 0) << "\n";
+            o << p << "address=" << (l.address ? 1 : 0) << "\n";
+            o << p << "corner=" << (l.corner ? 1 : 0) << "\n";
+        }
+        o << "playerMenu=" << EscapeList(s.playerMenu) << "\n";
+        o << "playerStatus=" << Escape(s.playerStatus) << "\n";
+        o << "playerTime=" << (s.playerTime ? 1 : 0) << "\n";
+        o << "video.format=" << s.video.format << "\n";
+        o << "video.square=" << (s.video.square ? 1 : 0) << "\n";
+        o << "video.squareSize=" << s.video.squareSize << "\n";
+        o << "video.gifFps=" << s.video.gifFps << "\n";
+        o << "video.gifWidth=" << s.video.gifWidth << "\n";
+        o << "background=" << Hex(s.background) << "\n";
+        o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
         o << "format=" << s.format << "\n";
         o << "openFolder=" << Escape(s.openFolder) << "\n";
         o << "saveFolder=" << Escape(s.saveFolder) << "\n";
+        o << "videoFolder=" << Escape(s.videoFolder) << "\n";
         o << "libraryFolder=" << Escape(s.libraryFolder) << "\n";
         o << "library=" << EscapeList(s.library) << "\n";
         o << "windowX=" << s.windowX << "\n";
@@ -222,23 +268,23 @@ namespace rf
             }
             kv[line.substr(0, eq)] = line.substr(eq + 1);
         }
-        const auto get = [&](const char* key) -> const std::string* {
+        const auto get = [&](const std::string& key) -> const std::string* {
             const auto it = kv.find(key);
             return it == kv.end() ? nullptr : &it->second;
         };
-        const auto getInt = [&](const char* key, int& target, int lo, int hi) {
+        const auto getInt = [&](const std::string& key, int& target, int lo, int hi) {
             if (const std::string* v = get(key))
             {
                 target = std::clamp(ToInt(*v, target), lo, hi);
             }
         };
-        const auto getBool = [&](const char* key, bool& target) {
+        const auto getBool = [&](const std::string& key, bool& target) {
             if (const std::string* v = get(key))
             {
                 target = *v == "1";
             }
         };
-        const auto getColor = [&](const char* key, Color& target) {
+        const auto getColor = [&](const std::string& key, Color& target) {
             if (const std::string* v = get(key))
             {
                 Color c;
@@ -248,13 +294,30 @@ namespace rf
                 }
             }
         };
+        const auto getText = [&](const std::string& key, std::wstring& target) {
+            if (const std::string* v = get(key))
+            {
+                target = Unescape(*v);
+            }
+        };
+        const auto getList = [&](const std::string& key, std::vector<std::wstring>& target) {
+            if (const std::string* v = get(key))
+            {
+                target.clear();
+                for (const auto& item : UnescapeList(*v))
+                {
+                    if (!item.empty())
+                    {
+                        target.push_back(item);
+                    }
+                }
+            }
+        };
         FrameSettings& f = s.frame;
+        getInt("mode", s.mode, 0, 2);
         int style = int(f.style);
         getInt("style", style, 0, 2);
         f.style = static_cast<Style>(style);
-        int kind = int(f.kind);
-        getInt("kind", kind, 0, 3);
-        f.kind = static_cast<WindowKind>(kind);
         getBool("active", f.active);
         getColor("face", f.colors.face);
         getColor("active1", f.colors.active1);
@@ -266,12 +329,10 @@ namespace rf
         getColor("text", f.colors.text);
         getColor("window", f.colors.window);
         getColor("select", f.colors.select);
-        getBool("menu", f.menu);
         if (const std::string* v = get("menuItems"))
         {
             f.menuItems = UnescapeList(*v);
         }
-        getBool("status", f.status);
         if (const std::string* v = get("statusFields"))
         {
             f.statusFields = UnescapeList(*v);
@@ -279,46 +340,43 @@ namespace rf
         }
         getBool("statusIcon", f.statusIcon);
         getBool("grip", f.grip);
-        getBool("address", f.address);
-        if (const std::string* v = get("addressText"))
-        {
-            f.addressText = Unescape(*v);
-        }
-        getBool("toolbar", f.toolbar);
-        getBool("corner", f.corner);
+        getText("addressText", f.addressText);
         getBool("sunken", f.sunken);
         getInt("scale", f.scale, 0, 4);
         getInt("scheme", s.scheme, -1, SchemeCount() - 1);
-        getInt("icon", s.iconIndex, NoIconIndex, CustomIconIndex);
-        getBool("titleFromName", s.titleFromName);
-        if (const std::string* v = get("customTitle"))
+        const char* prefixes[] = {"", "video.", "music."};
+        for (int m = 0; m < 3; ++m)
         {
-            s.customTitle = Unescape(*v);
+            ModeLook& l = s.looks[std::size_t(m)];
+            const std::string p = prefixes[m];
+            getInt(p + "icon", l.iconIndex, NoIconIndex, CustomIconIndex);
+            getBool(p + "titleFromName", l.titleFromName);
+            getText(p + "customTitle", l.customTitle);
+            int kind = int(l.kind);
+            getInt(p + "kind", kind, 0, 3);
+            l.kind = static_cast<WindowKind>(kind);
+            getBool(p + "menu", l.menu);
+            getBool(p + "status", l.status);
+            getBool(p + "toolbar", l.toolbar);
+            getBool(p + "address", l.address);
+            getBool(p + "corner", l.corner);
         }
+        getList("playerMenu", s.playerMenu);
+        getText("playerStatus", s.playerStatus);
+        getBool("playerTime", s.playerTime);
+        getInt("video.format", s.video.format, 0, 3);
+        getBool("video.square", s.video.square);
+        getInt("video.squareSize", s.video.squareSize, 240, 2160);
+        getInt("video.gifFps", s.video.gifFps, 5, 50);
+        getInt("video.gifWidth", s.video.gifWidth, 0, 4000);
+        getColor("background", s.background);
+        getBool("backgroundPicture", s.backgroundPicture);
         getInt("format", s.format, 0, 2);
-        if (const std::string* v = get("openFolder"))
-        {
-            s.openFolder = Unescape(*v);
-        }
-        if (const std::string* v = get("saveFolder"))
-        {
-            s.saveFolder = Unescape(*v);
-        }
-        if (const std::string* v = get("libraryFolder"))
-        {
-            s.libraryFolder = Unescape(*v);
-        }
-        if (const std::string* v = get("library"))
-        {
-            s.library.clear();
-            for (const auto& item : UnescapeList(*v))
-            {
-                if (!item.empty())
-                {
-                    s.library.push_back(item);
-                }
-            }
-        }
+        getText("openFolder", s.openFolder);
+        getText("saveFolder", s.saveFolder);
+        getText("videoFolder", s.videoFolder);
+        getText("libraryFolder", s.libraryFolder);
+        getList("library", s.library);
         getInt("windowX", s.windowX, -100000, 100000);
         getInt("windowY", s.windowY, -100000, 100000);
     }

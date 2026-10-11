@@ -33,7 +33,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         }
         if (!files.empty())
         {
-            view.AddFiles(files);
+            view.OnDropFiles(files);
         }
 
         rf::AppSettings& s = view.MutableSettings();

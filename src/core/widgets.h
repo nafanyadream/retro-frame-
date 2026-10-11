@@ -450,6 +450,31 @@ namespace rf::ui
         ScrollBar bar_;
     };
 
+    class TrackBar : public Widget
+    {
+    public:
+        double value = 0.0;
+        bool range = false;
+        double rangeStart = 0.0;
+        double rangeEnd = 1.0;
+        std::function<void(double)> onChange;
+        std::function<void(double)> onRelease;
+
+        void Paint(Painter& p) override;
+        void OnMouseDown(const MouseEvent& e) override;
+        void OnMouseMove(const MouseEvent& e) override;
+        void OnMouseUp(const MouseEvent& e) override;
+        void OnWheel(int delta) override;
+
+    private:
+        Rect Channel() const;
+        Rect Thumb() const;
+        double ValueAt(int x) const;
+        void Set(double v);
+        bool dragging_ = false;
+        int grab_ = 0;
+    };
+
     class GlyphView : public Widget
     {
     public:

@@ -63,6 +63,8 @@ namespace rf::win
         std::wstring AskSavePath(const std::wstring& folder, const std::wstring& suggested, ImageFormat format) override;
         std::wstring AskFolder(const std::wstring& folder, const std::wstring& title) override;
         std::wstring AskOpenArchive(const std::wstring& folder) override;
+        std::wstring AskOpenVideo(const std::wstring& folder) override;
+        std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) override;
         bool AskColor(Color initial, Color& result) override;
 
         bool ReadImage(const std::wstring& path, Image& out, std::wstring& error) override;
@@ -86,6 +88,8 @@ namespace rf::win
         bool ExtractArchive(const std::wstring& archive, const std::wstring& folder, const std::function<bool()>& keepGoing, std::wstring& error) override;
         std::wstring NewTempFolder() override;
         void RemoveFolder(const std::wstring& path) override;
+        std::wstring FfmpegPath() override;
+        std::unique_ptr<Process> StartProcess(const std::wstring& exe, const std::vector<std::wstring>& args, bool input, bool output) override;
 
         int RunModal(View& view) override;
         void* OpenModeless(View& view) override;

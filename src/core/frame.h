@@ -36,6 +36,8 @@ namespace rf
         Image cornerImage;
         bool sunken = false;
         int scale = 0;
+        bool player = false;
+        double playerPosition = 0.0;
     };
 
     struct FrameVars
@@ -43,7 +45,11 @@ namespace rf
         std::wstring name;
         int width = 0;
         int height = 0;
+        std::wstring time;
     };
+
+    constexpr int PlayerPanelHeight = 52;
+    constexpr int PlayerMinWidth = 280;
 
     struct FrameGeometry
     {

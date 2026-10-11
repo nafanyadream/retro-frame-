@@ -28,6 +28,22 @@ namespace rf
         ui::CheckBox* icon_ = nullptr;
     };
 
+    class PlayerTextsView : public View
+    {
+    public:
+        PlayerTextsView(const std::vector<std::wstring>& menu, const std::wstring& status, bool time, const std::wstring& address);
+        std::vector<std::wstring> Menu() const;
+        std::wstring Status() const { return status_->text; }
+        bool Time() const { return time_->checked; }
+        std::wstring Address() const { return address_->text; }
+
+    private:
+        ui::TextField* menu_ = nullptr;
+        ui::TextField* status_ = nullptr;
+        ui::CheckBox* time_ = nullptr;
+        ui::TextField* address_ = nullptr;
+    };
+
     class ProgressView : public View
     {
     public:

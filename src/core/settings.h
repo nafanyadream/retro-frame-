@@ -3,32 +3,73 @@
 #include "frame.h"
 #include "host.h"
 
+#include <array>
 #include <string>
 
 namespace rf
 {
+    enum Mode
+    {
+        PhotoMode = 0,
+        VideoMode = 1,
+        MusicMode = 2
+    };
+
+    struct ModeLook
+    {
+        int iconIndex = 0;
+        bool titleFromName = true;
+        std::wstring customTitle;
+        WindowKind kind = WindowKind::Normal;
+        bool menu = false;
+        bool status = false;
+        bool toolbar = false;
+        bool address = false;
+        bool corner = false;
+    };
+
+    struct VideoSettings
+    {
+        int format = 0;
+        bool square = false;
+        int squareSize = 1080;
+        int gifFps = 15;
+        int gifWidth = 0;
+    };
+
     struct AppSettings
     {
         FrameSettings frame;
+        std::array<ModeLook, 3> looks;
+        int mode = PhotoMode;
         int scheme = 0;
-        int iconIndex = 0;
-        bool titleFromName = true;
-        std::wstring customTitle = L"Моё фото";
         int format = 0;
+        std::vector<std::wstring> playerMenu = {L"Файл", L"Вид", L"Воспроизведение", L"Избранное", L"Переход", L"?"};
+        std::wstring playerStatus = L"Воспроизведение";
+        bool playerTime = true;
+        VideoSettings video;
+        Color background = Rgb(0x3A, 0x6E, 0xA5);
+        bool backgroundPicture = false;
         std::wstring openFolder;
         std::wstring saveFolder;
+        std::wstring videoFolder;
         std::wstring libraryFolder;
         std::vector<std::wstring> library;
         int windowX = -100000;
         int windowY = -100000;
         Image customIcon;
         Image cornerImage;
+        Image backgroundImage;
     };
 
     constexpr int CustomIconIndex = 100;
     constexpr int NoIconIndex = -1;
+    constexpr int SquareSizes[] = {1080, 720};
+    constexpr int GifFpsChoices[] = {10, 12, 15, 20, 25, 30};
+    constexpr int GifWidthChoices[] = {0, 800, 640, 480, 320};
 
     std::string SerializeSettings(const AppSettings& s);
     void ParseSettings(const std::string& text, AppSettings& s);
     AppSettings DefaultSettings();
+    ModeLook DefaultLook(int mode);
 }

@@ -2,9 +2,11 @@
 
 #include "dialogs.h"
 #include "library.h"
+#include "media.h"
 #include "settings.h"
 
 #include <array>
+#include <memory>
 
 namespace rf
 {
@@ -17,6 +19,9 @@ namespace rf
         void SaveSettings();
         void AddFiles(const std::vector<std::wstring>& paths);
         void AddImage(Image full, const std::wstring& path, const std::wstring& name, bool keepFull);
+        void OpenVideo(const std::wstring& path);
+        void SetMode(int mode);
+        bool HasClip() const { return clip_ != nullptr; }
 
         void OnTick(unsigned long long ms) override;
         bool OnCloseRequest() override;
@@ -44,6 +49,9 @@ namespace rf
         void Changed();
         void UpdatePreview();
         void UpdateStatus();
+        ModeLook& Look() { return s_.looks[std::size_t(mode_)]; }
+        const ModeLook& Look() const { return s_.looks[std::size_t(mode_)]; }
+        FrameSettings LookFrame(int mode, const std::wstring& name) const;
         FrameSettings FrameFor(const Photo& photo) const;
         FrameVars VarsFor(const Photo& photo) const;
         bool FullImage(const Photo& photo, Image& out, std::wstring& error);
@@ -54,6 +62,39 @@ namespace rf
         std::wstring UniquePath(const std::wstring& dir, const std::wstring& stem) const;
 
         void Open();
+        struct Clip
+        {
+            std::wstring path;
+            std::wstring name;
+            MediaInfo info;
+            double position = 0.0;
+            bool whole = true;
+            double start = 0.0;
+            double end = 0.0;
+            Image frame;
+        };
+
+        void BuildVideo();
+        void SyncVideoControls();
+        void UpdateVideoPreview();
+        void UpdateVideoStatus(std::wstring& first, std::wstring& second, std::wstring& third);
+        FrameSettings VideoFrame() const;
+        VideoTarget Target() const;
+        double TrimStart() const;
+        double TrimEnd() const;
+        void SetPosition(double seconds);
+        void RequestFrame();
+        void PollVideo(unsigned long long ms);
+        void TogglePlay();
+        void StopPlay();
+        void SetTrim(bool start);
+        void TrimFieldChanged(bool start, const std::wstring& text);
+        void SaveVideo();
+        void PickBackground();
+        void LoadBackground();
+        void VideoChanged();
+        void UpdateFormatItems();
+
         void Paste();
         void SaveCurrent();
         void SaveAll();
@@ -120,5 +161,35 @@ namespace rf
         ui::ComboBox* format_ = nullptr;
         ui::Button* removeButton_ = nullptr;
         std::vector<ui::Widget*> photoOnly_;
+        std::vector<ui::Widget*> videoOnly_;
+
+        std::unique_ptr<Clip> clip_;
+        std::unique_ptr<FrameStream> fetch_;
+        double fetchAt_ = -1.0;
+        bool fetchAgain_ = false;
+        std::unique_ptr<FrameStream> play_;
+        double playFrom_ = 0.0;
+        int playFrames_ = 0;
+        unsigned long long playStart_ = 0;
+        int resultValue_ = 0;
+        ui::Button* playButton_ = nullptr;
+        ui::TrackBar* scrub_ = nullptr;
+        ui::Label* timeLabel_ = nullptr;
+        ui::CheckBox* wholeCheck_ = nullptr;
+        ui::TextField* startField_ = nullptr;
+        ui::TextField* endField_ = nullptr;
+        ui::Button* startHere_ = nullptr;
+        ui::Button* endHere_ = nullptr;
+        ui::Label* fragLabel_ = nullptr;
+        ui::ComboBox* squareSize_ = nullptr;
+        ui::Swatch* bgSwatch_ = nullptr;
+        ui::CheckBox* bgPicture_ = nullptr;
+        ui::Button* bgLoad_ = nullptr;
+        ui::ComboBox* gifFps_ = nullptr;
+        ui::ComboBox* gifWidth_ = nullptr;
+        ui::Button* saveAllButton_ = nullptr;
+        ui::Button* copyButton_ = nullptr;
+        Image bgPreview_;
+        std::wstring bgKey_;
     };
 }

@@ -2,52 +2,12 @@
 
 #include "../src/core/dialogs.h"
 #include "../src/core/mainview.h"
+#include "test_host.h"
 
 #include <cstdio>
 
 namespace
 {
-    class StubHost : public rf::Host
-    {
-    public:
-        std::vector<std::wstring> AskOpenImages(const std::wstring&) override { return {}; }
-        std::wstring AskOpenIcon(const std::wstring&) override { return L""; }
-        std::wstring AskSavePath(const std::wstring&, const std::wstring&, rf::ImageFormat) override { return L""; }
-        std::wstring AskFolder(const std::wstring&, const std::wstring&) override { return L""; }
-        std::wstring AskOpenArchive(const std::wstring&) override { return L""; }
-        bool AskColor(rf::Color, rf::Color&) override { return false; }
-        bool ReadImage(const std::wstring&, rf::Image&, std::wstring& e) override
-        {
-            e = L"нет";
-            return false;
-        }
-        bool ReadIcon(const std::wstring&, rf::Image&, std::wstring&) override { return false; }
-        bool WriteImage(const std::wstring&, const rf::Image&, rf::ImageFormat, int, std::wstring&) override { return true; }
-        bool DecodeIcon(const std::vector<unsigned char>&, rf::Image&, std::wstring&) override { return false; }
-        bool ReadFileIcons(const std::wstring&, std::vector<rf::Image>&, std::wstring&) override { return false; }
-        bool ClipboardImage(rf::Image&) override { return false; }
-        std::vector<std::wstring> ClipboardFiles() override { return {}; }
-        bool SetClipboardImage(const rf::Image&) override { return true; }
-        bool FileExists(const std::wstring&) override { return false; }
-        std::wstring SettingsFolder() override { return L""; }
-        bool ReadText(const std::wstring&, std::string&) override { return false; }
-        bool WriteText(const std::wstring&, const std::string&) override { return true; }
-        bool RemoveFile(const std::wstring&) override { return true; }
-        bool ListFolder(const std::wstring&, std::vector<rf::FolderItem>&) override { return false; }
-        std::unique_ptr<rf::ByteSource> OpenFile(const std::wstring&) override { return nullptr; }
-        std::wstring SevenZipPath() override { return L""; }
-        bool ExtractArchive(const std::wstring&, const std::wstring&, const std::function<bool()>&, std::wstring&) override { return false; }
-        std::wstring NewTempFolder() override { return L""; }
-        void RemoveFolder(const std::wstring&) override {}
-        int RunModal(rf::View&) override { return 0; }
-        void* OpenModeless(rf::View&) override { return nullptr; }
-        void CloseModeless(void*) override {}
-        void Pump() override {}
-        void Minimize() override {}
-        void Quit() override {}
-        unsigned long long Ticks() override { return 0; }
-    };
-
     void Shot(rf::View& v, const std::string& path)
     {
         rf::Image img;
@@ -64,7 +24,7 @@ int main(int argc, char** argv)
     }
     rftest::TestTextEngine engine;
     rf::SetTextEngine(&engine);
-    StubHost host;
+    rftest::TestHost host;
     rf::MainView main(host);
     const std::string out = argv[3];
     Shot(main, out + "/ui_empty.ppm");
@@ -77,8 +37,8 @@ int main(int argc, char** argv)
     main.AddImage(b, L"", L"четыре.png", true);
     main.AddImage(a, L"", L"пять.png", true);
     main.AddImage(b, L"", L"шесть.png", true);
-    main.MutableSettings().frame.menu = true;
-    main.MutableSettings().frame.status = true;
+    main.MutableSettings().looks[0].menu = true;
+    main.MutableSettings().looks[0].status = true;
     main.Refresh();
     Shot(main, out + "/ui_photos.ppm");
     main.root.MouseDown(20, 30, false, false, 1);

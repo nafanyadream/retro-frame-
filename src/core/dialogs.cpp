@@ -193,6 +193,70 @@ namespace rf
         s.addressText = address_->text;
     }
 
+    PlayerTextsView::PlayerTextsView(const std::vector<std::wstring>& menu, const std::wstring& status, bool time, const std::wstring& address)
+        : View(420, 262)
+    {
+        AddDialogChrome(*this, L"Тексты плеера");
+        const int left = 14;
+        const int fieldX = 82;
+        const int fieldW = root.width - fieldX - 14;
+        const auto group = [&](int y, int h, const std::wstring& text) {
+            auto* g = root.Add<ui::GroupBox>();
+            g->rect = Rect{8, y, root.width - 16, h};
+            g->text = text;
+        };
+        const auto label = [&](int y, const std::wstring& text) {
+            auto* l = root.Add<ui::Label>();
+            l->rect = Rect{left + 4, y, 64, 13};
+            l->text = text;
+        };
+        const auto field = [&](int y, const std::wstring& text) {
+            auto* f = root.Add<ui::TextField>();
+            f->rect = Rect{fieldX, y, fieldW - 4, 21};
+            f->SetText(text);
+            return f;
+        };
+        group(28, 50, L"Меню плеера");
+        label(50, L"Пункты:");
+        menu_ = field(46, JoinList(menu, L", "));
+        group(84, 72, L"Строка состояния");
+        label(106, L"Текст:");
+        status_ = field(102, status);
+        time_ = root.Add<ui::CheckBox>();
+        time_->rect = Rect{fieldX, 130, fieldW - 4, 16};
+        time_->text = L"Время ролика справа";
+        time_->checked = time;
+        group(162, 50, L"Адресная строка");
+        label(184, L"Адрес:");
+        address_ = field(180, address);
+        auto* ok = root.Add<ui::Button>();
+        ok->rect = Rect{root.width - 14 - 75 - 6 - 75, root.height - 3 - 10 - 23, 75, 23};
+        ok->text = L"OK";
+        ok->isDefault = true;
+        auto* cancel = root.Add<ui::Button>();
+        cancel->rect = Rect{root.width - 14 - 75, root.height - 3 - 10 - 23, 75, 23};
+        cancel->text = L"Отмена";
+        View* self = this;
+        ok->onClick = [self]() { self->Close(1); };
+        cancel->onClick = [self]() { self->Close(0); };
+        InstallDialogKeys(*this, [self]() { self->Close(1); }, [self]() { self->Close(0); });
+        root.SetFocus(menu_);
+        menu_->SelectAll();
+    }
+
+    std::vector<std::wstring> PlayerTextsView::Menu() const
+    {
+        std::vector<std::wstring> items;
+        for (const auto& item : SplitList(menu_->text, L','))
+        {
+            if (!item.empty())
+            {
+                items.push_back(item);
+            }
+        }
+        return items;
+    }
+
     ProgressView::ProgressView(const std::wstring& title)
         : View(380, 136)
     {
