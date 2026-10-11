@@ -1,5 +1,5 @@
-bin/
-obj/
-.vs/
-*.user
+build/
 out/
+.vs/
+CMakeSettings.json
+CMakeUserPresets.json
