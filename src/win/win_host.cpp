@@ -743,6 +743,12 @@ namespace rf::win
         return r.empty() ? std::wstring() : r.front();
     }
 
+    std::wstring WinHost::AskOpenLyrics(const std::wstring& folder)
+    {
+        const auto r = RunOpen(Owner(), folder, L"Открыть текст песни", {{L"Текст песни", L"*.lrc;*.txt"}, {L"Все файлы", L"*.*"}}, false, false);
+        return r.empty() ? std::wstring() : r.front();
+    }
+
     std::wstring WinHost::AskOpenVideo(const std::wstring& folder)
     {
         const auto r = RunOpen(Owner(), folder, L"Открыть видео",

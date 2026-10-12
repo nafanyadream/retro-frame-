@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lyrics.h"
 #include "media.h"
 
 namespace rf
@@ -8,6 +9,7 @@ namespace rf
     constexpr int MusicClientH = 214;
     constexpr double MusicFps = 25.0;
     constexpr double DiscSpeed = 120.0;
+    constexpr int LyricsStripH = 22;
 
     struct MusicPlan
     {
@@ -33,9 +35,12 @@ namespace rf
         bool equalizer = false;
         float bars[SpectrumBands] = {};
         float peaks[SpectrumBands] = {};
+        bool lyricsStrip = false;
+        std::wstring lyric;
+        double lyricAge = 0.0;
     };
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square);
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics = false);
 
     class MusicComposer
     {
@@ -86,10 +91,12 @@ namespace rf
         std::vector<float> levels;
         bool equalizer = false;
         std::vector<float> spectrum;
+        std::vector<LyricLine> lyrics;
         EffectSettings effects;
     };
 
     MusicFrame MusicFrameAt(double now, double length, double absolute, bool spin, bool meter, const std::vector<float>& levels);
     void AddSpectrum(MusicFrame& frame, const std::vector<float>& spectrum, double absolute);
+    void AddLyrics(MusicFrame& frame, const std::vector<LyricLine>& lines, double absolute);
     ExportResult ExportMusic(Host& host, const MusicJob& job, const ExportStep& step, std::wstring& error);
 }

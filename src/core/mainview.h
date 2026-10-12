@@ -84,6 +84,8 @@ namespace rf
             std::vector<float> levels;
             std::vector<float> spectrum;
             bool levelsReady = false;
+            std::vector<LyricLine> lyrics;
+            std::wstring lyricsName;
         };
 
         Media* Cur();
@@ -102,6 +104,9 @@ namespace rf
         void ResetCover();
         void EnsureLevels();
         MusicFrame TrackFrame() const;
+        bool ShowLyrics() const;
+        bool LoadLyrics(const std::wstring& path, bool quiet);
+        void PickLyrics();
         ExportResult WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work);
         void FinishExport(ExportResult outcome, const std::wstring& path, const std::wstring& error);
 
@@ -211,6 +216,9 @@ namespace rf
         ui::CheckBox* spinCheck_ = nullptr;
         ui::CheckBox* meterCheck_ = nullptr;
         ui::CheckBox* equalizerCheck_ = nullptr;
+        ui::CheckBox* lyricsCheck_ = nullptr;
+        ui::Button* lyricsLoad_ = nullptr;
+        ui::Label* lyricsLabel_ = nullptr;
         ui::ComboBox* fade_ = nullptr;
         ui::Label* levelsLabel_ = nullptr;
         std::unique_ptr<FrameStream> fetch_;

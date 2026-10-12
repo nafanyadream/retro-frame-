@@ -465,8 +465,14 @@ namespace rf
         std::vector<std::wstring> images;
         std::wstring video;
         std::wstring song;
+        std::wstring lyrics;
         for (const auto& path : paths)
         {
+            if (IsLyricsFile(path))
+            {
+                lyrics = path;
+                continue;
+            }
             const std::wstring lower = ToLower(path);
             const bool gif = lower.size() >= 4 && lower.compare(lower.size() - 4, 4, L".gif") == 0;
             if (video.empty() && (IsVideoFile(path) || (gif && mode_ == VideoMode)))
@@ -493,6 +499,22 @@ namespace rf
         if (!song.empty())
         {
             OpenTrack(song);
+            if (!lyrics.empty() && track_)
+            {
+                LoadLyrics(lyrics, false);
+            }
+            return;
+        }
+        if (!lyrics.empty() && images.empty())
+        {
+            if (!track_)
+            {
+                SetMode(MusicMode);
+                Warn(L"Сначала откройте песню, потом добавьте к ней текст.");
+                return;
+            }
+            SetMode(MusicMode);
+            LoadLyrics(lyrics, false);
             return;
         }
         SetMode(PhotoMode);

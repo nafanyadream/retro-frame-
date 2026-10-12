@@ -200,6 +200,42 @@ int main(int argc, char** argv)
         Check(above && bars[6] > 0.5f, "equalizer: peaks stay above bars");
     }
 
+    {
+        const std::string lrc = "\xEF\xBB\xBF[ar:Ночной экспресс]\r\n[ti:Огни]\r\n[offset:+500]\r\n[00:01.00]Первая <00:01.50>строка\r\n[00:03.50][00:10.00]Припев\r\n"
+                                "[00:02.25]Вторая\r\n[00:12.00]\r\n";
+        const std::vector<rf::LyricLine> lines = rf::ParseLyrics(lrc, 60.0);
+        Check(lines.size() == 5 && Near(lines[0].time, 0.5, 1e-6) && lines[0].text == L"Первая строка" && Near(lines[1].time, 1.75, 1e-6) &&
+                  lines[1].text == L"Вторая" && lines[2].text == L"Припев" && Near(lines[3].time, 9.5, 1e-6) && lines[4].text.empty(),
+              "lyrics: timestamps, offset, word stamps, metadata");
+        Check(rf::LyricIndex(lines, 0.2) == -1 && rf::LyricIndex(lines, 0.5) == 0 && rf::LyricIndex(lines, 3.2) == 2 && rf::LyricIndex(lines, 100.0) == 4,
+              "lyrics: current line by time");
+        const std::vector<rf::LyricLine> cp = rf::ParseLyrics("[00:01]\xcf\xf0\xe8\xe2\xe5\xf2, \xec\xe8\xf0!", 10.0);
+        Check(cp.size() == 1 && cp[0].text == L"Привет, мир!" && Near(cp[0].time, 1.0, 1e-6), "lyrics: windows-1251 file");
+        std::string wide = "\xFF\xFE";
+        for (wchar_t ch : std::wstring(L"[00:02.5]Ёлка"))
+        {
+            wide.push_back(char(ch & 0xFF));
+            wide.push_back(char((ch >> 8) & 0xFF));
+        }
+        const std::vector<rf::LyricLine> utf16 = rf::ParseLyrics(wide, 10.0);
+        Check(utf16.size() == 1 && utf16[0].text == L"Ёлка" && Near(utf16[0].time, 2.5, 1e-6), "lyrics: utf-16 file");
+        const std::vector<rf::LyricLine> plain = rf::ParseLyrics("Раз\n\nДва\nТри\n", 9.0);
+        Check(plain.size() == 3 && Near(plain[1].time, 3.0, 1e-6) && Near(plain[2].time, 6.0, 1e-6) && plain[2].text == L"Три", "lyrics: plain text spread over the song");
+        Check(rf::IsLyricsFile(L"C:\\a\\Песня.LRC") && rf::IsLyricsFile(L"b.txt") && !rf::IsLyricsFile(L"c.mp3"), "lyrics file types");
+        const rf::MusicPlan plainPlan = rf::PlanMusic(Song(0), 1080, 1080, false, false);
+        const rf::MusicPlan withText = rf::PlanMusic(Song(0), 1080, 1080, false, true);
+        Check(withText.clientH >= plainPlan.clientH + rf::LyricsStripH && withText.outH > plainPlan.outH && withText.outH % 2 == 0, "plan: lyrics make the player taller");
+        rf::MusicComposer comp(Song(0), rf::FrameVars{L"a.mp3", 0, 0, L""}, withText, rf::Image(), L"A", L"B", rf::Image());
+        rf::MusicFrame f1 = rf::MusicFrameAt(1.0, 10.0, 1.0, false, false, {});
+        const std::vector<rf::LyricLine> longLine = {{0.0, L"очень длинная строчка песни, которая никак не помещается в окошко плеера целиком"}};
+        rf::MusicFrame f2 = f1;
+        rf::AddLyrics(f1, longLine, 1.0);
+        rf::AddLyrics(f2, longLine, 3.0);
+        const rf::Image a1 = comp.Small(f1, rf::Image());
+        const rf::Image a2 = comp.Small(f2, rf::Image());
+        Check(f1.lyricsStrip && a1.pixels != a2.pixels, "lyrics: long line scrolls");
+    }
+
     const std::wstring track = dir + L"/песня.mp3";
     const std::wstring bare = dir + L"/bare.wav";
     const std::wstring coverPng = dir + L"/cover.png";
@@ -331,6 +367,10 @@ int main(int argc, char** argv)
         main.SetMode(rf::MusicMode);
         main.Refresh();
         shot("ui_music_empty");
+        {
+            std::ofstream lrc(rftest::Narrow(dir + L"/песня.lrc"), std::ios::binary);
+            lrc << "[00:00.00]Огни\n[00:03.00]Ночного города\n";
+        }
         main.OnDropFiles({track});
         for (int i = 0; i < 200 && !main.LevelsReady(); ++i)
         {
@@ -359,6 +399,24 @@ int main(int argc, char** argv)
         settle(1);
         Check(main.ShownFormat() == 3 && !main.Settings().music.spin, "format list shows the music format after other changes");
         click(340, 221);
+        settle(1);
+        host.saveAnswer = dir + L"/still_text.png";
+        click(240, 59);
+        settle(2);
+        const rf::Image withLyrics = host.writtenImage;
+        int lyricPixels = 0;
+        for (auto px : withLyrics.pixels)
+        {
+            lyricPixels += rf::Opaque(px) == rf::Rgb(0x40, 0xF0, 0x40);
+        }
+        click(340, 315);
+        settle(1);
+        host.saveAnswer = dir + L"/still_notext.png";
+        click(240, 59);
+        settle(2);
+        Check(lyricPixels > 50 && !main.Settings().music.lyrics && host.writtenImage.height < withLyrics.height, "lyrics under the player, switchable");
+        rftest::WritePpm(out + "/ui_music_lyrics.ppm", withLyrics);
+        click(340, 315);
         settle(1);
         main.MutableSettings().music.square = true;
         main.Refresh();

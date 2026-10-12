@@ -273,6 +273,7 @@ namespace rftest
         std::wstring folderAnswer;
         std::wstring archiveAnswer;
         std::wstring videoAnswer;
+        std::wstring lyricsAnswer;
         std::wstring saveAnswer;
         std::wstring ffmpeg;
         std::wstring written;
@@ -289,6 +290,7 @@ namespace rftest
         std::wstring AskOpenArchive(const std::wstring&) override { return archiveAnswer; }
         std::wstring AskOpenVideo(const std::wstring&) override { return videoAnswer; }
         std::wstring AskOpenAudio(const std::wstring&) override { return videoAnswer; }
+        std::wstring AskOpenLyrics(const std::wstring&) override { return lyricsAnswer; }
         std::wstring AskSaveVideo(const std::wstring&, const std::wstring&, bool) override { return saveAnswer; }
         bool AskColor(rf::Color, rf::Color&) override { return false; }
         bool ReadImage(const std::wstring& path, rf::Image& out, std::wstring& e) override { return ReadIcon(path, out, e); }
@@ -326,7 +328,16 @@ namespace rftest
         }
         bool FileExists(const std::wstring& path) override { return fs::exists(Narrow(path)); }
         std::wstring SettingsFolder() override { return L""; }
-        bool ReadText(const std::wstring&, std::string&) override { return false; }
+        bool ReadText(const std::wstring& path, std::string& out) override
+        {
+            if (!fs::exists(Narrow(path)))
+            {
+                return false;
+            }
+            const auto bytes = Slurp(Narrow(path));
+            out.assign(bytes.begin(), bytes.end());
+            return true;
+        }
         bool WriteText(const std::wstring&, const std::string&) override { return true; }
         bool RemoveFile(const std::wstring& path) override
         {

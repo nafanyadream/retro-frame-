@@ -93,6 +93,16 @@ namespace rf
             s_.music.fade = FadeChoices[std::clamp(i, 0, int(std::size(FadeChoices)) - 1)];
             Changed();
         };
+        lyricsCheck_ = AddCheck(r, 334, 308, 170, L"Текст песни под плеером");
+        lyricsCheck_->onChange = [this](bool v) {
+            s_.music.lyrics = v;
+            Changed();
+        };
+        lyricsLoad_ = Place<ui::Button>(r, 514, 304, 94, 21);
+        lyricsLoad_->text = L"Файл .lrc...";
+        lyricsLoad_->onClick = [this]() { PickLyrics(); };
+        lyricsLabel_ = AddLabel(r, 334, 330, 274, L"");
+        lyricsLabel_->color = Rgb(0x40, 0x40, 0x40);
         auto* hint = AddLabel(r, 334, 352, 274, L"Затухание работает, когда выбран фрагмент.");
         hint->color = Rgb(0x40, 0x40, 0x40);
         levelsLabel_ = AddLabel(r, 334, 374, 274, L"");
@@ -100,8 +110,8 @@ namespace rf
         auto* resultHint = AddLabel(r, 324, 544, 284, L"MP4 — видео с песней.\nPNG — один кадр на выбранной секунде,\nтот же кадр копирует Ctrl+C.");
         resultHint->rect.h = 40;
         resultHint->color = Rgb(0x40, 0x40, 0x40);
-        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, equalizerCheck_, l4, fade_, hint, levelsLabel_,
-                      resultHint};
+        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, equalizerCheck_, l4, fade_, lyricsCheck_, lyricsLoad_,
+                      lyricsLabel_, hint, levelsLabel_, resultHint};
     }
 
     void MainView::SyncMusicControls()
@@ -123,6 +133,20 @@ namespace rf
         spinCheck_->checked = s_.music.spin;
         meterCheck_->checked = s_.music.meter;
         equalizerCheck_->checked = s_.music.equalizer;
+        lyricsCheck_->checked = s_.music.lyrics;
+        lyricsLoad_->enabled = has;
+        if (!has)
+        {
+            lyricsLabel_->text = L"Текст берётся из файла .lrc рядом с песней.";
+        }
+        else if (track_->lyrics.empty())
+        {
+            lyricsLabel_->text = L"Рядом с песней нет файла .lrc";
+        }
+        else
+        {
+            lyricsLabel_->text = L"Текст: " + track_->lyricsName + L", строк: " + std::to_wstring(track_->lyrics.size());
+        }
         fade_->index = FadeIndex(s_.music.fade);
         levelsLabel_->text = has && !track_->levelsReady ? L"Слушаю песню для шкалы и эквалайзера..." : L"";
     }
@@ -145,13 +169,66 @@ namespace rf
         {
             AddSpectrum(mf, track_->spectrum, track_->position);
         }
+        if (ShowLyrics())
+        {
+            AddLyrics(mf, track_->lyrics, track_->position);
+        }
         return mf;
+    }
+
+    bool MainView::ShowLyrics() const
+    {
+        return s_.music.lyrics && track_ && !track_->lyrics.empty();
+    }
+
+    bool MainView::LoadLyrics(const std::wstring& path, bool quiet)
+    {
+        if (!track_)
+        {
+            return false;
+        }
+        std::string bytes;
+        if (!host_.ReadText(path, bytes))
+        {
+            if (!quiet)
+            {
+                Warn(L"Не удалось прочитать файл «" + FileNameOf(path) + L"».");
+            }
+            return false;
+        }
+        std::vector<LyricLine> lines = ParseLyrics(bytes, track_->info.duration);
+        if (lines.empty())
+        {
+            if (!quiet)
+            {
+                Warn(L"В файле «" + FileNameOf(path) + L"» нет строк текста.");
+            }
+            return false;
+        }
+        track_->lyrics = std::move(lines);
+        track_->lyricsName = FileNameOf(path);
+        SyncControls();
+        UpdatePreview();
+        return true;
+    }
+
+    void MainView::PickLyrics()
+    {
+        if (!track_)
+        {
+            return;
+        }
+        const std::wstring path = host_.AskOpenLyrics(DirectoryOf(track_->path));
+        if (!path.empty())
+        {
+            LoadLyrics(path, false);
+        }
     }
 
     MusicPlan MainView::MusicPlanFor(const FrameSettings& frame) const
     {
         const CanvasSize c = s_.music.square ? CanvasAt(s_.music.canvas) : CanvasSize{SquareSizes[0], SquareSizes[0]};
-        return PlanMusic(frame, c.width, c.height, s_.music.square);
+        return PlanMusic(frame, c.width, c.height, s_.music.square, ShowLyrics());
     }
 
     void MainView::OpenTrack(const std::wstring& path)
@@ -190,6 +267,14 @@ namespace rf
             track->cover = std::move(cover);
         }
         track_ = std::move(track);
+        for (const wchar_t* ext : {L".lrc", L".LRC", L".Lrc"})
+        {
+            const std::wstring lrc = JoinPath(DirectoryOf(path), StemOf(FileNameOf(path)) + ext);
+            if (host_.FileExists(lrc) && LoadLyrics(lrc, true))
+            {
+                break;
+            }
+        }
         levels_ = std::make_unique<LevelReader>(host_, path);
         s_.musicFolder = DirectoryOf(path);
         dirty_ = true;
@@ -364,6 +449,10 @@ namespace rf
             job.levels = track_->levels;
             job.equalizer = s_.music.equalizer;
             job.spectrum = track_->spectrum;
+            if (ShowLyrics())
+            {
+                job.lyrics = track_->lyrics;
+            }
             return ExportMusic(host_, job, step, err);
         });
         FinishExport(outcome, path, err);

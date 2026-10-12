@@ -231,16 +231,39 @@ namespace rf
             p.Fill(Rect{track.x + 2, track.y + 2, done, track.h - 4}, sh.shadow);
             const int thumbX = std::clamp(track.x + 2 + done - 5, track.x + 2, track.Right() - 2 - 10);
             p.Raised(Rect{thumbX, track.y + 1, 10, track.h - 2}, sh);
+            if (m.lyricsStrip)
+            {
+                const Rect strip{CoverX, MusicClientH, right - CoverX, LyricsStripH - 4};
+                p.Sunken(strip, sh, &black);
+                const Rect lcd = strip.Inflate(-3);
+                Painter q = p.Clipped(lcd);
+                const int lw = Text().Width(m.lyric, f);
+                const int ly = lcd.y + (lcd.h - Text().Height(f)) / 2;
+                const Color green = Rgb(0x40, 0xF0, 0x40);
+                if (lw <= lcd.w)
+                {
+                    q.Text(lcd.x + (lcd.w - lw) / 2, ly, m.lyric, f, green);
+                }
+                else
+                {
+                    const int gap = 48;
+                    const int shift = int(std::fmod(std::max(0.0, m.lyricAge - 0.8) * 34.0, double(lw + gap)));
+                    q.Text(lcd.x - shift, ly, m.lyric, f, green);
+                    q.Text(lcd.x - shift + lw + gap, ly, m.lyric, f, green);
+                }
+            }
         }
     }
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square)
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics)
     {
         MusicPlan p;
         p.square = square;
+        const int baseH = MusicClientH + (lyrics ? LyricsStripH : 0);
+        p.clientH = baseH;
         const int outW = std::max(120, canvasW & ~1);
         const int outH = std::max(120, canvasH & ~1);
-        const FrameGeometry g = MeasureFrame(MusicWindow(frame), MusicClientW, MusicClientH);
+        const FrameGeometry g = MeasureFrame(MusicWindow(frame), MusicClientW, baseH);
         const int roomW = square ? outW * 92 / 100 : outW;
         const int roomH = square ? outH * 92 / 100 : outH;
         int fits = 1;
@@ -273,7 +296,7 @@ namespace rf
             ++p.clientH;
         }
         p.windowW = (g.width - MusicClientW + p.clientW) * p.scale;
-        p.windowH = (g.height - MusicClientH + p.clientH) * p.scale;
+        p.windowH = (g.height - baseH + p.clientH) * p.scale;
         p.outW = p.windowW;
         p.outH = p.windowH;
         return p;
@@ -383,6 +406,17 @@ namespace rf
         SpectrumAt(spectrum, absolute, frame.bars, frame.peaks);
     }
 
+    void AddLyrics(MusicFrame& frame, const std::vector<LyricLine>& lines, double absolute)
+    {
+        frame.lyricsStrip = true;
+        const int i = LyricIndex(lines, absolute);
+        if (i >= 0)
+        {
+            frame.lyric = lines[std::size_t(i)].text;
+            frame.lyricAge = absolute - lines[std::size_t(i)].time;
+        }
+    }
+
     ExportResult ExportMusic(Host& host, const MusicJob& job, const ExportStep& step, std::wstring& error)
     {
         const double fps = std::clamp(job.fps, 1.0, 60.0);
@@ -412,6 +446,10 @@ namespace rf
             if (job.equalizer)
             {
                 AddSpectrum(mf, job.spectrum, job.start + t);
+            }
+            if (!job.lyrics.empty())
+            {
+                AddLyrics(mf, job.lyrics, job.start + t);
             }
             return &composer.Compose(mf, i, true);
         }, step, error);

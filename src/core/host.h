@@ -79,6 +79,7 @@ namespace rf
         virtual std::wstring AskOpenArchive(const std::wstring& folder) = 0;
         virtual std::wstring AskOpenVideo(const std::wstring& folder) = 0;
         virtual std::wstring AskOpenAudio(const std::wstring& folder) = 0;
+        virtual std::wstring AskOpenLyrics(const std::wstring& folder) = 0;
         virtual std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) = 0;
         virtual bool AskColor(Color initial, Color& result) = 0;
 

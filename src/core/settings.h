@@ -48,6 +48,7 @@ namespace rf
         bool spin = true;
         bool meter = true;
         bool equalizer = false;
+        bool lyrics = true;
         int fps = 25;
     };
 
