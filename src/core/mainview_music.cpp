@@ -230,6 +230,9 @@ namespace rf
         const double length = std::max(0.001, TrimEnd() - start);
         const MusicFrame mf = MusicFrameAt(track_->position - start, length, track_->position, s_.music.spin, s_.music.meter, track_->levels);
         Image img = composer.Small(mf, plan.square ? bgPreview_ : Image());
+        const int k = std::max(1, plan.scale);
+        ApplyEffects(img, f, plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{0, 0, img.width, img.height}, 1, mf.now,
+                     int(mf.now * 15.0));
         const int availW = preview_->rect.w - 4 - 12;
         const int availH = preview_->rect.h - 4 - 12;
         preview_->image = img.width > availW || img.height > availH ? FitInside(img, availW, availH, false) : std::move(img);
@@ -268,6 +271,7 @@ namespace rf
         const MusicPlan plan = MusicPlanFor(f);
         const Image background = plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.outW, plan.outH) : Image();
         MusicComposer composer(f, FrameVars{track_->name, 0, 0, L""}, plan, background, track_->artist, track_->title, track_->cover);
+        composer.SetEffects(s_.effects);
         const double start = TrimStart();
         const double length = std::max(0.001, TrimEnd() - start);
         out = composer.Compose(MusicFrameAt(track_->position - start, length, track_->position, s_.music.spin, s_.music.meter, track_->levels));
@@ -329,6 +333,7 @@ namespace rf
         job.frame = MusicFrameSettings();
         job.vars = FrameVars{track_->name, 0, 0, L""};
         job.plan = MusicPlanFor(job.frame);
+        job.effects = s_.effects;
         job.background =
             job.plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH) : Image();
         job.artist = track_->artist;

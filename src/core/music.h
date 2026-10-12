@@ -39,7 +39,9 @@ namespace rf
     public:
         MusicComposer(const FrameSettings& frame, const FrameVars& vars, const MusicPlan& plan, const Image& background, const std::wstring& artist,
                       const std::wstring& title, const Image& cover);
-        const Image& Compose(const MusicFrame& f);
+        void SetEffects(const EffectSettings& effects);
+        const Image& Compose(const MusicFrame& f, int seed = 0, bool animate = false);
+        const Image& Intro(double t, int seed);
         Image Small(const MusicFrame& f, const Image& background);
 
     private:
@@ -55,6 +57,9 @@ namespace rf
         Image coverBig_;
         Image coverSmall_;
         Image out_;
+        EffectSettings effects_;
+        EffectsLayer fx_;
+        bool fxOn_ = false;
     };
 
     struct MusicJob
@@ -76,6 +81,7 @@ namespace rf
         std::wstring title;
         Image cover;
         std::vector<float> levels;
+        EffectSettings effects;
     };
 
     MusicFrame MusicFrameAt(double now, double length, double absolute, bool spin, bool meter, const std::vector<float>& levels);

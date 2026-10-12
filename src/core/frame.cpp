@@ -508,6 +508,12 @@ namespace rf
         return img;
     }
 
+    Rect CloseButtonRect(const FrameSettings& settings, int frameWidth)
+    {
+        const int border = settings.kind == WindowKind::Normal ? 4 : 3;
+        return Rect{frameWidth - border - 2 - 16, border + 2, 16, 14};
+    }
+
     int AutoScale(int contentWidth, int contentHeight)
     {
         const int side = std::max(contentWidth, contentHeight);

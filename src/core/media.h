@@ -1,5 +1,6 @@
 #pragma once
 
+#include "effects.h"
 #include "frame.h"
 #include "host.h"
 
@@ -119,7 +120,9 @@ namespace rf
     {
     public:
         PlayerComposer(const FrameSettings& frame, const FrameVars& vars, const VideoPlan& plan, const Image& background);
-        const Image& Compose(const Image& video, double position, const std::wstring& time);
+        void SetEffects(const EffectSettings& effects);
+        const Image& Compose(const Image& video, double position, const std::wstring& time, double t = 0.0, int seed = 0, bool animate = false);
+        const Image& Intro(double t, int seed);
 
     private:
         FrameSettings frame_;
@@ -127,6 +130,9 @@ namespace rf
         VideoPlan plan_;
         Image background_;
         Image out_;
+        EffectSettings effects_;
+        EffectsLayer fx_;
+        bool fxOn_ = false;
     };
 
     struct ExportJob
@@ -143,6 +149,7 @@ namespace rf
         FrameVars vars;
         VideoPlan plan;
         Image background;
+        EffectSettings effects;
     };
 
     enum class ExportResult
@@ -167,6 +174,7 @@ namespace rf
         double start = 0.0;
         double duration = 0.0;
         double fade = 0.0;
+        double delay = 0.0;
     };
 
     using FrameSource = std::function<const Image*(int index)>;

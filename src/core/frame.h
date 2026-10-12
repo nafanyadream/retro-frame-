@@ -62,6 +62,7 @@ namespace rf
     FrameGeometry MeasureFrame(const FrameSettings& settings, int contentWidth, int contentHeight);
     Image RenderFrame(const FrameSettings& settings, int contentWidth, int contentHeight, const FrameVars& vars, Rect* client);
     int AutoScale(int contentWidth, int contentHeight);
+    Rect CloseButtonRect(const FrameSettings& settings, int frameWidth);
     int EffectiveScale(const FrameSettings& settings, int contentWidth, int contentHeight);
     Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale);
 }

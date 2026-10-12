@@ -245,6 +245,15 @@ namespace rf
         o << "music.spin=" << (s.music.spin ? 1 : 0) << "\n";
         o << "music.meter=" << (s.music.meter ? 1 : 0) << "\n";
         o << "music.fps=" << s.music.fps << "\n";
+        o << "fx.intro=" << (s.effects.intro ? 1 : 0) << "\n";
+        o << "fx.cursor=" << s.effects.cursor << "\n";
+        o << "fx.cursorPlace=" << s.effects.cursorPlace << "\n";
+        o << "fx.popups=" << s.effects.popups << "\n";
+        o << "fx.popupIcon=" << s.effects.popupIcon << "\n";
+        o << "fx.popupButtons=" << s.effects.popupButtons << "\n";
+        o << "fx.popupTitle=" << Escape(s.effects.popupTitle) << "\n";
+        o << "fx.popupText=" << Escape(s.effects.popupText) << "\n";
+        o << "fx.screen=" << s.effects.screen << "\n";
         o << "background=" << Hex(s.background) << "\n";
         o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
         o << "format=" << s.format << "\n";
@@ -423,6 +432,15 @@ namespace rf
         {
             s.music.fps = MusicSettings().fps;
         }
+        getBool("fx.intro", s.effects.intro);
+        getInt("fx.cursor", s.effects.cursor, 0, 3);
+        getInt("fx.cursorPlace", s.effects.cursorPlace, 0, 3);
+        getInt("fx.popups", s.effects.popups, 0, 3);
+        getInt("fx.popupIcon", s.effects.popupIcon, 0, 3);
+        getInt("fx.popupButtons", s.effects.popupButtons, 0, 2);
+        getText("fx.popupTitle", s.effects.popupTitle);
+        getText("fx.popupText", s.effects.popupText);
+        getInt("fx.screen", s.effects.screen, 0, 2);
         getColor("background", s.background);
         getBool("backgroundPicture", s.backgroundPicture);
         getInt("format", s.format, 0, 2);

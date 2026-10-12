@@ -1068,7 +1068,23 @@ namespace rf
         frame_.player = true;
     }
 
-    const Image& PlayerComposer::Compose(const Image& video, double position, const std::wstring& time)
+    void PlayerComposer::SetEffects(const EffectSettings& effects)
+    {
+        effects_ = effects;
+        const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
+        fx_ = EffectsLayer(effects, frame_, Stage{window, plan_.scale});
+        fxOn_ = HasOverlays(effects);
+    }
+
+    const Image& PlayerComposer::Intro(double t, int seed)
+    {
+        out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
+        fx_.DrawIntro(out_, plan_.square ? background_ : Image(), t);
+        ApplyScreen(out_, effects_.screen, seed, plan_.scale);
+        return out_;
+    }
+
+    const Image& PlayerComposer::Compose(const Image& video, double position, const std::wstring& time, double t, int seed, bool animate)
     {
         frame_.playerPosition = position;
         vars_.time = time;
@@ -1082,6 +1098,10 @@ namespace rf
         if (!plan_.square)
         {
             out_ = std::move(window);
+            if (fxOn_)
+            {
+                fx_.Apply(out_, t, seed, animate);
+            }
             return out_;
         }
         if (background_.width == plan_.outW && background_.height == plan_.outH)
@@ -1093,6 +1113,10 @@ namespace rf
             out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         }
         Blit(out_, window, plan_.windowX, plan_.windowY);
+        if (fxOn_)
+        {
+            fx_.Apply(out_, t, seed, animate);
+        }
         return out_;
     }
 
@@ -1120,10 +1144,19 @@ namespace rf
                     args.insert(args.end(), {L"-ss", Number(spec.start)});
                 }
                 args.insert(args.end(), {L"-t", Number(spec.duration), L"-i", spec.source, L"-map", L"0:v:0", L"-map", L"1:a:0?"});
+                std::wstring filters;
                 if (spec.fade > 0.0 && spec.duration > 0.2)
                 {
                     const double f = std::min(spec.fade, spec.duration / 3.0);
-                    args.insert(args.end(), {L"-af", L"afade=t=in:st=0:d=" + Number(f) + L",afade=t=out:st=" + Number(spec.duration - f) + L":d=" + Number(f)});
+                    filters = L"afade=t=in:st=0:d=" + Number(f) + L",afade=t=out:st=" + Number(spec.duration - f) + L":d=" + Number(f);
+                }
+                if (spec.delay > 0.0)
+                {
+                    filters += (filters.empty() ? L"" : L",") + std::wstring(L"adelay=") + std::to_wstring(int(std::lround(spec.delay * 1000.0))) + L":all=1";
+                }
+                if (!filters.empty())
+                {
+                    args.insert(args.end(), {L"-af", filters});
                 }
             }
             const wchar_t* crf[] = {L"18", L"23", L"28"};
@@ -1206,7 +1239,8 @@ namespace rf
             return ExportResult::Failed;
         }
         const double fps = std::clamp(job.fps, 1.0, 60.0);
-        const int total = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        const int intro = job.effects.intro ? int(std::ceil(IntroSeconds * fps - 1e-6)) : 0;
+        const int total = intro + std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
         FrameStream reader(host, job.source, job.start, job.duration, fps, job.plan.videoW, job.plan.videoH);
         if (!reader.Started())
         {
@@ -1224,13 +1258,19 @@ namespace rf
         spec.source = job.source;
         spec.start = job.start;
         spec.duration = job.duration;
+        spec.delay = intro / fps;
         PlayerComposer composer(job.frame, job.vars, job.plan, job.background);
+        composer.SetEffects(job.effects);
         const std::wstring length = FormatClock(job.duration);
         Image frame;
         const ExportResult result = Encode(host, spec, total, [&](int i) -> const Image* {
+            if (i < intro)
+            {
+                return &composer.Intro(i / fps, i);
+            }
             if (!reader.Next(frame))
             {
-                if (i == 0)
+                if (i == intro)
                 {
                     error = FromUtf8(LastLines(reader.Log(), 3));
                     if (error.empty())
@@ -1240,8 +1280,8 @@ namespace rf
                 }
                 return nullptr;
             }
-            const double t = i / fps;
-            return &composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length);
+            const double t = (i - intro) / fps;
+            return &composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length, t, i, true);
         }, step, error);
         reader.Stop();
         return result;

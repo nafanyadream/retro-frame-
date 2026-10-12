@@ -16,6 +16,7 @@ g++ "${flags[@]}" -o "$out/ui_test" src/core/*.cpp tests/ui_test.cpp
 g++ "${flags[@]}" -o "$out/frames_test" src/core/*.cpp tests/frames_test.cpp
 g++ "${flags[@]}" -o "$out/video_test" src/core/*.cpp tests/video_test.cpp
 g++ "${flags[@]}" -o "$out/music_test" src/core/*.cpp tests/music_test.cpp
+g++ "${flags[@]}" -o "$out/effects_test" src/core/*.cpp tests/effects_test.cpp
 
 python3 tests/make_test_data.py "$out/data"
 python3 tests/check_zip.py "$out/zip_test" "$out/zip"
@@ -25,7 +26,9 @@ python3 tests/check_zip.py "$out/zip_test" "$out/zip"
 if command -v ffmpeg > /dev/null; then
     "$out/video_test" "$out" "$(command -v ffmpeg)"
     "$out/music_test" "$out" "$(command -v ffmpeg)"
+    "$out/effects_test" "$out" "$(command -v ffmpeg)"
 else
+    "$out/effects_test" "$out"
     echo "ffmpeg не найден: проверки видео и музыки пропущены"
 fi
 echo "Снимки окон и рамок: $out/*.ppm"

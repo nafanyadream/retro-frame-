@@ -244,6 +244,98 @@ namespace rf
         menu_->SelectAll();
     }
 
+    EffectsView::EffectsView(const EffectSettings& e)
+        : View(440, 424), base_(e)
+    {
+        AddDialogChrome(*this, L"Эффекты");
+        const int left = 18;
+        const int fieldX = 104;
+        const int fieldW = root.width - fieldX - 18;
+        const auto group = [&](int y, int h, const std::wstring& text) {
+            auto* g = root.Add<ui::GroupBox>();
+            g->rect = Rect{8, y, root.width - 16, h};
+            g->text = text;
+        };
+        const auto label = [&](int x, int y, int w, const std::wstring& text) {
+            auto* l = root.Add<ui::Label>();
+            l->rect = Rect{x, y + 4, w, 13};
+            l->text = text;
+        };
+        const auto combo = [&](int x, int y, int w, std::vector<std::wstring> items, int index) {
+            auto* c = root.Add<ui::ComboBox>();
+            c->rect = Rect{x, y, w, 21};
+            c->items = std::move(items);
+            c->index = std::clamp(index, 0, int(c->items.size()) - 1);
+            return c;
+        };
+        const auto field = [&](int y, const std::wstring& text) {
+            auto* f = root.Add<ui::TextField>();
+            f->rect = Rect{fieldX, y, fieldW, 21};
+            f->SetText(text);
+            return f;
+        };
+        group(28, 44, L"Видео и музыка");
+        intro_ = root.Add<ui::CheckBox>();
+        intro_->rect = Rect{left, 46, root.width - 2 * left, 16};
+        intro_->text = L"Анимация открытия окна в начале ролика";
+        intro_->checked = e.intro;
+        group(78, 74, L"Курсор мыши");
+        label(left, 96, 80, L"Вид:");
+        cursor_ = combo(fieldX, 96, fieldW, {L"нет", L"стрелка", L"песочные часы", L"стрелка с часиками"}, e.cursor);
+        label(left, 122, 80, L"Где:");
+        place_ = combo(fieldX, 122, fieldW, {L"у крестика", L"в центре окна", L"справа внизу", L"на кнопке окна-ошибки"}, e.cursorPlace);
+        group(158, 164, L"Окна-ошибки поверх окна");
+        label(left, 176, 80, L"Показывать:");
+        popups_ = combo(fieldX, 176, fieldW, {L"нет", L"одно окно", L"каскад из 5 окон", L"каскад, по очереди в видео"}, e.popups);
+        label(left, 202, 80, L"Значок:");
+        icon_ = combo(fieldX, 202, 128, {L"ошибка", L"предупреждение", L"информация", L"вопрос"}, e.popupIcon);
+        label(fieldX + 136, 202, 50, L"Кнопки:");
+        buttons_ = combo(fieldX + 186, 202, fieldW - 186, {L"OK", L"OK и Отмена", L"Да и Нет"}, e.popupButtons);
+        label(left, 228, 80, L"Заголовок:");
+        title_ = field(228, e.popupTitle);
+        std::wstring first = e.popupText;
+        std::wstring second;
+        const std::size_t nl = first.find(L'\n');
+        if (nl != std::wstring::npos)
+        {
+            second = first.substr(nl + 1);
+            first.resize(nl);
+            std::replace(second.begin(), second.end(), L'\n', L' ');
+        }
+        label(left, 254, 80, L"Текст:");
+        line1_ = field(254, first);
+        line2_ = field(280, second);
+        group(328, 48, L"Экран");
+        label(left, 346, 80, L"Вид:");
+        screen_ = combo(fieldX, 346, 150, {L"обычный", L"ЭЛТ-монитор", L"VHS-кассета"}, e.screen);
+        auto* ok = root.Add<ui::Button>();
+        ok->rect = Rect{root.width - 14 - 75 - 6 - 75, root.height - 3 - 10 - 23, 75, 23};
+        ok->text = L"OK";
+        ok->isDefault = true;
+        auto* cancel = root.Add<ui::Button>();
+        cancel->rect = Rect{root.width - 14 - 75, root.height - 3 - 10 - 23, 75, 23};
+        cancel->text = L"Отмена";
+        View* self = this;
+        ok->onClick = [self]() { self->Close(1); };
+        cancel->onClick = [self]() { self->Close(0); };
+        InstallDialogKeys(*this, [self]() { self->Close(1); }, [self]() { self->Close(0); });
+    }
+
+    EffectSettings EffectsView::Result() const
+    {
+        EffectSettings e = base_;
+        e.intro = intro_->checked;
+        e.cursor = cursor_->index;
+        e.cursorPlace = place_->index;
+        e.popups = popups_->index;
+        e.popupIcon = icon_->index;
+        e.popupButtons = buttons_->index;
+        e.popupTitle = title_->text;
+        e.popupText = line2_->text.empty() ? line1_->text : line1_->text + L"\n" + line2_->text;
+        e.screen = screen_->index;
+        return e;
+    }
+
     std::vector<std::wstring> PlayerTextsView::Menu() const
     {
         std::vector<std::wstring> items;

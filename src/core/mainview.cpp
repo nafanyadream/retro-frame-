@@ -85,7 +85,8 @@ namespace rf
         Place<ui::Panel>(r, bx + 2, 50, 2, 19)->kind = ui::Panel::Kind::EtchedV;
         bx += 10;
         toolButton(L"Сохранить...", 96, [this]() { SaveCurrent(); }, true);
-        saveAllButton_ = toolButton(L"Сохранить все в папку...", 160, [this]() { SaveAll(); }, false);
+        effectsButton_ = toolButton(L"Эффекты...", 86, [this]() { EditEffects(); }, false);
+        saveAllButton_ = toolButton(L"Сохранить все...", 112, [this]() { SaveAll(); }, false);
         copyButton_ = toolButton(L"Копировать", 88, [this]() { CopyCurrent(); }, false);
         photoOnly_.push_back(saveAllButton_);
         photoOnly_.push_back(copyButton_);
@@ -361,6 +362,8 @@ namespace rf
         view.items.push_back(MenuItem{L"Следующее фото", L"→", [this]() { Select(current_ + 1); }, true, false});
         view.items[4].shortcut = L"Влево";
         view.items[5].shortcut = L"Вправо";
+        view.items.push_back(sep);
+        view.items.push_back(MenuItem{L"Эффекты...", L"", [this]() { EditEffects(); }, true, false});
         Menu help{L"Справка", {}};
         help.items.push_back(MenuItem{L"О программе...", L"", [this]() { About(); }, true, false});
         menu_->menus = {file, edit, view, help};
@@ -587,7 +590,32 @@ namespace rf
             f.icon = Image();
         }
         f.cornerImage = s_.cornerImage;
+        if (s_.effects.popups > 0)
+        {
+            f.active = false;
+        }
         return f;
+    }
+
+    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, int scale, double t, int seed) const
+    {
+        if (!HasOverlays(s_.effects))
+        {
+            return;
+        }
+        EffectsLayer(s_.effects, frame, Stage{window, scale}).Apply(img, t, seed, false);
+    }
+
+    void MainView::EditEffects()
+    {
+        EffectsView view(s_.effects);
+        if (host_.RunModal(view) != 1)
+        {
+            return;
+        }
+        s_.effects = view.Result();
+        bgKey_.clear();
+        Changed();
     }
 
     FrameSettings MainView::FrameFor(const Photo& photo) const
@@ -631,6 +659,7 @@ namespace rf
         Image frame = RenderFrame(fs, content.width, content.height, VarsFor(ph), &client);
         Painter p(frame);
         p.Draw(content, client.x, client.y);
+        ApplyEffects(frame, fs, Rect{0, 0, frame.width, frame.height}, 1, 0.0, 0);
         preview_->image = std::move(frame);
         preview_->message.clear();
         root.dirty = true;
@@ -760,7 +789,9 @@ namespace rf
             return false;
         }
         const FrameSettings fs = FrameFor(photo);
-        out = ComposeFramed(full, fs, VarsFor(photo), EffectiveScale(fs, full.width, full.height));
+        const int k = EffectiveScale(fs, full.width, full.height);
+        out = ComposeFramed(full, fs, VarsFor(photo), k);
+        ApplyEffects(out, fs, Rect{0, 0, out.width, out.height}, k, 0.0, 0);
         return true;
     }
 

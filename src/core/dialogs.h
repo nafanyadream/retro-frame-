@@ -1,5 +1,6 @@
 #pragma once
 
+#include "effects.h"
 #include "frame.h"
 #include "host.h"
 #include "widgets.h"
@@ -42,6 +43,26 @@ namespace rf
         ui::TextField* status_ = nullptr;
         ui::CheckBox* time_ = nullptr;
         ui::TextField* address_ = nullptr;
+    };
+
+    class EffectsView : public View
+    {
+    public:
+        explicit EffectsView(const EffectSettings& settings);
+        EffectSettings Result() const;
+
+    private:
+        EffectSettings base_;
+        ui::CheckBox* intro_ = nullptr;
+        ui::ComboBox* cursor_ = nullptr;
+        ui::ComboBox* place_ = nullptr;
+        ui::ComboBox* popups_ = nullptr;
+        ui::ComboBox* icon_ = nullptr;
+        ui::ComboBox* buttons_ = nullptr;
+        ui::TextField* title_ = nullptr;
+        ui::TextField* line1_ = nullptr;
+        ui::TextField* line2_ = nullptr;
+        ui::ComboBox* screen_ = nullptr;
     };
 
     class ProgressView : public View

@@ -261,7 +261,23 @@ namespace rf
         return img;
     }
 
-    const Image& MusicComposer::Compose(const MusicFrame& f)
+    void MusicComposer::SetEffects(const EffectSettings& effects)
+    {
+        effects_ = effects;
+        const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
+        fx_ = EffectsLayer(effects, frame_, Stage{window, plan_.scale});
+        fxOn_ = HasOverlays(effects);
+    }
+
+    const Image& MusicComposer::Intro(double t, int seed)
+    {
+        out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
+        fx_.DrawIntro(out_, plan_.square ? background_ : Image(), t);
+        ApplyScreen(out_, effects_.screen, seed, plan_.scale);
+        return out_;
+    }
+
+    const Image& MusicComposer::Compose(const MusicFrame& f, int seed, bool animate)
     {
         Rect client;
         const Image small = Window(f, client);
@@ -284,6 +300,10 @@ namespace rf
             out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         }
         Blit(out_, window, plan_.windowX, plan_.windowY);
+        if (fxOn_)
+        {
+            fx_.Apply(out_, f.now, seed, animate);
+        }
         return out_;
     }
 
@@ -325,7 +345,8 @@ namespace rf
     ExportResult ExportMusic(Host& host, const MusicJob& job, const ExportStep& step, std::wstring& error)
     {
         const double fps = std::clamp(job.fps, 1.0, 60.0);
-        const int total = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        const int intro = job.effects.intro ? int(std::ceil(IntroSeconds * fps - 1e-6)) : 0;
+        const int total = intro + std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
         EncoderSpec spec;
         spec.output = job.output;
         spec.quality = job.quality;
@@ -337,10 +358,16 @@ namespace rf
         spec.start = job.start;
         spec.duration = job.duration;
         spec.fade = job.fade;
+        spec.delay = intro / fps;
         MusicComposer composer(job.frame, job.vars, job.plan, job.background, job.artist, job.title, job.cover);
+        composer.SetEffects(job.effects);
         return Encode(host, spec, total, [&](int i) -> const Image* {
-            const double t = i / fps;
-            return &composer.Compose(MusicFrameAt(t, job.duration, job.start + t, job.spin, job.meter, job.levels));
+            if (i < intro)
+            {
+                return &composer.Intro(i / fps, i);
+            }
+            const double t = (i - intro) / fps;
+            return &composer.Compose(MusicFrameAt(t, job.duration, job.start + t, job.spin, job.meter, job.levels), i, true);
         }, step, error);
     }
 }

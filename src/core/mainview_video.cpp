@@ -728,6 +728,7 @@ namespace rf
                 DrawCentered(window, ResizeSmooth(clip_->frame, std::max(2, plan.videoW / k), std::max(2, plan.videoH / k)), client);
             }
             Painter(square).DrawOpaque(window, plan.windowX / k, plan.windowY / k);
+            ApplyEffects(square, f, Rect{plan.windowX / k, plan.windowY / k, window.width, window.height}, 1, rel, int(rel * 15.0));
             preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;
         }
         else
@@ -744,6 +745,7 @@ namespace rf
             {
                 DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), client);
             }
+            ApplyEffects(window, f, Rect{0, 0, window.width, window.height}, 1, rel, int(rel * 15.0));
             preview_->image = std::move(window);
         }
         root.dirty = true;
@@ -804,6 +806,7 @@ namespace rf
         job.frame = VideoFrame();
         job.vars = FrameVars{clip_->name, info.width, info.height, L""};
         job.plan = PlanVideo(job.frame, info.width, info.height, Target());
+        job.effects = s_.effects;
         if (job.plan.square)
         {
             job.background = CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH);

@@ -280,6 +280,7 @@ namespace rftest
         rf::Image clipboard;
         std::wstring sevenZip;
         int modalCalls = 0;
+        std::function<int(rf::View&)> onModal;
 
         std::vector<std::wstring> AskOpenImages(const std::wstring&) override { return {}; }
         std::wstring AskOpenIcon(const std::wstring&) override { return L""; }
@@ -371,10 +372,10 @@ namespace rftest
         {
             return PosixProcess::Start(Narrow(exe), args, input, output);
         }
-        int RunModal(rf::View&) override
+        int RunModal(rf::View& view) override
         {
             ++modalCalls;
-            return 0;
+            return onModal ? onModal(view) : 0;
         }
         void* OpenModeless(rf::View&) override { return nullptr; }
         void CloseModeless(void*) override {}

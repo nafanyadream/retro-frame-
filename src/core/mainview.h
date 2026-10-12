@@ -138,6 +138,8 @@ namespace rf
         void SyncLibrary();
         void LoadCorner();
         void EditTexts();
+        void EditEffects();
+        void ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, int scale, double t, int seed) const;
         void ResetSettings();
         void About();
         void Exit();
@@ -233,6 +235,7 @@ namespace rf
         ui::ComboBox* gifFps_ = nullptr;
         ui::ComboBox* gifWidth_ = nullptr;
         ui::Button* saveAllButton_ = nullptr;
+        ui::Button* effectsButton_ = nullptr;
         ui::Button* copyButton_ = nullptr;
         Image bgPreview_;
         std::wstring bgKey_;

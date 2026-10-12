@@ -1,5 +1,6 @@
 #pragma once
 
+#include "effects.h"
 #include "frame.h"
 #include "host.h"
 
@@ -61,6 +62,7 @@ namespace rf
         bool playerTime = true;
         VideoSettings video;
         MusicSettings music;
+        EffectSettings effects;
         Color background = Rgb(0x3A, 0x6E, 0xA5);
         bool backgroundPicture = false;
         std::wstring openFolder;
