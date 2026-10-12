@@ -56,7 +56,7 @@ namespace rf::win
     public:
         explicit WinHost(HINSTANCE instance);
 
-        int RunMain(View& view, int show, int x, int y, const std::function<void(int, int)>& onMoved);
+        int RunMain(View& view, int show, int x, int y, const std::function<void(int, int)>& onMoved, const std::function<void()>& onShown);
 
         std::vector<std::wstring> AskOpenImages(const std::wstring& folder) override;
         std::wstring AskOpenIcon(const std::wstring& folder) override;

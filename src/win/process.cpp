@@ -261,7 +261,9 @@ namespace rf::win
         std::vector<wchar_t> line(cmd.begin(), cmd.end());
         line.push_back(L'\0');
         PROCESS_INFORMATION pi{};
+        const UINT errorMode = SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
         const BOOL started = CreateProcessW(exe.c_str(), line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+        SetErrorMode(errorMode);
         if (childIn != nullptr)
         {
             CloseHandle(childIn);

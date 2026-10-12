@@ -29,6 +29,8 @@ namespace rf
     bool IsAudioFile(const std::wstring& path);
     std::wstring FfmpegMissingText();
     std::string LastLines(const std::string& log, int count);
+    std::string WrapText(const std::string& text, std::size_t width);
+    std::wstring ProbeFailure(const std::wstring& ffmpeg, const std::string& log, int code);
 
     bool ProbeMedia(Host& host, const std::wstring& path, MediaInfo& info, std::wstring& error);
     bool ProbeAudio(Host& host, const std::wstring& path, MediaInfo& info, std::wstring& error);

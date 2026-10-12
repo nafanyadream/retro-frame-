@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 
 namespace rf
 {
@@ -112,6 +113,35 @@ namespace rf
                 return true;
             }
             return false;
+        }
+
+        std::size_t Utf8Offset(const std::string& s, std::size_t chars)
+        {
+            std::size_t n = 0;
+            for (std::size_t i = 0; i < s.size(); ++i)
+            {
+                if ((static_cast<unsigned char>(s[i]) & 0xC0) != 0x80)
+                {
+                    if (n == chars)
+                    {
+                        return i;
+                    }
+                    ++n;
+                }
+            }
+            return s.size();
+        }
+
+        std::wstring ExitCodeText(int code)
+        {
+            const unsigned status = static_cast<unsigned>(code);
+            if (status <= 0xFFFFu)
+            {
+                return std::to_wstring(status);
+            }
+            wchar_t buf[16];
+            std::swprintf(buf, 16, L"%08X", status);
+            return buf;
         }
 
         std::wstring Extension(const std::wstring& path)
@@ -414,9 +444,11 @@ namespace rf
 
     std::wstring FfmpegMissingText()
     {
-        return L"Для видео нужна программа ffmpeg.\n\n"
-               L"Скачайте её для Windows по ссылкам на сайте ffmpeg.org\n"
-               L"и положите файл ffmpeg.exe рядом с RetroFrame.exe.\n\n"
+        return L"Для видео и музыки нужна программа ffmpeg.\n\n"
+               L"Скачайте ffmpeg-release-essentials.zip с сайта gyan.dev\n"
+               L"(ссылка есть на ffmpeg.org в разделе Windows),\n"
+               L"достаньте из папки bin файл ffmpeg.exe\n"
+               L"и положите его рядом с RetroFrame.exe.\n\n"
                L"Фото работают и без неё.";
     }
 
@@ -455,6 +487,110 @@ namespace rf
         return out;
     }
 
+    std::string WrapText(const std::string& text, std::size_t width)
+    {
+        std::string out;
+        std::size_t start = 0;
+        for (;;)
+        {
+            std::size_t end = text.find('\n', start);
+            const bool last = end == std::string::npos;
+            if (last)
+            {
+                end = text.size();
+            }
+            std::string line = text.substr(start, end - start);
+            for (std::size_t cut = Utf8Offset(line, width); width > 0 && cut < line.size(); cut = Utf8Offset(line, width))
+            {
+                const std::size_t space = line.rfind(' ', cut);
+                if (space != std::string::npos && space > 0)
+                {
+                    cut = space;
+                }
+                out += line.substr(0, cut) + "\n";
+                line.erase(0, cut);
+                line.erase(0, line.find_first_not_of(' '));
+            }
+            out += line;
+            if (last)
+            {
+                return out;
+            }
+            out += "\n";
+            start = end + 1;
+        }
+    }
+
+    std::wstring ProbeFailure(const std::wstring& ffmpeg, const std::string& log, int code)
+    {
+        if (log.find_first_not_of(" \t\r\n") == std::string::npos)
+        {
+            const unsigned status = static_cast<unsigned>(code);
+            std::wstring text = L"ffmpeg.exe не запускается";
+            if (code != 0)
+            {
+                text += L" (код ошибки " + ExitCodeText(code) + L")";
+            }
+            text += L".\n\n";
+            if (status == 0xC0000135u)
+            {
+                text += L"Похоже, это сборка «shared»: ей нужны DLL-файлы,\n"
+                        L"которые лежали рядом с ffmpeg.exe в папке bin.\n"
+                        L"Скопируйте их туда же, где сейчас ffmpeg.exe,\n"
+                        L"или скачайте сборку, где ffmpeg.exe работает один:\n"
+                        L"ffmpeg-release-essentials.zip с сайта gyan.dev.";
+            }
+            else
+            {
+                text += L"Попробуйте скачать его заново:\n"
+                        L"ffmpeg-release-essentials.zip с сайта gyan.dev.";
+            }
+            return text + L"\n\nСейчас используется:\n" + ffmpeg;
+        }
+        const std::string tail = LastLines(log, 3);
+        if (tail.find("No such file") != std::string::npos)
+        {
+            return L"файл не найден";
+        }
+        std::wstring reason = L"ffmpeg не смог прочитать файл.";
+        if (tail.find("Permission denied") != std::string::npos)
+        {
+            reason = L"нет доступа к файлу.\nМожет быть, он ещё копируется или открыт в другой программе.";
+        }
+        else if (tail.find("moov atom not found") != std::string::npos || tail.find("Invalid data found") != std::string::npos)
+        {
+            reason = L"файл повреждён или записан не до конца.\nТак бывает, если он ещё скачивается или запись прервалась.";
+        }
+        std::string details;
+        int streams = 0;
+        std::size_t start = 0;
+        while (start < log.size() && streams < 2)
+        {
+            std::size_t end = log.find('\n', start);
+            if (end == std::string::npos)
+            {
+                end = log.size();
+            }
+            std::string line = log.substr(start, end - start);
+            start = end + 1;
+            if (line.find("Stream #") != std::string::npos)
+            {
+                line.erase(0, line.find_first_not_of(' '));
+                while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+                {
+                    line.pop_back();
+                }
+                details += (details.empty() ? "" : "\n") + line;
+                ++streams;
+            }
+        }
+        if (details.empty())
+        {
+            details = LastLines(log, 2);
+        }
+        return reason + L"\n\nОтвет ffmpeg:\n" + FromUtf8(WrapText(details, 70));
+    }
+
     bool ProbeMedia(Host& host, const std::wstring& path, MediaInfo& info, std::wstring& error)
     {
         const std::wstring ffmpeg = host.FfmpegPath();
@@ -474,8 +610,7 @@ namespace rf
         const std::string log = proc->Log();
         if (!ParseProbe(log, info))
         {
-            const std::string tail = LastLines(log, 1);
-            error = tail.find("No such file") != std::string::npos ? L"файл не найден" : L"ffmpeg не смог прочитать файл";
+            error = ProbeFailure(ffmpeg, log, code);
             return false;
         }
         if (!info.hasVideo)
@@ -505,7 +640,7 @@ namespace rf
         const std::string log = proc->Log();
         if (!ParseProbe(log, info))
         {
-            error = LastLines(log, 1).find("No such file") != std::string::npos ? L"файл не найден" : L"ffmpeg не смог прочитать файл";
+            error = ProbeFailure(ffmpeg, log, code);
             return false;
         }
         if (!info.hasAudio)

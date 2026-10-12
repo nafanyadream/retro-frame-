@@ -553,7 +553,7 @@ namespace rf::win
         SetWindowPos(w.Handle(), nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    int WinHost::RunMain(View& view, int show, int x, int y, const std::function<void(int, int)>& onMoved)
+    int WinHost::RunMain(View& view, int show, int x, int y, const std::function<void(int, int)>& onMoved, const std::function<void()>& onShown)
     {
         HostWindow w(*this, view, nullptr, true);
         main_ = &w;
@@ -579,6 +579,11 @@ namespace rf::win
         w.onMoved = onMoved;
         DragAcceptFiles(w.Handle(), TRUE);
         w.Show(show);
+        UpdateWindow(w.Handle());
+        if (onShown)
+        {
+            onShown();
+        }
         MSG msg;
         while (GetMessageW(&msg, nullptr, 0, 0) > 0)
         {

@@ -31,16 +31,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         {
             LocalFree(argv);
         }
-        if (!files.empty())
-        {
-            view.OnDropFiles(files);
-        }
-
         rf::AppSettings& s = view.MutableSettings();
-        code = host.RunMain(view, show, s.windowX, s.windowY, [&s](int x, int y) {
-            s.windowX = x;
-            s.windowY = y;
-        });
+        code = host.RunMain(
+            view, show, s.windowX, s.windowY,
+            [&s](int x, int y) {
+                s.windowX = x;
+                s.windowY = y;
+            },
+            [&view, &files]() {
+                if (!files.empty())
+                {
+                    view.OnDropFiles(files);
+                }
+            });
         view.SaveSettings();
         rf::ui::SetPlatform(nullptr);
         rf::SetTextEngine(nullptr);

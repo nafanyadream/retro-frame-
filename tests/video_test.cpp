@@ -115,6 +115,77 @@ namespace
         const rf::VideoPlan h = rf::PlanVideo(manual, 1920, 1080, sq);
         Check(h.scale == 2 && h.windowW <= 1080, "plan: manual scale in square");
     }
+    bool Has(const std::wstring& text, const std::wstring& part)
+    {
+        return text.find(part) != std::wstring::npos;
+    }
+
+    bool LinesFit(const std::wstring& text, std::size_t width)
+    {
+        std::size_t len = 0;
+        for (wchar_t c : text)
+        {
+            len = c == L'\n' ? 0 : len + 1;
+            if (len > width)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void ProbeFailures(rftest::TestHost& host, const std::string& out)
+    {
+        const std::wstring exe = L"C:\\Tools\\ffmpeg.exe";
+        const int dllMissing = static_cast<int>(0xC0000135u);
+        std::wstring e = rf::ProbeFailure(exe, "", dllMissing);
+        Check(Has(e, L"не запускается") && Has(e, L"C0000135") && Has(e, L"shared") && Has(e, exe), "failure: ffmpeg without its dlls");
+        e = rf::ProbeFailure(exe, "\r\n", 1);
+        Check(Has(e, L"не запускается") && Has(e, L"(код ошибки 1)") && !Has(e, L"shared") && Has(e, L"gyan.dev"), "failure: ffmpeg does not start");
+        e = rf::ProbeFailure(exe, "[in#0 @ 0x1] Error opening input: No such file or directory\nError opening input files: No such file or directory\n", 1);
+        Check(e == L"файл не найден", "failure: missing file");
+        e = rf::ProbeFailure(exe, "[mov,mp4 @ 0x1] moov atom not found\nVID_1.mp4: Invalid data found when processing input\n", 1);
+        Check(Has(e, L"повреждён") && Has(e, L"Ответ ffmpeg:\n[mov,mp4 @ 0x1] moov atom not found\nVID_1.mp4: Invalid data"), "failure: unfinished file with ffmpeg lines");
+        e = rf::ProbeFailure(exe, "Error opening input file C:\\video.mp4.\nError opening input files: Permission denied\n", 1);
+        Check(Has(e, L"нет доступа"), "failure: locked file");
+        e = rf::ProbeFailure(exe,
+                             "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'x.mp4':\n  Duration: 00:00:05.00, start: 0.000000, bitrate: 900 kb/s\n"
+                             "  Stream #0:0[0x1](und): Data: none (rtp  / 0x20707472), 0 kb/s (default)\n"
+                             "At least one output file must be specified\n",
+                             1);
+        Check(Has(e, L"не смог прочитать") && Has(e, L"Ответ ffmpeg:\nStream #0:0[0x1](und): Data:") && !Has(e, L"At least one") && LinesFit(e, 70),
+              "failure: unknown streams are shown, wrapped");
+        const std::string longLine(150, 'x');
+        const std::string wrapped = rf::WrapText("aaa bbb " + longLine + "\nкороткая строка", 40);
+        Check(LinesFit(rf::FromUtf8(wrapped), 40) && rf::FromUtf8(wrapped).find(L"\nкороткая строка") != std::wstring::npos && wrapped.find("aaa bbb\n") == 0,
+              "wrap: long words split, short lines kept");
+
+        const std::string fake = out + "/silent-ffmpeg.sh";
+        {
+            std::ofstream f(fake);
+            f << "#!/bin/sh\nexit 3\n";
+        }
+        rftest::fs::permissions(fake, rftest::fs::perms::owner_all);
+        rftest::TestHost broken;
+        broken.ffmpeg = rf::FromUtf8(fake);
+        rf::MediaInfo m;
+        std::wstring err;
+        Check(!rf::ProbeMedia(broken, rf::FromUtf8(out) + L"/clip.mp4", m, err) && Has(err, L"не запускается") && Has(err, L"(код ошибки 3)") &&
+                  Has(err, broken.ffmpeg),
+              "probe with ffmpeg that does not start");
+        Check(!rf::ProbeAudio(broken, rf::FromUtf8(out) + L"/clip.mp4", m, err) && Has(err, L"не запускается"), "probe audio with ffmpeg that does not start");
+
+        const std::string cut = out + "/cut.mp4";
+        {
+            std::ifstream in(out + "/clip.mp4", std::ios::binary);
+            std::string head(4000, '\0');
+            in.read(head.data(), std::streamsize(head.size()));
+            std::ofstream o(cut, std::ios::binary);
+            o.write(head.data(), in.gcount());
+        }
+        Check(!rf::ProbeMedia(host, rf::FromUtf8(cut), m, err) && Has(err, L"повреждён") && Has(err, L"Ответ ffmpeg:"), "probe unfinished download");
+    }
+
 }
 
 int main(int argc, char** argv)
@@ -147,7 +218,8 @@ int main(int argc, char** argv)
     rf::MediaInfo gifInfo;
     Check(rf::ProbeMedia(host, gifSrc, gifInfo, err) && gifInfo.width == 160 && !gifInfo.hasAudio, "probe real gif");
     rf::MediaInfo none;
-    Check(!rf::ProbeMedia(host, dir + L"/missing.mp4", none, err) && !err.empty(), "probe missing file fails with message");
+    Check(!rf::ProbeMedia(host, dir + L"/missing.mp4", none, err) && err == L"файл не найден", "probe missing file fails with message");
+    ProbeFailures(host, out);
 
     {
         rf::FrameStream one(host, clip, 1.0, 0.0, 0.0, 160, 120);
