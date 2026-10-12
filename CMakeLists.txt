@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(RetroFrame VERSION 0.2.0 LANGUAGES CXX RC)
+project(RetroFrame VERSION 0.4.0 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
