@@ -81,22 +81,27 @@ namespace rf
             s_.music.meter = v;
             Changed();
         };
-        auto* l4 = AddLabel(r, 334, 262, 270, L"Плавное начало и конец фрагмента:");
-        fade_ = Place<ui::ComboBox>(r, 334, 278, 150, 21);
+        equalizerCheck_ = AddCheck(r, 334, 254, 270, L"Эквалайзер вместо диска");
+        equalizerCheck_->onChange = [this](bool v) {
+            s_.music.equalizer = v;
+            Changed();
+        };
+        auto* l4 = AddLabel(r, 334, 284, 140, L"Затухание фрагмента:");
+        fade_ = Place<ui::ComboBox>(r, 476, 280, 132, 21);
         fade_->items = {L"выключено", L"1 секунда", L"2 секунды", L"3 секунды", L"5 секунд"};
         fade_->onChange = [this](int i) {
             s_.music.fade = FadeChoices[std::clamp(i, 0, int(std::size(FadeChoices)) - 1)];
             Changed();
         };
-        auto* hint = AddLabel(r, 334, 310, 274, L"Исполнитель, название и обложка взяты\nиз тегов файла, их можно поправить.\nЗатухание работает, когда выбран фрагмент.");
-        hint->rect.h = 40;
+        auto* hint = AddLabel(r, 334, 352, 274, L"Затухание работает, когда выбран фрагмент.");
         hint->color = Rgb(0x40, 0x40, 0x40);
         levelsLabel_ = AddLabel(r, 334, 374, 274, L"");
         levelsLabel_->color = Rgb(0x40, 0x40, 0x40);
         auto* resultHint = AddLabel(r, 324, 544, 284, L"MP4 — видео с песней.\nPNG — один кадр на выбранной секунде,\nтот же кадр копирует Ctrl+C.");
         resultHint->rect.h = 40;
         resultHint->color = Rgb(0x40, 0x40, 0x40);
-        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, l4, fade_, hint, levelsLabel_, resultHint};
+        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, equalizerCheck_, l4, fade_, hint, levelsLabel_,
+                      resultHint};
     }
 
     void MainView::SyncMusicControls()
@@ -117,8 +122,9 @@ namespace rf
         fill(songField_, has ? track_->title : std::wstring());
         spinCheck_->checked = s_.music.spin;
         meterCheck_->checked = s_.music.meter;
+        equalizerCheck_->checked = s_.music.equalizer;
         fade_->index = FadeIndex(s_.music.fade);
-        levelsLabel_->text = has && !track_->levelsReady ? L"Считаю громкость песни..." : L"";
+        levelsLabel_->text = has && !track_->levelsReady ? L"Слушаю песню для шкалы и эквалайзера..." : L"";
     }
 
     FrameSettings MainView::MusicFrameSettings() const
@@ -128,6 +134,18 @@ namespace rf
         f.statusFields = {s_.playerStatus, s_.playerTime ? std::wstring(L"{время}") : std::wstring()};
         f.statusIcon = false;
         return f;
+    }
+
+    MusicFrame MainView::TrackFrame() const
+    {
+        const double start = TrimStart();
+        const double length = std::max(0.001, TrimEnd() - start);
+        MusicFrame mf = MusicFrameAt(track_->position - start, length, track_->position, s_.music.spin, s_.music.meter, track_->levels);
+        if (s_.music.equalizer)
+        {
+            AddSpectrum(mf, track_->spectrum, track_->position);
+        }
+        return mf;
     }
 
     MusicPlan MainView::MusicPlanFor(const FrameSettings& frame) const
@@ -193,6 +211,7 @@ namespace rf
         }
         levels_->Wait();
         track_->levels = levels_->Levels();
+        track_->spectrum = levels_->Spectrum();
         track_->levelsReady = true;
         levels_.reset();
     }
@@ -226,9 +245,7 @@ namespace rf
         }
         const FrameVars vars{track_->name, 0, 0, L""};
         MusicComposer composer(f, vars, plan, Image(), track_->artist, track_->title, track_->cover);
-        const double start = TrimStart();
-        const double length = std::max(0.001, TrimEnd() - start);
-        const MusicFrame mf = MusicFrameAt(track_->position - start, length, track_->position, s_.music.spin, s_.music.meter, track_->levels);
+        const MusicFrame mf = TrackFrame();
         Image img = composer.Small(mf, plan.square ? bgPreview_ : Image());
         const int k = std::max(1, plan.scale);
         ApplyEffects(img, f, plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{0, 0, img.width, img.height}, 1, mf.now,
@@ -272,9 +289,7 @@ namespace rf
         const Image background = plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.outW, plan.outH) : Image();
         MusicComposer composer(f, FrameVars{track_->name, 0, 0, L""}, plan, background, track_->artist, track_->title, track_->cover);
         composer.SetEffects(s_.effects);
-        const double start = TrimStart();
-        const double length = std::max(0.001, TrimEnd() - start);
-        out = composer.Compose(MusicFrameAt(track_->position - start, length, track_->position, s_.music.spin, s_.music.meter, track_->levels));
+        out = composer.Compose(TrackFrame());
         return true;
     }
 
@@ -341,12 +356,14 @@ namespace rf
         job.cover = track_->cover;
         std::wstring err;
         const ExportResult outcome = WithProgress(path, [&](const ExportStep& step) {
-            if (s_.music.meter && !track_->levelsReady)
+            if ((s_.music.meter || s_.music.equalizer) && !track_->levelsReady)
             {
                 step(-1, 0);
                 EnsureLevels();
             }
             job.levels = track_->levels;
+            job.equalizer = s_.music.equalizer;
+            job.spectrum = track_->spectrum;
             return ExportMusic(host_, job, step, err);
         });
         FinishExport(outcome, path, err);

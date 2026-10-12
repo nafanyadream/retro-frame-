@@ -711,7 +711,7 @@ namespace rf
         const std::wstring ffmpeg = host.FfmpegPath();
         if (!ffmpeg.empty())
         {
-            proc_ = host.StartProcess(ffmpeg, {L"-v", L"error", L"-nostdin", L"-i", path, L"-vn", L"-sn", L"-ac", L"1", L"-ar", L"8000", L"-f", L"s16le", L"pipe:1"},
+            proc_ = host.StartProcess(ffmpeg, {L"-v", L"error", L"-nostdin", L"-i", path, L"-vn", L"-sn", L"-ac", L"1", L"-ar", Int(AnalysisRate), L"-f", L"s16le", L"pipe:1"},
                                       false, true);
         }
         done_ = proc_ == nullptr;
@@ -792,14 +792,138 @@ namespace rf
         return true;
     }
 
-    std::vector<float> LevelReader::Levels() const
+    std::vector<std::int16_t> LevelReader::Samples() const
     {
         std::vector<std::int16_t> samples(bytes_.size() / 2);
         for (std::size_t i = 0; i < samples.size(); ++i)
         {
             samples[i] = std::int16_t(std::uint16_t(bytes_[i * 2]) | (std::uint16_t(bytes_[i * 2 + 1]) << 8));
         }
-        return LevelsFromSamples(samples, 8000);
+        return samples;
+    }
+
+    std::vector<float> LevelReader::Levels() const
+    {
+        return LevelsFromSamples(Samples(), AnalysisRate);
+    }
+
+    std::vector<float> LevelReader::Spectrum() const
+    {
+        return SpectrumFromSamples(Samples(), AnalysisRate);
+    }
+
+    std::vector<float> SpectrumFromSamples(const std::vector<std::int16_t>& samples, int sampleRate)
+    {
+        constexpr int N = 1024;
+        const int hop = std::max(1, sampleRate / LevelRate);
+        const std::size_t frames = (samples.size() + std::size_t(hop) - 1) / std::size_t(hop);
+        std::vector<float> out(frames * SpectrumBands, 0.0f);
+        std::vector<double> window(N);
+        for (int i = 0; i < N; ++i)
+        {
+            window[std::size_t(i)] = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (N - 1));
+        }
+        int edges[SpectrumBands + 1];
+        for (int b = 0; b <= SpectrumBands; ++b)
+        {
+            const double f = 60.0 * std::pow(7000.0 / 60.0, double(b) / SpectrumBands);
+            edges[b] = std::clamp(int(std::lround(f * N / sampleRate)), 1, N / 2 - 1);
+        }
+        for (int b = 1; b <= SpectrumBands; ++b)
+        {
+            edges[b] = std::max(edges[b], edges[b - 1] + 1);
+        }
+        std::vector<double> re(N);
+        std::vector<double> im(N);
+        float fall[SpectrumBands] = {};
+        for (std::size_t fr = 0; fr < frames; ++fr)
+        {
+            const long long centre = (long long)(fr * std::size_t(hop)) + hop / 2;
+            for (int i = 0; i < N; ++i)
+            {
+                const long long at = centre - N / 2 + i;
+                const double v = at >= 0 && at < (long long)samples.size() ? samples[std::size_t(at)] / 32768.0 : 0.0;
+                re[std::size_t(i)] = v * window[std::size_t(i)];
+                im[std::size_t(i)] = 0.0;
+            }
+            for (int i = 1, j = 0; i < N; ++i)
+            {
+                int bit = N >> 1;
+                for (; j & bit; bit >>= 1)
+                {
+                    j ^= bit;
+                }
+                j ^= bit;
+                if (i < j)
+                {
+                    std::swap(re[std::size_t(i)], re[std::size_t(j)]);
+                    std::swap(im[std::size_t(i)], im[std::size_t(j)]);
+                }
+            }
+            for (int len = 2; len <= N; len <<= 1)
+            {
+                const double ang = -2.0 * 3.14159265358979 / len;
+                const double wr = std::cos(ang);
+                const double wi = std::sin(ang);
+                for (int i = 0; i < N; i += len)
+                {
+                    double cr = 1.0;
+                    double ci = 0.0;
+                    for (int k = 0; k < len / 2; ++k)
+                    {
+                        const std::size_t a = std::size_t(i + k);
+                        const std::size_t b = std::size_t(i + k + len / 2);
+                        const double xr = re[b] * cr - im[b] * ci;
+                        const double xi = re[b] * ci + im[b] * cr;
+                        re[b] = re[a] - xr;
+                        im[b] = im[a] - xi;
+                        re[a] += xr;
+                        im[a] += xi;
+                        const double nr = cr * wr - ci * wi;
+                        ci = cr * wi + ci * wr;
+                        cr = nr;
+                    }
+                }
+            }
+            for (int b = 0; b < SpectrumBands; ++b)
+            {
+                double peak = 0.0;
+                for (int k = edges[b]; k < edges[b + 1]; ++k)
+                {
+                    peak = std::max(peak, std::hypot(re[std::size_t(k)], im[std::size_t(k)]));
+                }
+                const double db = 20.0 * std::log10(std::max(peak / (N / 4.0), 1e-7)) + b * 0.9;
+                const float v = float(std::clamp((db + 54.0) / 54.0, 0.0, 1.0));
+                fall[b] = std::max(v, fall[b] - 0.09f);
+                out[fr * SpectrumBands + std::size_t(b)] = fall[b];
+            }
+        }
+        return out;
+    }
+
+    void SpectrumAt(const std::vector<float>& spectrum, double seconds, float* bars, float* peaks)
+    {
+        const long long frames = (long long)(spectrum.size() / SpectrumBands);
+        for (int b = 0; b < SpectrumBands; ++b)
+        {
+            bars[b] = 0.0f;
+            peaks[b] = 0.0f;
+        }
+        if (frames == 0)
+        {
+            return;
+        }
+        const long long i = std::clamp<long long>((long long)std::floor(seconds * LevelRate), 0, frames - 1);
+        for (int b = 0; b < SpectrumBands; ++b)
+        {
+            bars[b] = spectrum[std::size_t(i) * SpectrumBands + std::size_t(b)];
+            float peak = bars[b];
+            for (long long d = 1; d <= 30 && i - d >= 0; ++d)
+            {
+                peak = std::max(peak, spectrum[std::size_t(i - d) * SpectrumBands + std::size_t(b)] - 0.0012f * float(d * d));
+            }
+            peaks[b] = peak;
+        }
     }
 
     float MeterAt(const std::vector<float>& levels, double seconds)

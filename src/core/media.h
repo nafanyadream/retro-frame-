@@ -38,8 +38,12 @@ namespace rf
     bool ReadCover(Host& host, const std::wstring& path, const MediaInfo& info, int maxSide, Image& out);
 
     constexpr int LevelRate = 25;
+    constexpr int AnalysisRate = 16000;
+    constexpr int SpectrumBands = 16;
 
     std::vector<float> LevelsFromSamples(const std::vector<std::int16_t>& samples, int sampleRate);
+    std::vector<float> SpectrumFromSamples(const std::vector<std::int16_t>& samples, int sampleRate);
+    void SpectrumAt(const std::vector<float>& spectrum, double seconds, float* bars, float* peaks);
 
     class LevelReader
     {
@@ -52,8 +56,10 @@ namespace rf
         bool Wait();
         bool Done() const { return done_; }
         std::vector<float> Levels() const;
+        std::vector<float> Spectrum() const;
 
     private:
+        std::vector<std::int16_t> Samples() const;
         void Take(std::size_t n);
         std::unique_ptr<Process> proc_;
         std::vector<unsigned char> bytes_;

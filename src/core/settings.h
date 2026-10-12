@@ -47,6 +47,7 @@ namespace rf
         int fade = 2;
         bool spin = true;
         bool meter = true;
+        bool equalizer = false;
         int fps = 25;
     };
 

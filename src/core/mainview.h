@@ -82,6 +82,7 @@ namespace rf
             Image cover;
             Image tagCover;
             std::vector<float> levels;
+            std::vector<float> spectrum;
             bool levelsReady = false;
         };
 
@@ -100,6 +101,7 @@ namespace rf
         void LoadCover();
         void ResetCover();
         void EnsureLevels();
+        MusicFrame TrackFrame() const;
         ExportResult WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work);
         void FinishExport(ExportResult outcome, const std::wstring& path, const std::wstring& error);
 
@@ -208,6 +210,7 @@ namespace rf
         ui::Button* coverReset_ = nullptr;
         ui::CheckBox* spinCheck_ = nullptr;
         ui::CheckBox* meterCheck_ = nullptr;
+        ui::CheckBox* equalizerCheck_ = nullptr;
         ui::ComboBox* fade_ = nullptr;
         ui::Label* levelsLabel_ = nullptr;
         std::unique_ptr<FrameStream> fetch_;

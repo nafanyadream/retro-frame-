@@ -108,6 +108,34 @@ namespace rf
             }
         }
 
+        void DrawAnalyzer(Painter& p, const Rect& box, const MusicFrame& m, const Shades& sh)
+        {
+            const Color black = Rgb(0, 0, 0);
+            p.Sunken(box, sh, &black);
+            const int innerH = box.h - 6;
+            const int segments = innerH / 3;
+            const int barW = std::max(2, (box.w - 6 + 1) / SpectrumBands - 1);
+            const int total = SpectrumBands * (barW + 1) - 1;
+            const int x0 = box.x + (box.w - total) / 2;
+            const int bottom = box.y + 3 + segments * 3;
+            for (int b = 0; b < SpectrumBands; ++b)
+            {
+                const int x = x0 + b * (barW + 1);
+                const int lit = int(std::lround(std::clamp(double(m.bars[b]), 0.0, 1.0) * segments));
+                for (int j = 0; j < lit; ++j)
+                {
+                    const double h = double(j) / std::max(1, segments - 1);
+                    const Color c = h < 0.55 ? Rgb(0x28, 0xD8, 0x28) : (h < 0.82 ? Rgb(0xE8, 0xE0, 0x20) : Rgb(0xF0, 0x38, 0x20));
+                    p.Fill(Rect{x, bottom - (j + 1) * 3 + 1, barW, 2}, c);
+                }
+                const int peak = int(std::lround(std::clamp(double(m.peaks[b]), 0.0, 1.0) * segments));
+                if (peak > 0)
+                {
+                    p.Fill(Rect{x, bottom - peak * 3 + 1, barW, 1}, Rgb(0xC8, 0xC8, 0xC8));
+                }
+            }
+        }
+
         void DrawCombo(Painter& p, const Rect& r, const std::wstring& text, const Font& f, const FrameColors& colors, const Shades& sh)
         {
             const Color fill = colors.window;
@@ -135,12 +163,19 @@ namespace rf
             }
             const int left = CoverX + CoverSize + 10;
             const int right = w - 8;
-            DrawDisc(p, left + 4, 18, m.angle, sh);
-            const Rect display{left + 44, 25, 40, 18};
-            p.Raised(display, sh);
-            p.Fill(Rect{display.x + 4, display.y + 5, 2, 2}, Rgb(0xFF, 0x00, 0x00));
-            p.ThinSunken(Rect{display.x + 9, display.y + 8, 26, 4}, sh);
             const Rect meter{right - 14, 8, 14, 58};
+            if (m.equalizer)
+            {
+                DrawAnalyzer(p, Rect{left, 8, meter.x - 26 - 6 - left, 58}, m, sh);
+            }
+            else
+            {
+                DrawDisc(p, left + 4, 18, m.angle, sh);
+                const Rect display{left + 44, 25, 40, 18};
+                p.Raised(display, sh);
+                p.Fill(Rect{display.x + 4, display.y + 5, 2, 2}, Rgb(0xFF, 0x00, 0x00));
+                p.ThinSunken(Rect{display.x + 9, display.y + 8, 26, 4}, sh);
+            }
             const Rect plus{meter.x - 26, 10, 22, 22};
             const Rect minus{meter.x - 26, 36, 22, 22};
             p.Raised(plus, sh);
@@ -342,6 +377,12 @@ namespace rf
         return f;
     }
 
+    void AddSpectrum(MusicFrame& frame, const std::vector<float>& spectrum, double absolute)
+    {
+        frame.equalizer = true;
+        SpectrumAt(spectrum, absolute, frame.bars, frame.peaks);
+    }
+
     ExportResult ExportMusic(Host& host, const MusicJob& job, const ExportStep& step, std::wstring& error)
     {
         const double fps = std::clamp(job.fps, 1.0, 60.0);
@@ -367,7 +408,12 @@ namespace rf
                 return &composer.Intro(i / fps, i);
             }
             const double t = (i - intro) / fps;
-            return &composer.Compose(MusicFrameAt(t, job.duration, job.start + t, job.spin, job.meter, job.levels), i, true);
+            MusicFrame mf = MusicFrameAt(t, job.duration, job.start + t, job.spin, job.meter, job.levels);
+            if (job.equalizer)
+            {
+                AddSpectrum(mf, job.spectrum, job.start + t);
+            }
+            return &composer.Compose(mf, i, true);
         }, step, error);
     }
 }

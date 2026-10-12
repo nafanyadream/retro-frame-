@@ -245,6 +245,7 @@ namespace rf
         o << "music.spin=" << (s.music.spin ? 1 : 0) << "\n";
         o << "music.meter=" << (s.music.meter ? 1 : 0) << "\n";
         o << "music.fps=" << s.music.fps << "\n";
+        o << "music.equalizer=" << (s.music.equalizer ? 1 : 0) << "\n";
         o << "fx.intro=" << (s.effects.intro ? 1 : 0) << "\n";
         o << "fx.cursor=" << s.effects.cursor << "\n";
         o << "fx.cursorPlace=" << s.effects.cursorPlace << "\n";
@@ -413,6 +414,7 @@ namespace rf
         getInt("music.fade", s.music.fade, 0, 30);
         getBool("music.spin", s.music.spin);
         getBool("music.meter", s.music.meter);
+        getBool("music.equalizer", s.music.equalizer);
         getInt("music.fps", s.music.fps, 10, 60);
         const auto listed = [](int fps) {
             for (int choice : FpsChoices)

@@ -30,6 +30,9 @@ namespace rf
         double length = 0.0;
         double angle = 0.0;
         float level = 0.0f;
+        bool equalizer = false;
+        float bars[SpectrumBands] = {};
+        float peaks[SpectrumBands] = {};
     };
 
     MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square);
@@ -81,9 +84,12 @@ namespace rf
         std::wstring title;
         Image cover;
         std::vector<float> levels;
+        bool equalizer = false;
+        std::vector<float> spectrum;
         EffectSettings effects;
     };
 
     MusicFrame MusicFrameAt(double now, double length, double absolute, bool spin, bool meter, const std::vector<float>& levels);
+    void AddSpectrum(MusicFrame& frame, const std::vector<float>& spectrum, double absolute);
     ExportResult ExportMusic(Host& host, const MusicJob& job, const ExportStep& step, std::wstring& error);
 }

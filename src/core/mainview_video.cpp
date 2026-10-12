@@ -456,6 +456,7 @@ namespace rf
         if (levels_ && track_ && levels_->Poll())
         {
             track_->levels = levels_->Levels();
+            track_->spectrum = levels_->Spectrum();
             track_->levelsReady = true;
             levels_.reset();
             if (mode_ == MusicMode)

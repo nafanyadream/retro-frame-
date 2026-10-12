@@ -157,6 +157,49 @@ int main(int argc, char** argv)
         Check(even, "plan: only the window always has even sides for mp4");
     }
 
+    {
+        const auto tone = [](double hz) {
+            std::vector<std::int16_t> s(std::size_t(rf::AnalysisRate) * 2);
+            for (std::size_t i = 0; i < s.size(); ++i)
+            {
+                s[i] = std::int16_t(std::lround(12000.0 * std::sin(2.0 * 3.14159265358979 * hz * double(i) / rf::AnalysisRate)));
+            }
+            return s;
+        };
+        const auto loudest = [](const std::vector<float>& sp, std::size_t frame) {
+            int best = 0;
+            for (int b = 1; b < rf::SpectrumBands; ++b)
+            {
+                if (sp[frame * rf::SpectrumBands + std::size_t(b)] > sp[frame * rf::SpectrumBands + std::size_t(best)])
+                {
+                    best = b;
+                }
+            }
+            return best;
+        };
+        const std::vector<float> low = rf::SpectrumFromSamples(tone(440.0), rf::AnalysisRate);
+        const std::vector<float> high = rf::SpectrumFromSamples(tone(3000.0), rf::AnalysisRate);
+        const std::vector<float> quiet = rf::SpectrumFromSamples(std::vector<std::int16_t>(std::size_t(rf::AnalysisRate), 0), rf::AnalysisRate);
+        float silent = 0.0f;
+        for (float v : quiet)
+        {
+            silent = std::max(silent, v);
+        }
+        Check(low.size() == 50 * std::size_t(rf::SpectrumBands) && loudest(low, 25) == 6 && loudest(high, 25) == 13 && low[25 * rf::SpectrumBands + 6] > 0.6f &&
+                  silent == 0.0f,
+              "equalizer: bars follow the pitch");
+        float bars[rf::SpectrumBands];
+        float peaks[rf::SpectrumBands];
+        rf::SpectrumAt(low, 1.0, bars, peaks);
+        bool above = true;
+        for (int b = 0; b < rf::SpectrumBands; ++b)
+        {
+            above = above && peaks[b] >= bars[b];
+        }
+        rf::SpectrumAt(low, 0.0, bars, peaks);
+        Check(above && bars[6] > 0.5f, "equalizer: peaks stay above bars");
+    }
+
     const std::wstring track = dir + L"/песня.mp3";
     const std::wstring bare = dir + L"/bare.wav";
     const std::wstring coverPng = dir + L"/cover.png";
@@ -317,6 +360,35 @@ int main(int argc, char** argv)
         Check(main.ShownFormat() == 3 && !main.Settings().music.spin, "format list shows the music format after other changes");
         click(340, 221);
         settle(1);
+        main.MutableSettings().music.square = true;
+        main.Refresh();
+        host.saveAnswer = dir + L"/still_disc.png";
+        click(240, 59);
+        settle(2);
+        const rf::Image disc = host.writtenImage;
+        click(340, 261);
+        settle(1);
+        Check(main.Settings().music.equalizer, "equalizer checkbox");
+        shot("ui_music_equalizer");
+        host.saveAnswer = dir + L"/still_eq.png";
+        click(240, 59);
+        settle(2);
+        int green = 0;
+        for (auto px : host.writtenImage.pixels)
+        {
+            green += rf::Opaque(px) == rf::Rgb(0x28, 0xD8, 0x28);
+        }
+        int greenDisc = 0;
+        for (auto px : disc.pixels)
+        {
+            greenDisc += rf::Opaque(px) == rf::Rgb(0x28, 0xD8, 0x28);
+        }
+        Check(green > 100 && greenDisc == 0, "equalizer bars in the saved frame");
+        rftest::WritePpm(out + "/ui_music_eq_still.ppm", host.writtenImage);
+        click(340, 261);
+        settle(1);
+        main.MutableSettings().music.square = false;
+        main.Refresh();
         host.saveAnswer = dir + L"/still_window.png";
         click(240, 59);
         settle(2);
