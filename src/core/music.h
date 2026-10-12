@@ -65,6 +65,7 @@ namespace rf
         double start = 0.0;
         double duration = 0.0;
         double fade = 0.0;
+        double fps = MusicFps;
         bool spin = true;
         bool meter = true;
         FrameSettings frame;

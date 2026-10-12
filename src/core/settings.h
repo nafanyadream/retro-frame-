@@ -35,6 +35,7 @@ namespace rf
         int squareSize = 1080;
         int gifFps = 15;
         int gifWidth = 0;
+        int fps = 0;
     };
 
     struct MusicSettings
@@ -45,6 +46,7 @@ namespace rf
         int fade = 2;
         bool spin = true;
         bool meter = true;
+        int fps = 25;
     };
 
     struct AppSettings
@@ -80,6 +82,7 @@ namespace rf
     constexpr int GifFpsChoices[] = {10, 12, 15, 20, 25, 30};
     constexpr int GifWidthChoices[] = {0, 800, 640, 480, 320};
     constexpr int FadeChoices[] = {0, 1, 2, 3, 5};
+    constexpr int FpsChoices[] = {60, 50, 30, 25, 24, 15};
 
     std::string SerializeSettings(const AppSettings& s);
     void ParseSettings(const std::string& text, AppSettings& s);

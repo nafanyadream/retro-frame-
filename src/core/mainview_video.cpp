@@ -13,6 +13,18 @@ namespace rf
         constexpr int FrameMaxH = 360;
         constexpr double PreviewFps = 15.0;
 
+        std::wstring FpsText(double fps)
+        {
+            const long long hundredths = std::llround(fps * 100.0);
+            std::wstring text = std::to_wstring(hundredths / 100);
+            if (hundredths % 100 != 0)
+            {
+                const int rest = int(hundredths % 100);
+                text += L"." + std::to_wstring(rest / 10) + (rest % 10 != 0 ? std::to_wstring(rest % 10) : std::wstring());
+            }
+            return text;
+        }
+
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
         {
@@ -153,8 +165,21 @@ namespace rf
         bgLoad_ = Place<ui::Button>(r, 516, 486, 92, 21);
         bgLoad_->text = L"Выбрать...";
         bgLoad_->onClick = [this]() { LoadBackground(); };
-        auto* l4 = AddLabel(r, 324, 518, 54, L"Для GIF:");
-        gifFps_ = Place<ui::ComboBox>(r, 380, 514, 76, 21);
+        auto* l5 = AddLabel(r, 324, 518, 54, L"Для MP4:");
+        fps_ = Place<ui::ComboBox>(r, 380, 514, 110, 21);
+        fps_->onChange = [this](int i) {
+            if (mode_ == MusicMode)
+            {
+                s_.music.fps = FpsChoices[std::clamp(i, 0, int(std::size(FpsChoices)) - 1)];
+            }
+            else
+            {
+                s_.video.fps = i <= 0 ? 0 : FpsChoices[std::clamp(i - 1, 0, int(std::size(FpsChoices)) - 1)];
+            }
+            Changed();
+        };
+        auto* l4 = AddLabel(r, 324, 544, 54, L"Для GIF:");
+        gifFps_ = Place<ui::ComboBox>(r, 380, 540, 76, 21);
         for (int fps : GifFpsChoices)
         {
             gifFps_->items.push_back(std::to_wstring(fps) + L" к/с");
@@ -163,7 +188,7 @@ namespace rf
             s_.video.gifFps = GifFpsChoices[std::clamp(i, 0, int(std::size(GifFpsChoices)) - 1)];
             Changed();
         };
-        gifWidth_ = Place<ui::ComboBox>(r, 462, 514, 146, 21);
+        gifWidth_ = Place<ui::ComboBox>(r, 462, 540, 146, 21);
         for (int w : GifWidthChoices)
         {
             gifWidth_->items.push_back(w == 0 ? std::wstring(L"ширина как есть") : L"ширина " + std::to_wstring(w));
@@ -172,12 +197,11 @@ namespace rf
             s_.video.gifWidth = GifWidthChoices[std::clamp(i, 0, int(std::size(GifWidthChoices)) - 1)];
             Changed();
         };
-        auto* hint2 = AddLabel(r, 324, 544, 284, L"MP4 сохраняет звук ролика.\nGIF без звука и повторяется по кругу.");
-        hint2->rect.h = 26;
+        auto* hint2 = AddLabel(r, 324, 570, 284, L"MP4 со звуком, GIF без звука и по кругу.");
         hint2->color = Rgb(0x40, 0x40, 0x40);
 
         mediaOnly_ = {playButton_, scrub_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
-                      resultBox, r1, r2, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_};
+                      resultBox, r1, r2, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
         videoOnly_ = {l4, gifFps_, gifWidth_, hint2};
     }
 
@@ -292,11 +316,21 @@ namespace rf
         bgPicture_->checked = s_.backgroundPicture && !s_.backgroundImage.Empty();
         bgPicture_->enabled = square;
         bgLoad_->enabled = square;
+        fps_->items.clear();
+        for (int fps : FpsChoices)
+        {
+            fps_->items.push_back(std::to_wstring(fps) + L" к/с");
+        }
         if (mode_ == MusicMode)
         {
+            fps_->index = IndexOf(FpsChoices, int(std::size(FpsChoices)), s_.music.fps, 3);
+            fps_->enabled = s_.music.format != 3;
             SyncMusicControls();
             return;
         }
+        fps_->items.insert(fps_->items.begin(), L"как в ролике");
+        fps_->index = s_.video.fps <= 0 ? 0 : 1 + IndexOf(FpsChoices, int(std::size(FpsChoices)), s_.video.fps, 2);
+        fps_->enabled = s_.video.format != 3;
         const bool gif = s_.video.format == 3;
         gifFps_->index = IndexOf(GifFpsChoices, int(std::size(GifFpsChoices)), s_.video.gifFps, 2);
         gifFps_->enabled = gif;
@@ -719,8 +753,8 @@ namespace rf
             return;
         }
         const MediaInfo& info = clip_->info;
-        first = clip_->name + L" — " + std::to_wstring(info.width) + L" x " + std::to_wstring(info.height) + L", " + FormatClock(info.duration) +
-                (info.hasAudio ? L"" : L", без звука");
+        first = clip_->name + L" — " + std::to_wstring(info.width) + L" x " + std::to_wstring(info.height) + L", " + FpsText(info.fps) + L" к/с, " +
+                FormatClock(info.duration) + (info.hasAudio ? L"" : L", без звука");
         const VideoPlan plan = PlanVideo(VideoFrame(), info.width, info.height, Target());
         second = s_.video.square ? L"Квадрат " + std::to_wstring(plan.outW) + L", окно " + std::to_wstring(plan.scale) + L"x"
                                  : L"Итог " + std::to_wstring(plan.outW) + L" x " + std::to_wstring(plan.outH);
@@ -758,7 +792,7 @@ namespace rf
         job.quality = std::clamp(s_.video.format, 0, 2);
         job.start = TrimStart();
         job.duration = TrimEnd() - TrimStart();
-        job.fps = gif ? double(s_.video.gifFps) : info.fps;
+        job.fps = gif ? double(s_.video.gifFps) : s_.video.fps > 0 ? double(s_.video.fps) : info.fps;
         job.audio = !gif && info.hasAudio;
         job.frame = VideoFrame();
         job.vars = FrameVars{clip_->name, info.width, info.height, L""};

@@ -93,7 +93,7 @@ namespace rf
         hint->color = Rgb(0x40, 0x40, 0x40);
         levelsLabel_ = AddLabel(r, 334, 374, 274, L"");
         levelsLabel_->color = Rgb(0x40, 0x40, 0x40);
-        auto* resultHint = AddLabel(r, 324, 518, 284, L"MP4 — видео с песней.\nPNG — один кадр на выбранной секунде,\nтот же кадр копирует Ctrl+C.");
+        auto* resultHint = AddLabel(r, 324, 544, 284, L"MP4 — видео с песней.\nPNG — один кадр на выбранной секунде,\nтот же кадр копирует Ctrl+C.");
         resultHint->rect.h = 40;
         resultHint->color = Rgb(0x40, 0x40, 0x40);
         musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, l4, fade_, hint, levelsLabel_, resultHint};
@@ -320,6 +320,7 @@ namespace rf
         job.start = TrimStart();
         job.duration = TrimEnd() - TrimStart();
         job.fade = track_->whole ? 0.0 : double(s_.music.fade);
+        job.fps = double(s_.music.fps);
         job.spin = s_.music.spin;
         job.meter = s_.music.meter;
         job.frame = MusicFrameSettings();

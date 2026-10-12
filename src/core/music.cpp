@@ -321,13 +321,14 @@ namespace rf
 
     ExportResult ExportMusic(Host& host, const MusicJob& job, const ExportStep& step, std::wstring& error)
     {
-        const int total = std::max(1, int(std::ceil(job.duration * MusicFps - 1e-6)));
+        const double fps = std::clamp(job.fps, 1.0, 60.0);
+        const int total = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
         EncoderSpec spec;
         spec.output = job.output;
         spec.quality = job.quality;
         spec.width = job.plan.outW;
         spec.height = job.plan.outH;
-        spec.fps = MusicFps;
+        spec.fps = fps;
         spec.audio = true;
         spec.source = job.source;
         spec.start = job.start;
@@ -335,7 +336,7 @@ namespace rf
         spec.fade = job.fade;
         MusicComposer composer(job.frame, job.vars, job.plan, job.background, job.artist, job.title, job.cover);
         return Encode(host, spec, total, [&](int i) -> const Image* {
-            const double t = i / MusicFps;
+            const double t = i / fps;
             return &composer.Compose(MusicFrameAt(t, job.duration, job.start + t, job.spin, job.meter, job.levels));
         }, step, error);
     }

@@ -98,9 +98,16 @@ int main(int argc, char** argv)
         now.looks[rf::MusicMode].iconIndex = 4;
         now.music.fade = 5;
         now.music.square = true;
+        now.music.fps = 50;
+        now.video.fps = 24;
         rf::AppSettings back = rf::DefaultSettings();
         rf::ParseSettings(rf::SerializeSettings(now), back);
-        Check(back.looks[rf::MusicMode].iconIndex == 4 && back.music.fade == 5 && back.music.square, "music settings round trip");
+        Check(back.looks[rf::MusicMode].iconIndex == 4 && back.music.fade == 5 && back.music.square && back.music.fps == 50 && back.video.fps == 24,
+              "music settings round trip");
+        rf::AppSettings odd = rf::DefaultSettings();
+        rf::ParseSettings("music.fps=37\nvideo.fps=33\n", odd);
+        Check(odd.music.fps == 25 && odd.video.fps == 0 && rf::DefaultSettings().music.fps == 25 && rf::DefaultSettings().video.fps == 0,
+              "unknown frame rates fall back to defaults");
         Check(!rf::DefaultSettings().music.square && !old.music.square, "music result is only the window by default");
     }
 
@@ -223,12 +230,13 @@ int main(int argc, char** argv)
         alone.start = 2.0;
         alone.duration = 1.0;
         alone.fade = 0.0;
+        alone.fps = 30.0;
         alone.plan = w1080;
         alone.background = rf::Image();
         rf::MediaInfo w;
         Check(rf::ExportMusic(host, alone, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, alone.output, w, err) &&
-                  w.width == w1080.outW && w.height == w1080.outH && w.hasAudio,
-              "music mp4 with only the window: window size with sound");
+                  w.width == w1080.outW && w.height == w1080.outH && w.hasAudio && Near(w.fps, 30.0, 0.01),
+              "music mp4 with only the window: window size with sound, 30 fps");
     }
     {
         rf::MainView main(host);
@@ -305,6 +313,9 @@ int main(int argc, char** argv)
         main.MutableSettings().music.format = 1;
         main.MutableSettings().music.squareSize = 720;
         main.Refresh();
+        main.root.Wheel(435, 524, 120);
+        settle(1);
+        Check(main.Settings().music.fps == 30, "frame rate list in the music tab");
         click(30, 471);
         settle(1);
         main.root.SetFocus(nullptr);
@@ -312,7 +323,8 @@ int main(int argc, char** argv)
         click(240, 59);
         settle(2);
         rf::MediaInfo saved;
-        Check(rf::ProbeMedia(host, host.saveAnswer, saved, err) && saved.width == 720 && saved.hasAudio && saved.duration > 1.0, "save mp4 720 from music tab");
+        Check(rf::ProbeMedia(host, host.saveAnswer, saved, err) && saved.width == 720 && saved.hasAudio && saved.duration > 1.0 && Near(saved.fps, 30.0, 0.01),
+              "save mp4 720 from music tab at 30 fps");
         std::printf("    saved %.2f s\n", saved.duration);
     }
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);

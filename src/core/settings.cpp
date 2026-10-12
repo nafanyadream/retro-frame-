@@ -237,12 +237,14 @@ namespace rf
         o << "video.squareSize=" << s.video.squareSize << "\n";
         o << "video.gifFps=" << s.video.gifFps << "\n";
         o << "video.gifWidth=" << s.video.gifWidth << "\n";
+        o << "video.fps=" << s.video.fps << "\n";
         o << "music.format=" << s.music.format << "\n";
         o << "music.square=" << (s.music.square ? 1 : 0) << "\n";
         o << "music.squareSize=" << s.music.squareSize << "\n";
         o << "music.fade=" << s.music.fade << "\n";
         o << "music.spin=" << (s.music.spin ? 1 : 0) << "\n";
         o << "music.meter=" << (s.music.meter ? 1 : 0) << "\n";
+        o << "music.fps=" << s.music.fps << "\n";
         o << "background=" << Hex(s.background) << "\n";
         o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
         o << "format=" << s.format << "\n";
@@ -382,12 +384,32 @@ namespace rf
         getInt("video.squareSize", s.video.squareSize, 240, 2160);
         getInt("video.gifFps", s.video.gifFps, 5, 50);
         getInt("video.gifWidth", s.video.gifWidth, 0, 4000);
+        getInt("video.fps", s.video.fps, 0, 60);
         getInt("music.format", s.music.format, 0, 3);
         getBool("music.square", s.music.square);
         getInt("music.squareSize", s.music.squareSize, 240, 2160);
         getInt("music.fade", s.music.fade, 0, 30);
         getBool("music.spin", s.music.spin);
         getBool("music.meter", s.music.meter);
+        getInt("music.fps", s.music.fps, 10, 60);
+        const auto listed = [](int fps) {
+            for (int choice : FpsChoices)
+            {
+                if (choice == fps)
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (s.video.fps != 0 && !listed(s.video.fps))
+        {
+            s.video.fps = 0;
+        }
+        if (!listed(s.music.fps))
+        {
+            s.music.fps = MusicSettings().fps;
+        }
         getColor("background", s.background);
         getBool("backgroundPicture", s.backgroundPicture);
         getInt("format", s.format, 0, 2);

@@ -370,13 +370,17 @@ int main(int argc, char** argv)
         shot("ui_video_playing");
         click(60, 426);
         settle(ms, 2);
+        main.root.Wheel(435, 524, -120);
+        main.root.Wheel(435, 524, -120);
+        settle(ms, 2);
+        Check(main.Settings().video.fps == 50, "frame rate list in the video tab");
         host.saveAnswer = dir + L"/ui_saved.mp4";
         click(240, 59);
         settle(ms, 2);
         rf::MediaInfo saved;
         Check(rf::ProbeMedia(host, host.saveAnswer, saved, err) && saved.width == 1080 && saved.height == 1080 && saved.hasAudio && saved.duration > 0.3 &&
-                  saved.duration < 2.9,
-              "save from video tab: square mp4 of the trimmed fragment");
+                  saved.duration < 2.9 && Near(saved.fps, 50.0, 0.01),
+              "save from video tab: square mp4 of the trimmed fragment at 50 fps");
         std::printf("    saved duration %.2f\n", saved.duration);
         main.SetMode(rf::PhotoMode);
         Check(!main.HasClip() || main.Settings().mode == rf::PhotoMode, "back to photo tab");

@@ -229,6 +229,7 @@ namespace rf
         ui::Swatch* bgSwatch_ = nullptr;
         ui::CheckBox* bgPicture_ = nullptr;
         ui::Button* bgLoad_ = nullptr;
+        ui::ComboBox* fps_ = nullptr;
         ui::ComboBox* gifFps_ = nullptr;
         ui::ComboBox* gifWidth_ = nullptr;
         ui::Button* saveAllButton_ = nullptr;
