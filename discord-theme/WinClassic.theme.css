@@ -1,0 +1,1053 @@
+/**
+ * @name WinClassic
+ * @author SlippingGitty
+ * @version 10.2026
+ * @description It sucks less. Windows Classic theme for Discord, updated for the current Discord client.
+ * @source https://github.com/SlippingGittys-Discord-Themes/WinClassic/
+ * @website https://slippinggitty.github.io/
+*/
+
+/*
+          /          /|  `7MMF'    A     `7MF'db               .g8"""bgd `7MM                             db          
+ 	 /__________/ |  `MA     ,MA     ,V                 .dP'     `M   MM                                         
+ 	|.---------.| |  VM:   ,VVM:   ,V `7MM  `7MMpMMMb. dM'       `   MM   ,6"Yb.  ,pP"Ybd ,pP"Ybd `7MM  ,p6"bo  
+ 	||         || |  MM.  M' MM.  M'   MM    MM    MM MM            MM  8)   MM  8I   `" 8I   `"   MM 6M'  OO  
+ 	||         || |  `MM A'  `MM A'    MM    MM    MM MM.           MM   ,pm9MM  `YMMMa. `YMMMa.   MM 8M       
+ 	||         || |  :MM;    :MM;     MM    MM    MM `Mb.     ,'   MM  8M   MM  L.   I8 L.   I8   MM YM.    , 
+ 	||         || |   VF      VF    .JMML..JMML  JMML. `"bmmmd'  .JMML.`Moo9^Yo.M9mmmP' M9mmmP' .JMML.YMbmd'  
+ 	|'---------'|/																		 
+ 	[=== -- o ]/--.
+	_'---------'__  \
+       [::::::::::: :::]  )
+	`""'"""""'""""`  /T\
+			 \_/
+*/
+
+/* License https://github.com/dmack6464/WinClassic/blob/master/LICENSE */
+
+/*
+//////////////////////////////////////////
+/// ABOUT THIS VERSION
+//////////////////////////////////////////
+Updated for the current Discord client (October 2026, Build 635724).
+Since the last update (February 2025) Discord replaced its whole layout
+("visual refresh"): the window title bar, the sidebars, the colour variables
+and most class names changed, so most of the old selectors stopped matching.
+This file is self-contained: it no longer @imports source.css from GitHub Pages.
+*/
+
+
+/*
+//////////////////////////////////////////
+/// SETTINGS (change the values you like)
+//////////////////////////////////////////
+*/
+
+:root {
+	--classic-titlebar-height: 20px;
+	--classic-titlebar-active: linear-gradient(90deg, #0a246a, #a6caf0);
+	--classic-titlebar-inactive: linear-gradient(90deg, #808080, #c0c0c0);
+	--classic-titlebar-text-active: #fff;
+	--classic-titlebar-text-inactive: #d4d0c8;
+	--classic-app-padding: 3px;
+	--classic-font: Tahoma, 'MS Sans Serif', Whitney, 'gg sans', 'Noto Sans', sans-serif;
+
+	/* Windows Classic colours */
+	--classic-face: #c0c0c0;
+	--classic-highlight: #fff;
+	--classic-light: #dfdfdf;
+	--classic-shadow: #808080;
+	--classic-dark-shadow: #0a0a0a;
+	--classic-window: #fff;
+	--classic-text: #000;
+	--classic-gray-text: #606060;
+	--classic-select: #0a246a;
+	--classic-select-text: #fff;
+	--classic-tooltip: #ffffe1;
+
+	/* 3D edges used by buttons */
+	--classic-raised: inset -1px -1px var(--classic-dark-shadow), inset 1px 1px var(--classic-highlight), inset -2px -2px var(--classic-shadow), inset 2px 2px var(--classic-light);
+	--classic-pressed: inset -1px -1px var(--classic-highlight), inset 1px 1px var(--classic-dark-shadow), inset -2px -2px var(--classic-light), inset 2px 2px var(--classic-shadow);
+}
+
+
+/*
+//////////////////////////////////////////
+/// COLOURS
+//////////////////////////////////////////
+Applied to every Discord theme (light, dark, ash, onyx), so the theme no longer
+depends on which appearance is picked in Discord settings. The id inside :not()
+never matches anything, it only makes these rules win over Discord's own ones.
+Profiles with a custom Nitro theme keep their colours.
+*/
+
+:root,
+:is(.theme-light, .theme-dark, .theme-darker, .theme-midnight):not(.custom-user-profile-theme, #winclassic) {
+	--font-primary: var(--classic-font);
+	--font-display: var(--classic-font);
+	--font-headline: var(--classic-font);
+
+	--radius-none: 0px;
+	--radius-xs: 0px;
+	--radius-sm: 0px;
+	--radius-md: 0px;
+	--radius-lg: 0px;
+	--radius-xl: 0px;
+	--radius-xxl: 0px;
+	--radius-round: 0px;
+
+	/* backgrounds */
+	--background-base-lowest: var(--classic-face);
+	--background-base-lower: var(--classic-face);
+	--background-base-low: var(--classic-window);
+	--background-surface-high: var(--classic-face);
+	--background-surface-higher: var(--classic-face);
+	--background-surface-highest: var(--classic-face);
+	--background-primary: var(--classic-window);
+	--background-secondary: var(--classic-face);
+	--background-secondary-alt: var(--classic-face);
+	--background-tertiary: var(--classic-window);
+	--background-floating: var(--classic-face);
+	--background-accent: var(--classic-select);
+	--background-brand: var(--classic-select);
+	--background-code: var(--classic-face);
+	--background-modifier-hover: rgba(10, 36, 106, 0.12);
+	--background-modifier-active: rgba(10, 36, 106, 0.2);
+	--background-modifier-selected: rgba(10, 36, 106, 0.2);
+	--background-modifier-accent: var(--classic-shadow);
+	--background-mod-subtle: rgba(0, 0, 0, 0.08);
+	--background-mod-muted: rgba(0, 0, 0, 0.08);
+	--background-mod-normal: var(--classic-face);
+	--background-mod-strong: #a8a8a8;
+	--interactive-background-hover: rgba(10, 36, 106, 0.12);
+	--interactive-background-active: rgba(10, 36, 106, 0.2);
+	--interactive-background-selected: rgba(10, 36, 106, 0.2);
+	--bg-base-primary: var(--classic-window);
+	--bg-base-secondary: var(--classic-face);
+	--bg-base-tertiary: var(--classic-face);
+	--bg-surface-raised: var(--classic-face);
+	--bg-surface-overlay: var(--classic-face);
+	--app-frame-background: var(--classic-face);
+	--app-frame-border: var(--classic-shadow);
+	--home-background: var(--classic-face);
+	--chat-background-default: var(--classic-window);
+	--channeltextarea-background: var(--classic-window);
+	--modal-background: var(--classic-face);
+	--modal-footer-background: var(--classic-face);
+	--card-background-default: var(--classic-face);
+	--card-primary-bg: var(--classic-face);
+	--card-secondary-bg: var(--classic-face);
+	--activity-card-background: var(--classic-window);
+	--user-profile-overlay-background: var(--classic-face);
+	--user-profile-toolbar-background: var(--classic-face);
+	--user-profile-border: var(--classic-shadow);
+	--message-background-hover: rgba(0, 0, 0, 0.05);
+	--message-highlight-background-default: rgba(10, 36, 106, 0.08);
+	--message-highlight-background-hover: rgba(10, 36, 106, 0.12);
+	--message-mentioned-background-default: var(--classic-tooltip);
+	--message-mentioned-background-hover: #ffffcc;
+
+	/* text and icons */
+	--text-default: var(--classic-text);
+	--text-normal: var(--classic-text);
+	--text-primary: var(--classic-text);
+	--text-strong: var(--classic-text);
+	--text-secondary: #202020;
+	--text-subtle: #404040;
+	--text-tertiary: #404040;
+	--text-muted: var(--classic-gray-text);
+	--text-link: #0067e0;
+	--text-brand: var(--classic-select);
+	--text-invert: var(--classic-select-text);
+	--text-feedback-critical: #c00000;
+	--text-feedback-positive: #008000;
+	--text-feedback-warning: #806000;
+	--header-primary: var(--classic-text);
+	--header-secondary: var(--classic-text);
+	--channels-default: var(--classic-text);
+	--channel-icon: var(--classic-text);
+	--channel-text-area-placeholder: var(--classic-shadow);
+	--chat-text-muted: var(--classic-shadow);
+	--textbox-markdown-syntax: var(--classic-shadow);
+	--interactive-normal: var(--classic-text);
+	--interactive-hover: var(--classic-text);
+	--interactive-active: var(--classic-text);
+	--interactive-muted: var(--classic-shadow);
+	--interactive-text-default: var(--classic-text);
+	--interactive-text-hover: var(--classic-text);
+	--interactive-text-active: var(--classic-text);
+	--interactive-icon-default: var(--classic-text);
+	--interactive-icon-hover: var(--classic-text);
+	--interactive-icon-active: var(--classic-text);
+	--icon-default: var(--classic-text);
+	--icon-strong: var(--classic-text);
+	--icon-subtle: #404040;
+	--icon-muted: var(--classic-shadow);
+	--icon-link: #0067e0;
+	--mention-foreground: var(--classic-select);
+	--mention-background: rgba(10, 36, 106, 0.15);
+
+	/* code blocks */
+	--text-code: var(--classic-text);
+	--text-code-keyword: #00007f;
+	--text-code-builtin: #7f007f;
+	--text-code-string: #7f0000;
+	--text-code-comment: #007f00;
+	--text-code-title: #00007f;
+	--text-code-section: #00007f;
+	--text-code-tag: #00007f;
+	--text-code-variable: #007f7f;
+	--text-code-bullet: #7f007f;
+	--text-code-addition: #007f00;
+	--text-code-deletion: #7f0000;
+	--background-code-addition: rgba(0, 127, 0, 0.15);
+	--background-code-deletion: rgba(127, 0, 0, 0.15);
+
+	/* borders */
+	--border-subtle: var(--classic-shadow);
+	--border-normal: var(--classic-shadow);
+	--border-strong: var(--classic-dark-shadow);
+	--border-muted: #a0a0a0;
+	--border-faint: #a0a0a0;
+	--border-focus: var(--classic-select);
+
+	/* text fields */
+	--input-background: var(--classic-window);
+	--input-background-default: var(--classic-window);
+	--input-text-default: var(--classic-text);
+	--input-placeholder-text-default: var(--classic-shadow);
+	--input-border-default: var(--classic-shadow);
+	--input-border-hover: var(--classic-dark-shadow);
+	--input-border-active: var(--classic-select);
+
+	/* buttons */
+	--control-primary-background-default: var(--classic-face);
+	--control-primary-background-hover: var(--classic-face);
+	--control-primary-background-active: #b0b0b0;
+	--control-primary-text-default: var(--classic-text);
+	--control-primary-text-hover: var(--classic-text);
+	--control-primary-text-active: var(--classic-text);
+	--control-primary-icon-default: var(--classic-text);
+	--control-primary-icon-hover: var(--classic-text);
+	--control-primary-icon-active: var(--classic-text);
+	--control-primary-border-default: var(--classic-shadow);
+	--control-primary-border-hover: var(--classic-shadow);
+	--control-primary-border-active: var(--classic-shadow);
+	--control-secondary-background-default: var(--classic-face);
+	--control-secondary-background-hover: var(--classic-face);
+	--control-secondary-background-active: #b0b0b0;
+	--control-secondary-text-default: var(--classic-text);
+	--control-secondary-text-hover: var(--classic-text);
+	--control-secondary-text-active: var(--classic-text);
+	--control-secondary-icon-default: var(--classic-text);
+	--control-secondary-icon-hover: var(--classic-text);
+	--control-secondary-icon-active: var(--classic-text);
+	--control-secondary-border-default: var(--classic-shadow);
+	--control-secondary-border-hover: var(--classic-shadow);
+	--control-secondary-border-active: var(--classic-shadow);
+	--control-critical-primary-background-default: var(--classic-face);
+	--control-critical-primary-background-hover: var(--classic-face);
+	--control-critical-primary-background-active: #b0b0b0;
+	--control-critical-primary-text-default: #a00000;
+	--control-critical-primary-text-hover: #a00000;
+	--control-critical-primary-text-active: #a00000;
+	--control-critical-primary-icon-default: #a00000;
+	--control-critical-primary-icon-hover: #a00000;
+	--control-critical-primary-icon-active: #a00000;
+	--control-critical-secondary-background-default: var(--classic-face);
+	--control-critical-secondary-background-hover: var(--classic-face);
+	--control-critical-secondary-background-active: #b0b0b0;
+	--control-critical-secondary-text-default: #a00000;
+	--control-critical-secondary-text-hover: #a00000;
+	--control-critical-secondary-text-active: #a00000;
+	--control-connect-background-default: var(--classic-face);
+	--control-connect-background-hover: var(--classic-face);
+	--control-connect-background-active: #b0b0b0;
+	--control-connect-text-default: var(--classic-text);
+	--control-connect-text-hover: var(--classic-text);
+	--control-connect-text-active: var(--classic-text);
+	--control-connect-icon-default: var(--classic-text);
+	--control-connect-icon-hover: var(--classic-text);
+	--control-connect-icon-active: var(--classic-text);
+	--control-icon-only-background-hover: rgba(10, 36, 106, 0.12);
+	--control-icon-only-background-active: rgba(10, 36, 106, 0.2);
+	--control-icon-only-icon-default: var(--classic-text);
+	--control-icon-only-icon-hover: var(--classic-text);
+	--control-icon-only-icon-active: var(--classic-text);
+	--button-secondary-background: var(--classic-face);
+	--button-secondary-background-hover: var(--classic-face);
+	--button-secondary-background-active: #b0b0b0;
+	--button-secondary-text: var(--classic-text);
+	--button-filled-brand-background: var(--classic-face);
+	--button-filled-brand-background-hover: var(--classic-face);
+	--button-filled-brand-background-active: #b0b0b0;
+	--button-filled-brand-text: var(--classic-text);
+	--redesign-button-primary-background: var(--classic-face);
+	--redesign-button-primary-pressed-background: #b0b0b0;
+	--redesign-button-primary-text: var(--classic-text);
+	--redesign-button-secondary-background: var(--classic-face);
+	--redesign-button-secondary-pressed-background: #b0b0b0;
+	--redesign-button-secondary-text: var(--classic-text);
+
+	/* checkboxes, radios, switches */
+	--checkbox-background-default: var(--classic-window);
+	--checkbox-background-hover: var(--classic-window);
+	--checkbox-background-selected-default: var(--classic-select);
+	--checkbox-background-selected-hover: var(--classic-select);
+	--checkbox-border-default: var(--classic-shadow);
+	--checkbox-border-hover: var(--classic-dark-shadow);
+	--radio-background-default: var(--classic-window);
+	--radio-background-hover: var(--classic-window);
+	--radio-background-selected-default: var(--classic-select);
+	--radio-background-selected-hover: var(--classic-select);
+	--radio-border-default: var(--classic-shadow);
+	--radio-border-hover: var(--classic-dark-shadow);
+	--switch-background-default: var(--classic-shadow);
+	--switch-background-hover: var(--classic-shadow);
+	--switch-background-selected-default: var(--classic-select);
+	--switch-background-selected-hover: var(--classic-select);
+	--switch-thumb-background-default: var(--classic-window);
+	--switch-thumb-background-selected-default: var(--classic-window);
+
+	/* reactions */
+	--reaction-background-default: var(--classic-face);
+	--reaction-background-hover: var(--classic-light);
+	--reaction-background-active: #b0b0b0;
+	--reaction-background-reacted-default: rgba(10, 36, 106, 0.15);
+	--reaction-background-reacted-hover: rgba(10, 36, 106, 0.25);
+	--reaction-border-default: var(--classic-shadow);
+	--reaction-border-hover: var(--classic-dark-shadow);
+	--reaction-border-reacted-default: var(--classic-select);
+	--reaction-text-default: var(--classic-text);
+	--reaction-text-hover: var(--classic-text);
+	--reaction-text-reacted-default: var(--classic-select);
+
+	/* scrollbars (only used where the styles below can't reach) */
+	--scrollbar-auto-thumb: var(--classic-face);
+	--scrollbar-auto-track: var(--classic-light);
+	--scrollbar-thin-thumb: var(--classic-face);
+	--scrollbar-thin-track: transparent;
+}
+
+::-webkit-input-placeholder, body, button, select, input, textarea, div {
+	font-family: var(--classic-font) !important;
+}
+
+* {
+	text-transform: none !important;
+}
+
+*,
+*::before,
+*::after {
+	border-radius: 0 !important;
+}
+
+
+/*
+//////////////////////////////////////////
+/// 98.css SCROLLBAR
+//////////////////////////////////////////
+*/
+
+/* Chromium ignores the ::-webkit-scrollbar styles below on elements that set scrollbar-width / scrollbar-color */
+.thin_d125d2,
+.auto_d125d2 {
+	scrollbar-width: auto !important;
+	scrollbar-color: auto !important;
+}
+
+body *:not(.none_d125d2)::-webkit-scrollbar {
+	width: 16px !important;
+	height: 16px !important;
+	background: none;
+}
+
+body *::-webkit-scrollbar-thumb {
+	min-height: 16px;
+	background: var(--classic-face) !important;
+	background-clip: border-box !important;
+	border: 0 !important;
+	box-shadow: var(--classic-raised) !important;
+	visibility: visible !important;
+}
+
+body *::-webkit-scrollbar-track {
+	margin: 0 !important;
+	border: 0 !important;
+	image-rendering: pixelated;
+	background-color: transparent !important;
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgLTAuNSAyIDIiIHNoYXBlLXJlbmRlcmluZz0iY3Jpc3BFZGdlcyI+CjxtZXRhZGF0YT5NYWRlIHdpdGggUGl4ZWxzIHRvIFN2ZyBodHRwczovL2NvZGVwZW4uaW8vc2hzaGF3L3Blbi9YYnh2Tmo8L21ldGFkYXRhPgo8cGF0aCBzdHJva2U9IiNjMGMwYzAiIGQ9Ik0wIDBoMU0xIDFoMSIgLz4KPC9zdmc+") !important;
+	background-position: 0 0 !important;
+	background-repeat: repeat !important;
+	background-size: 2px !important;
+}
+
+body *::-webkit-scrollbar-button:single-button {
+	display: block;
+	width: 16px;
+	height: 16px;
+	background-color: var(--classic-face);
+	background-repeat: no-repeat;
+	background-size: 16px;
+	box-shadow: var(--classic-raised);
+}
+
+body *::-webkit-scrollbar-button:single-button:active {
+	box-shadow: var(--classic-pressed);
+}
+
+body *::-webkit-scrollbar-button:single-button:vertical:decrement {
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgLTAuNSAxNiAxNiIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj4KPG1ldGFkYXRhPk1hZGUgd2l0aCBQaXhlbHMgdG8gU3ZnIGh0dHBzOi8vY29kZXBlbi5pby9zaHNoYXcvcGVuL1hieHZOajwvbWV0YWRhdGE+CjxwYXRoIHN0cm9rZT0iIzAwMDAwMCIgZD0iTTcgNWgxTTYgNmgzTTUgN2g1TTQgOGg3IiAvPgo8L3N2Zz4=");
+}
+
+body *::-webkit-scrollbar-button:single-button:vertical:increment {
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgLTAuNSAxNiAxNiIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj4KPG1ldGFkYXRhPk1hZGUgd2l0aCBQaXhlbHMgdG8gU3ZnIGh0dHBzOi8vY29kZXBlbi5pby9zaHNoYXcvcGVuL1hieHZOajwvbWV0YWRhdGE+CjxwYXRoIHN0cm9rZT0iIzAwMDAwMCIgZD0iTTQgNWg3TTUgNmg1TTYgN2gzTTcgOGgxIiAvPgo8L3N2Zz4=");
+}
+
+body *::-webkit-scrollbar-button:single-button:horizontal:decrement {
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgLTAuNSAxNiAxNiIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj4KPG1ldGFkYXRhPk1hZGUgd2l0aCBQaXhlbHMgdG8gU3ZnIGh0dHBzOi8vY29kZXBlbi5pby9zaHNoYXcvcGVuL1hieHZOajwvbWV0YWRhdGE+CjxwYXRoIHN0cm9rZT0iIzAwMDAwMCIgZD0iTTggM2gxTTcgNGgyTTYgNWgzTTUgNmg0TTYgN2gzTTcgOGgyTTggOWgxIiAvPgo8L3N2Zz4=");
+}
+
+body *::-webkit-scrollbar-button:single-button:horizontal:increment {
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgLTAuNSAxNiAxNiIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj4KPG1ldGFkYXRhPk1hZGUgd2l0aCBQaXhlbHMgdG8gU3ZnIGh0dHBzOi8vY29kZXBlbi5pby9zaHNoYXcvcGVuL1hieHZOajwvbWV0YWRhdGE+CjxwYXRoIHN0cm9rZT0iIzAwMDAwMCIgZD0iTTYgM2gxTTYgNGgyTTYgNWgzTTYgNmg0TTYgN2gzTTYgOGgyTTYgOWgxIiAvPgo8L3N2Zz4=");
+}
+
+body *::-webkit-scrollbar-corner {
+	background: var(--classic-face);
+}
+
+/* hidden scrollbars: server list, channel list, emoji categories */
+.none_d125d2::-webkit-scrollbar,
+.guilds__5e434 *::-webkit-scrollbar,
+.sidebar__5e434 *::-webkit-scrollbar,
+.categoryList_c0e32c::-webkit-scrollbar,
+.categoryList_c0e32c *::-webkit-scrollbar {
+	display: none !important;
+	width: 0 !important;
+	height: 0 !important;
+}
+
+/* Firefox (Stylus) has no ::-webkit-scrollbar */
+@supports not selector(::-webkit-scrollbar) {
+	* {
+		scrollbar-color: var(--classic-face) var(--classic-light);
+	}
+}
+
+/* dakedres was here ;3 */
+
+
+/*
+//////////////////////////////////////////
+/// CLASSIC TITLE BAR (Tropical)
+//////////////////////////////////////////
+Discord's new top bar: leading (back / forward) - title - trailing (inbox,
+help, window buttons). The title is left aligned like a real window caption.
+*/
+
+body,
+.refresh-title-bar-small {
+	--custom-app-top-bar-height: var(--classic-titlebar-height);
+}
+
+.bar_c38106 {
+	height: var(--classic-titlebar-height);
+	min-height: var(--classic-titlebar-height);
+	color: var(--text-default);
+	background: var(--classic-titlebar-inactive);
+
+	/* everything inside the bar is drawn white on the gradient */
+	--text-default: var(--classic-titlebar-text-inactive);
+	--text-normal: var(--classic-titlebar-text-inactive);
+	--text-strong: var(--classic-titlebar-text-inactive);
+	--interactive-normal: var(--classic-titlebar-text-inactive);
+	--interactive-icon-default: var(--classic-titlebar-text-inactive);
+	--interactive-icon-hover: var(--classic-titlebar-text-active);
+	--interactive-text-default: var(--classic-titlebar-text-inactive);
+	--icon-default: var(--classic-titlebar-text-inactive);
+	--icon-subtle: var(--classic-titlebar-text-inactive);
+	--channel-icon: var(--classic-titlebar-text-inactive);
+}
+
+.app-focused .bar_c38106 {
+	background: var(--classic-titlebar-active);
+	--text-default: var(--classic-titlebar-text-active);
+	--text-normal: var(--classic-titlebar-text-active);
+	--text-strong: var(--classic-titlebar-text-active);
+	--interactive-normal: var(--classic-titlebar-text-active);
+	--interactive-icon-default: var(--classic-titlebar-text-active);
+	--interactive-text-default: var(--classic-titlebar-text-active);
+	--icon-default: var(--classic-titlebar-text-active);
+	--icon-subtle: var(--classic-titlebar-text-active);
+	--channel-icon: var(--classic-titlebar-text-active);
+}
+
+.title_c38106 {
+	justify-content: flex-start;
+	padding: 0 3px;
+}
+
+.title_edbb22 {
+	gap: 3px;
+}
+
+.title_edbb22,
+.title_edbb22 * {
+	font-size: 12px !important;
+	font-weight: 700 !important;
+	line-height: var(--classic-titlebar-height) !important;
+	color: var(--text-default) !important;
+}
+
+.title_edbb22 > svg,
+.title_edbb22 .guildIcon_edbb22 {
+	width: 16px !important;
+	height: 16px !important;
+}
+
+.trailing_c38106 svg,
+.leading_c38106 svg {
+	max-width: 16px;
+	max-height: 16px;
+}
+
+.trailing_c38106 .button__85643:hover,
+.leading_c38106 button:hover {
+	background: none;
+}
+
+.winButtons_c38106 {
+	gap: 0;
+	height: 100%;
+	align-items: center;
+	padding: 0 2px 0 0;
+}
+
+.winButtonsWithDivider_c38106::before,
+.winButtons_c38106::before {
+	display: none;
+}
+
+.winButton_c38106 {
+	top: unset;
+	width: 16px;
+	height: 14px;
+	padding: 0;
+	margin: 0;
+	cursor: default;
+	color: var(--classic-text);
+	background-color: var(--classic-face) !important;
+	background-repeat: no-repeat;
+	box-shadow: var(--classic-raised);
+}
+
+.winButton_c38106:hover {
+	background-color: var(--classic-face) !important;
+	color: var(--classic-text) !important;
+}
+
+.winButton_c38106:active {
+	box-shadow: var(--classic-pressed);
+}
+
+.winButton_c38106 > svg {
+	display: none;
+}
+
+.winButtonClose_c38106 {
+	margin-left: 2px;
+	background-position: top 3px left 4px;
+	background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='8' height='7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0h2v1h1v1h2V1h1V0h2v1H7v1H6v1H5v1h1v1h1v1h1v1H6V6H5V5H3v1H2v1H0V6h1V5h1V4h1V3H2V2H1V1H0V0z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+/* minimize */
+.winButtonMinMax_c38106:nth-child(1 of .winButtonMinMax_c38106) {
+	background-position: bottom 3px left 4px;
+	background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='6' height='2' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23000' d='M0 0h6v2H0z'/%3E%3C/svg%3E");
+}
+
+/* maximize */
+.winButtonMinMax_c38106:nth-child(2 of .winButtonMinMax_c38106) {
+	background-position: top 2px left 3px;
+	background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='9' height='9' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 0H0v9h9V0zM8 2H1v6h7V2z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+/* window frame */
+.platform-win #app-mount {
+	padding: var(--classic-app-padding);
+	box-sizing: border-box;
+	background-color: var(--classic-face);
+	box-shadow: inset -1px -1px var(--classic-dark-shadow), inset 1px 1px var(--classic-light), inset -2px -2px var(--classic-shadow), inset 2px 2px var(--classic-highlight);
+}
+
+.bg__960e4 {
+	background: var(--classic-face);
+}
+
+.platform-osx #channelTabs-container {
+	background-color: var(--classic-face);
+}
+
+
+/*
+//////////////////////////////////////////
+/// WINCLASSIC THEME
+//////////////////////////////////////////
+*/
+
+/* Raised panels and buttons: light top/left edge, dark bottom/right edge */
+.panels__5e434,
+.sidebar__5e434,
+.scroller_ef3116,
+.container_e131a9,
+.childWrapper__6e9f8,
+.circleIconButton__5bc7e,
+.folderPreviewWrapper__48112,
+.expandedFolderIconWrapper__48112,
+.item__58105,
+.iconWrapper__9293f,
+.button_f7ecac,
+.button_f563df,
+.container__37e49 .button__67645,
+.attachButton__0923f,
+.attachButton__74017,
+.buttonContainer__74017,
+.button_aa63ab,
+.typing_b88801,
+.container__9293f:not(.transparent__9293f),
+.header__432f4,
+.footer__432f4,
+.peopleColumn__133bf,
+.tabBar__133bf .item__133bf,
+.container__7d20c,
+.itemCard__7e549,
+.card__2eab1,
+.card_eafb9c,
+.fileWrapper__0ccae,
+.markup__75297 code,
+.grid__623de,
+.menu_c1e9c4,
+.labelContainer_c1e9c4,
+.channel__972a0,
+.side_aa8da2 .item_aa8da2,
+.closeButton_c2b141,
+.accountProfileCard_a9178b,
+.background_a9178b,
+.uploadModal_b78547,
+.root__49fc1,
+.focusLock__49fc1,
+.container__8a031,
+.footerSeparator__49fc1,
+.contentWrapper__08434,
+.drawerSizingWrapper__08434,
+.navButton__08434,
+.inspector_c0e32c,
+.inspector_aeaaeb,
+.unicodeShortcut_b9ee0c,
+.categoryItemDefaultCategorySelected_b9ee0c,
+.stickerCategoryGeneric__3ad28,
+.header_fed6d3,
+.content_fed6d3,
+.newMessagesBar__0f481,
+.jumpToPresentBar__0f481,
+.barButtonAlt__0f481,
+.outer_c0bea0,
+.bd-button,
+.bd-addon-button,
+.bd-tab-item.selected,
+.bd-addon-error-header {
+	color: var(--classic-text);
+	background-color: var(--classic-face);
+	border: 1px solid;
+	border-color: var(--classic-highlight) var(--classic-shadow) var(--classic-shadow) var(--classic-highlight);
+	box-shadow: none;
+}
+
+/* Sunken fields: dark top/left edge, light bottom/right edge */
+.messagesWrapper__36d07,
+.messagesPopoutWrap__432f4,
+.messageGroupWrapper__432f4,
+.peopleList__5ec2f,
+.section__00943,
+.fieldList_a9178b,
+.uploadModal_b78547 .footer_b78547.hasSpoilers_b78547,
+.input__0ed4f,
+.inner_a45028,
+.inner_fea832,
+.search__49676,
+.searchBar_e6b769,
+.searchBar__97492,
+.searchBar_c322aa,
+.navButtonActive__08434,
+input:is([type="text"], [type="search"], [type="email"], [type="password"], [type="number"], :not([type])) {
+	border: 1px solid;
+	border-color: var(--classic-shadow) var(--classic-highlight) var(--classic-highlight) var(--classic-shadow);
+}
+
+input:is([type="text"], [type="search"], [type="email"], [type="password"], [type="number"], :not([type])) {
+	color: var(--classic-text);
+	background-color: var(--classic-window);
+}
+
+/* Buttons */
+.button__201d5.lookFilled__201d5,
+.button__201d5.lookOutlined__201d5,
+.button_a22cb0 {
+	color: var(--classic-text) !important;
+	background: var(--classic-face) !important;
+	border: 0 !important;
+	box-shadow: var(--classic-raised) !important;
+}
+
+.button__201d5.lookFilled__201d5:active,
+.button__201d5.lookOutlined__201d5:active,
+.button_a22cb0:active,
+.tabBar__133bf .item__133bf[aria-selected="true"] {
+	box-shadow: var(--classic-pressed) !important;
+}
+
+.button__201d5.lookFilled__201d5.colorRed__201d5,
+.button_a22cb0:is(.critical-primary_a22cb0, .critical-secondary_a22cb0) {
+	color: #a00000 !important;
+}
+
+.button__201d5.lookFilled__201d5 *,
+.button_a22cb0 * {
+	color: inherit;
+}
+
+/* Hover and selection: navy bar with white text, like a classic list box */
+.wrapper__2ea32:hover,
+.modeSelected__2ea32,
+.channel__972a0 .interactive__972a0:hover,
+.interactiveSelected__972a0,
+.interactive_f88cfd:hover,
+.selected_f88cfd,
+.member__5d473:hover,
+.member__5d473:has(.selected__91a9d),
+.peopleListItem_cc6179:hover,
+.peopleListItem_cc6179.active_cc6179,
+.side_aa8da2 .item_aa8da2:hover,
+.side_aa8da2 .item_aa8da2.selected_aa8da2,
+.item_c1e9c4.focused_c1e9c4,
+.item_c1e9c4.focused_c1e9c4 .labelContainer_c1e9c4 {
+	background-color: var(--classic-select) !important;
+}
+
+.wrapper__2ea32:hover .link__2ea32,
+.modeSelected__2ea32 .link__2ea32,
+.member__5d473:hover .layout__91a9d,
+.member__5d473 .selected__91a9d .layout__91a9d {
+	background: none !important;
+}
+
+.modeSelected__2ea32 {
+	border-color: var(--classic-dark-shadow) var(--classic-shadow) var(--classic-shadow) var(--classic-dark-shadow) !important;
+}
+
+.wrapper__2ea32:hover *,
+.modeSelected__2ea32 *,
+.channel__972a0 .interactive__972a0:hover *,
+.interactiveSelected__972a0 *,
+.interactive_f88cfd:hover *,
+.selected_f88cfd *,
+.member__5d473:hover *,
+.member__5d473:has(.selected__91a9d) *,
+.peopleListItem_cc6179:is(:hover, .active_cc6179) *,
+.side_aa8da2 .item_aa8da2:is(:hover, .selected_aa8da2),
+.side_aa8da2 .item_aa8da2:is(:hover, .selected_aa8da2) *,
+.item_c1e9c4.focused_c1e9c4,
+.item_c1e9c4.focused_c1e9c4 * {
+	color: var(--classic-select-text) !important;
+}
+
+/* Server list */
+.scroller_ef3116 {
+	background-color: var(--classic-select);
+}
+
+.wrapper__6e9f8:hover .childWrapper__6e9f8,
+.wrapper__6e9f8.selected__6e9f8 .childWrapper__6e9f8 {
+	color: var(--classic-text);
+	background-color: var(--classic-shadow);
+}
+
+/* Server name */
+.container_f37cb1 {
+	color: var(--classic-text);
+	margin: 0;
+	border-bottom: 1px solid var(--classic-shadow);
+}
+
+/* Channels */
+.wrapper__2ea32 {
+	color: var(--classic-text);
+	background-color: var(--classic-face);
+	margin: 0;
+	border-top: 1px solid var(--classic-highlight);
+	border-bottom: 1px solid var(--classic-shadow);
+}
+
+.modeUnreadImportant__2ea32 .name__2ea32 {
+	font-weight: 700;
+	font-style: italic;
+}
+
+/* Direct messages */
+.channel__972a0 {
+	margin: 0;
+}
+
+/* Members */
+.container_c8ffbb,
+.members_c8ffbb {
+	background-color: var(--classic-face);
+}
+
+.member__5d473 {
+	background-color: var(--classic-face);
+	margin: 0;
+	border-top: 1px solid var(--classic-highlight);
+	border-bottom: 1px solid var(--classic-shadow);
+}
+
+/* User panel and activity panel */
+.panels__5e434,
+.container__37e49,
+.activityPanel__5e434 {
+	background: var(--classic-face) !important;
+}
+
+.container__37e49,
+.activityPanel__5e434 {
+	border-top: 1px solid var(--classic-dark-shadow);
+	border-bottom: none;
+}
+
+/* Chat */
+.chat_f75fb0,
+.chatContent_f75fb0,
+.messagesWrapper__36d07 {
+	background-color: var(--classic-window);
+}
+
+.form_f75fb0 {
+	color: var(--classic-text);
+	background: var(--classic-face);
+}
+
+.channelTextArea_f75fb0 {
+	color: var(--classic-text);
+	background-color: var(--classic-window);
+	border: 1px solid;
+	border-color: var(--classic-shadow) var(--classic-highlight) var(--classic-highlight) var(--classic-shadow);
+	box-shadow: inset 1px 1px var(--classic-dark-shadow), inset -1px -1px var(--classic-light);
+}
+
+.channelTextArea_f75fb0 .themedBackground__74017,
+.channelTextArea_f75fb0 .scrollableContainer__74017 {
+	background: var(--classic-window);
+}
+
+.scrollableContainer__74017 {
+	overflow-x: hidden;
+}
+
+.children__9293f::after {
+	border-right: 1px solid var(--classic-shadow);
+	background: none;
+}
+
+.newMessagesBar__0f481,
+.jumpToPresentBar__0f481 {
+	color: var(--classic-text) !important;
+}
+
+/* Embeds */
+.embedFull__623de {
+	background-color: var(--classic-face);
+}
+
+/* Context menus */
+.menu_c1e9c4 {
+	padding: 2px;
+	border-color: var(--classic-light) var(--classic-dark-shadow) var(--classic-dark-shadow) var(--classic-light);
+	box-shadow: inset 1px 1px var(--classic-highlight), inset -1px -1px var(--classic-shadow);
+}
+
+.scroller_c1e9c4 {
+	padding: 0;
+}
+
+.item_c1e9c4 {
+	min-height: 21px;
+	margin: 0;
+}
+
+.labelContainer_c1e9c4 {
+	min-height: 21px;
+	padding: 1px 4px;
+	margin: 0;
+}
+
+.separator_c1e9c4 {
+	margin: 3px 0;
+	border-top: 1px solid var(--classic-shadow);
+	border-bottom: 1px solid var(--classic-highlight);
+	background: none;
+}
+
+.colorDanger_c1e9c4 {
+	color: #a00000;
+}
+
+/* Tooltips */
+.tooltip_c36707,
+.tooltipPrimary_c36707 {
+	color: var(--classic-text) !important;
+	background-color: var(--classic-tooltip) !important;
+	border: 1px solid var(--classic-dark-shadow);
+	box-shadow: none;
+	--text-default: var(--classic-text);
+	--text-strong: var(--classic-text);
+}
+
+.tooltipPointer_c36707,
+.tooltipPointerBg_c36707 {
+	display: none;
+}
+
+/* Friends */
+.peopleList__5ec2f {
+	color: var(--classic-text);
+	background-color: var(--classic-face);
+	margin: 0;
+}
+
+.tabBar__133bf .item__133bf {
+	color: var(--classic-text);
+}
+
+/* Settings */
+.side_aa8da2 .item_aa8da2 {
+	height: 21px;
+	padding: 0 4px;
+	margin: 0;
+}
+
+.sidebarRegionScroller__23e6b {
+	background-color: var(--classic-face);
+}
+
+.contentRegionScroller__23e6b {
+	background-color: #848484;
+}
+
+/* Switches look like classic check boxes */
+#app-mount .container__3f21e .input__3f21e {
+	margin: 0;
+	opacity: 1;
+	height: 14px !important;
+	width: 14px !important;
+	position: relative;
+	-webkit-appearance: checkbox;
+	appearance: checkbox;
+	box-shadow: var(--classic-pressed);
+}
+
+#app-mount .container__3f21e {
+	width: auto;
+	border-radius: 0;
+	background: transparent !important;
+	display: flex;
+	align-items: center;
+	box-shadow: none;
+}
+
+#app-mount .container__3f21e .slider__3f21e {
+	display: none;
+}
+
+/* Emoji, GIF and sticker picker */
+.medium_fea832 .tag_fea832 {
+	height: 30px !important;
+}
+
+/* Square avatars and server icons (from Saltssaumure's BorderRadient) */
+.assetWrapperMasked__31fc2,
+.inspectedIndicator_c6367b,
+foreignObject[mask*="url(#"] {
+	mask: none;
+	-webkit-mask: none;
+}
+
+.imageLoading__1859b {
+	background-image: none;
+}
+
+
+/*
+//////////////////////////////////////////
+/// BETTERDISCORD
+//////////////////////////////////////////
+*/
+
+.bd-controls > .bd-addon-button svg {
+	fill: var(--classic-text);
+}
+
+.bd-addon-list .bd-addon-header,
+.bd-description-wrap,
+.bd-addon-list .bd-footer {
+	color: var(--classic-text);
+	background-color: var(--classic-face);
+	border-left: 1px solid var(--classic-highlight);
+	border-right: 1px solid var(--classic-shadow);
+}
+
+.bd-addon-list .bd-addon-header {
+	border-top: 1px solid var(--classic-highlight);
+}
+
+button.bd-button.bd-addon-button.bd-button-danger {
+	background-color: var(--classic-face) !important;
+}
+
+/* Channel Tabs plugin */
+.channelTabs-closeTab,
+.channelTabs-newTab,
+.channelTabs-tab {
+	color: var(--classic-text) !important;
+	background: var(--classic-face) !important;
+	border: 1px solid !important;
+	border-color: var(--classic-highlight) var(--classic-shadow) var(--classic-shadow) var(--classic-highlight) !important;
+}
+
+.channelTabs-tabContainer {
+	color: var(--classic-text) !important;
+	background: var(--classic-face) !important;
+	border-top: 1px solid var(--classic-highlight) !important;
+	border-left: 1px solid var(--classic-highlight) !important;
+	border-right: 1px solid var(--classic-shadow) !important;
+}
+
+.channelTabs-tab:hover {
+	background-color: rgba(0, 0, 0, 0.144) !important;
+}
+
+.channelTabs-tab.channelTabs-selected {
+	border-bottom: 0 !important;
+}
+
+.platform-osx .channelTabs-tabContainer {
+	background: transparent !important;
+	border-color: transparent !important;
+}
+
+
+/*
+/////////////////////////////////////////
+//ADD YOUR OWN ADDITIONS BELOW THIS LINE
+/////////////////////////////////////////
+*/
