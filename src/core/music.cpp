@@ -118,12 +118,13 @@ namespace rf
             p.Text(r.x + 4, r.y + (r.h - Text().Height(f)) / 2, Ellipsize(text, f, r.w - 26), f, colors.text);
         }
 
-        void DrawPanel(Painter& p, const FrameSettings& s, const Shades& sh, const MusicFrame& m, const std::wstring& artist, const std::wstring& title, bool hasCover)
+        void DrawPanel(Painter& p, int w, int h, const FrameSettings& s, const Shades& sh, const MusicFrame& m, const std::wstring& artist, const std::wstring& title,
+                       bool hasCover)
         {
             const FrameColors& c = s.colors;
             const Font f{FamilyFor(s.style), false};
             const Color ink = c.text;
-            p.Fill(Rect{0, 0, MusicClientW, MusicClientH}, sh.face);
+            p.Fill(Rect{0, 0, w, h}, sh.face);
             const Color black = Rgb(0, 0, 0);
             p.Sunken(Rect{CoverX, CoverY, CoverSize, CoverSize}, sh, &black);
             if (!hasCover)
@@ -133,7 +134,7 @@ namespace rf
                 p.Draw(note, CoverX + 2 + (CoverInner - note.width) / 2, CoverY + 2 + (CoverInner - note.height) / 2);
             }
             const int left = CoverX + CoverSize + 10;
-            const int right = MusicClientW - 8;
+            const int right = w - 8;
             DrawDisc(p, left + 4, 18, m.angle, sh);
             const Rect display{left + 44, 25, 40, 18};
             p.Raised(display, sh);
@@ -198,12 +199,13 @@ namespace rf
         }
     }
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int squareSize)
+    MusicPlan PlanMusic(const FrameSettings& frame, int squareSize, bool square)
     {
         MusicPlan p;
-        p.size = std::max(120, squareSize & ~1);
+        p.square = square;
+        const int side = std::max(120, squareSize & ~1);
         const FrameGeometry g = MeasureFrame(MusicWindow(frame), MusicClientW, MusicClientH);
-        const int room = p.size * 92 / 100;
+        const int room = square ? side * 92 / 100 : side;
         int fits = 1;
         for (int k = 4; k >= 1; --k)
         {
@@ -213,11 +215,30 @@ namespace rf
                 break;
             }
         }
-        p.scale = frame.scale >= 1 && frame.scale <= 4 && frame.scale <= fits ? frame.scale : fits;
-        p.windowW = g.width * p.scale;
-        p.windowH = g.height * p.scale;
-        p.windowX = std::max(0, (p.size - p.windowW) / 2);
-        p.windowY = std::max(0, (p.size - p.windowH) / 2);
+        const bool manual = frame.scale >= 1 && frame.scale <= 4;
+        p.scale = manual && (!square || frame.scale <= fits) ? frame.scale : fits;
+        if (square)
+        {
+            p.windowW = g.width * p.scale;
+            p.windowH = g.height * p.scale;
+            p.windowX = std::max(0, (side - p.windowW) / 2);
+            p.windowY = std::max(0, (side - p.windowH) / 2);
+            p.outW = side;
+            p.outH = side;
+            return p;
+        }
+        if ((g.width * p.scale) % 2 != 0)
+        {
+            ++p.clientW;
+        }
+        if ((g.height * p.scale) % 2 != 0)
+        {
+            ++p.clientH;
+        }
+        p.windowW = (g.width - MusicClientW + p.clientW) * p.scale;
+        p.windowH = (g.height - MusicClientH + p.clientH) * p.scale;
+        p.outW = p.windowW;
+        p.outH = p.windowH;
         return p;
     }
 
@@ -231,10 +252,10 @@ namespace rf
     {
         FrameVars v = vars_;
         v.time = FormatShort(f.now) + L" / " + FormatShort(f.length);
-        Image img = RenderFrame(frame_, MusicClientW, MusicClientH, v, &client);
+        Image img = RenderFrame(frame_, plan_.clientW, plan_.clientH, v, &client);
         Painter p(img);
         Painter c = p.Sub(client);
-        DrawPanel(c, frame_, ShadesFor(frame_.colors.face, frame_.style), f, artist_, title_, !cover_.Empty());
+        DrawPanel(c, plan_.clientW, plan_.clientH, frame_, ShadesFor(frame_.colors.face, frame_.style), f, artist_, title_, !cover_.Empty());
         return img;
     }
 
@@ -252,13 +273,13 @@ namespace rf
         {
             Blit(window, coverBig_, (client.x + CoverX + 2) * k, (client.y + CoverY + 2) * k);
         }
-        if (background_.width == plan_.size && background_.height == plan_.size)
+        if (plan_.square && background_.width == plan_.outW && background_.height == plan_.outH)
         {
             out_ = background_;
         }
         else
         {
-            out_ = Image(plan_.size, plan_.size, Rgb(0, 0, 0));
+            out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         }
         Blit(out_, window, plan_.windowX, plan_.windowY);
         return out_;
@@ -276,8 +297,12 @@ namespace rf
             }
             Blit(window, coverSmall_, client.x + CoverX + 2, client.y + CoverY + 2);
         }
+        if (!plan_.square)
+        {
+            return window;
+        }
         const int k = plan_.scale;
-        const int side = plan_.size / k;
+        const int side = plan_.outW / k;
         Image out = background.width == side && background.height == side ? background : Image(side, side, Rgb(0, 0, 0));
         Blit(out, window, plan_.windowX / k, plan_.windowY / k);
         return out;
@@ -300,8 +325,8 @@ namespace rf
         EncoderSpec spec;
         spec.output = job.output;
         spec.quality = job.quality;
-        spec.width = job.plan.size;
-        spec.height = job.plan.size;
+        spec.width = job.plan.outW;
+        spec.height = job.plan.outH;
         spec.fps = MusicFps;
         spec.audio = true;
         spec.source = job.source;

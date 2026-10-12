@@ -11,12 +11,16 @@ namespace rf
 
     struct MusicPlan
     {
+        bool square = true;
         int scale = 1;
-        int size = 1080;
+        int clientW = MusicClientW;
+        int clientH = MusicClientH;
         int windowW = 0;
         int windowH = 0;
         int windowX = 0;
         int windowY = 0;
+        int outW = 1080;
+        int outH = 1080;
     };
 
     struct MusicFrame
@@ -28,7 +32,7 @@ namespace rf
         float level = 0.0f;
     };
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int squareSize);
+    MusicPlan PlanMusic(const FrameSettings& frame, int squareSize, bool square);
 
     class MusicComposer
     {

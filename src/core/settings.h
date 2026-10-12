@@ -40,6 +40,7 @@ namespace rf
     struct MusicSettings
     {
         int format = 0;
+        bool square = false;
         int squareSize = 1080;
         int fade = 2;
         bool spin = true;

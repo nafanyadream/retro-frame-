@@ -26,6 +26,7 @@ namespace rf
         bool HasClip() const { return clip_ != nullptr; }
         bool HasTrack() const { return track_ != nullptr; }
         bool LevelsReady() const { return track_ && track_->levelsReady; }
+        int ShownFormat() const;
 
         void OnTick(unsigned long long ms) override;
         bool OnCloseRequest() override;
@@ -92,6 +93,7 @@ namespace rf
         void UpdateMusicPreview();
         void UpdateMusicStatus(std::wstring& first, std::wstring& second, std::wstring& third);
         FrameSettings MusicFrameSettings() const;
+        MusicPlan MusicPlanFor(const FrameSettings& frame) const;
         bool MusicStill(Image& out);
         void SaveMusic();
         void CopyMusic();

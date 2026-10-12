@@ -238,6 +238,7 @@ namespace rf
         o << "video.gifFps=" << s.video.gifFps << "\n";
         o << "video.gifWidth=" << s.video.gifWidth << "\n";
         o << "music.format=" << s.music.format << "\n";
+        o << "music.square=" << (s.music.square ? 1 : 0) << "\n";
         o << "music.squareSize=" << s.music.squareSize << "\n";
         o << "music.fade=" << s.music.fade << "\n";
         o << "music.spin=" << (s.music.spin ? 1 : 0) << "\n";
@@ -382,6 +383,7 @@ namespace rf
         getInt("video.gifFps", s.video.gifFps, 5, 50);
         getInt("video.gifWidth", s.video.gifWidth, 0, 4000);
         getInt("music.format", s.music.format, 0, 3);
+        getBool("music.square", s.music.square);
         getInt("music.squareSize", s.music.squareSize, 240, 2160);
         getInt("music.fade", s.music.fade, 0, 30);
         getBool("music.spin", s.music.spin);

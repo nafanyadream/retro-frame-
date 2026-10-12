@@ -366,6 +366,11 @@ namespace rf
         menu_->menus = {file, edit, view, help};
     }
 
+    int MainView::ShownFormat() const
+    {
+        return format_->index;
+    }
+
     void MainView::LoadSettings()
     {
         const std::wstring dir = host_.SettingsFolder();
@@ -537,7 +542,7 @@ namespace rf
         gripCheck_->checked = s_.frame.grip;
         gripCheck_->enabled = look.status;
         scale_->index = std::clamp(s_.frame.scale, 0, 4);
-        format_->index = std::clamp(s_.format, 0, 2);
+        UpdateFormatItems();
         for (ui::Widget* w : photoOnly_)
         {
             w->visible = mode_ == PhotoMode;

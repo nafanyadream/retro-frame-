@@ -93,11 +93,10 @@ namespace rf
         hint->color = Rgb(0x40, 0x40, 0x40);
         levelsLabel_ = AddLabel(r, 334, 374, 274, L"");
         levelsLabel_->color = Rgb(0x40, 0x40, 0x40);
-        auto* sizeLabel = AddLabel(r, 324, 463, 180, L"Размер квадрата:");
         auto* resultHint = AddLabel(r, 324, 518, 284, L"MP4 — видео с песней.\nPNG — один кадр на выбранной секунде,\nтот же кадр копирует Ctrl+C.");
         resultHint->rect.h = 40;
         resultHint->color = Rgb(0x40, 0x40, 0x40);
-        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, l4, fade_, hint, levelsLabel_, sizeLabel, resultHint};
+        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, l4, fade_, hint, levelsLabel_, resultHint};
     }
 
     void MainView::SyncMusicControls()
@@ -129,6 +128,11 @@ namespace rf
         f.statusFields = {s_.playerStatus, s_.playerTime ? std::wstring(L"{время}") : std::wstring()};
         f.statusIcon = false;
         return f;
+    }
+
+    MusicPlan MainView::MusicPlanFor(const FrameSettings& frame) const
+    {
+        return PlanMusic(frame, s_.music.square ? s_.music.squareSize : SquareSizes[0], s_.music.square);
     }
 
     void MainView::OpenTrack(const std::wstring& path)
@@ -204,25 +208,28 @@ namespace rf
             return;
         }
         const FrameSettings f = MusicFrameSettings();
-        const MusicPlan plan = PlanMusic(f, s_.music.squareSize);
-        const int side = plan.size / plan.scale;
-        static const Image none;
-        const Image& picture = s_.backgroundPicture ? s_.backgroundImage : none;
-        const std::wstring key = std::to_wstring(side) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width);
-        if (key != bgKey_)
+        const MusicPlan plan = MusicPlanFor(f);
+        if (plan.square)
         {
-            bgPreview_ = SquareBackground(picture, s_.background, side);
-            bgKey_ = key;
+            const int side = plan.outW / plan.scale;
+            static const Image none;
+            const Image& picture = s_.backgroundPicture ? s_.backgroundImage : none;
+            const std::wstring key = std::to_wstring(side) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width);
+            if (key != bgKey_)
+            {
+                bgPreview_ = SquareBackground(picture, s_.background, side);
+                bgKey_ = key;
+            }
         }
         const FrameVars vars{track_->name, 0, 0, L""};
         MusicComposer composer(f, vars, plan, Image(), track_->artist, track_->title, track_->cover);
         const double start = TrimStart();
         const double length = std::max(0.001, TrimEnd() - start);
         const MusicFrame mf = MusicFrameAt(track_->position - start, length, track_->position, s_.music.spin, s_.music.meter, track_->levels);
-        Image img = composer.Small(mf, bgPreview_);
+        Image img = composer.Small(mf, plan.square ? bgPreview_ : Image());
         const int availW = preview_->rect.w - 4 - 12;
         const int availH = preview_->rect.h - 4 - 12;
-        preview_->image = side > availW || side > availH ? FitInside(img, availW, availH, false) : std::move(img);
+        preview_->image = img.width > availW || img.height > availH ? FitInside(img, availW, availH, false) : std::move(img);
         root.dirty = true;
     }
 
@@ -238,12 +245,14 @@ namespace rf
         }
         first = track_->name + L" — " + FormatClock(track_->info.duration) + (track_->artist.empty() ? std::wstring() : L", " + track_->artist);
         const FrameSettings f = MusicFrameSettings();
-        const MusicPlan plan = PlanMusic(f, s_.music.squareSize);
-        second = (s_.music.format == 3 ? L"PNG " : L"Квадрат ") + std::to_wstring(plan.size) + L", окно " + std::to_wstring(plan.scale) + L"x";
+        const MusicPlan plan = MusicPlanFor(f);
+        const std::wstring kind = s_.music.format == 3 ? L"PNG " : plan.square ? L"Квадрат " : L"Окно ";
+        second = plan.square ? kind + std::to_wstring(plan.outW) + L", окно " + std::to_wstring(plan.scale) + L"x"
+                             : kind + std::to_wstring(plan.outW) + L" x " + std::to_wstring(plan.outH) + L", " + std::to_wstring(plan.scale) + L"x";
         third = L"Фрагмент: " + FormatPrecise(TrimEnd() - TrimStart());
         FrameSettings automatic = f;
         automatic.scale = 0;
-        scale_->items[0] = L"Авто (сейчас " + std::to_wstring(PlanMusic(automatic, s_.music.squareSize).scale) + L"x)";
+        scale_->items[0] = L"Авто (сейчас " + std::to_wstring(MusicPlanFor(automatic).scale) + L"x)";
     }
 
     bool MainView::MusicStill(Image& out)
@@ -253,8 +262,8 @@ namespace rf
             return false;
         }
         const FrameSettings f = MusicFrameSettings();
-        const MusicPlan plan = PlanMusic(f, s_.music.squareSize);
-        const Image background = SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.size);
+        const MusicPlan plan = MusicPlanFor(f);
+        const Image background = plan.square ? SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.outW) : Image();
         MusicComposer composer(f, FrameVars{track_->name, 0, 0, L""}, plan, background, track_->artist, track_->title, track_->cover);
         const double start = TrimStart();
         const double length = std::max(0.001, TrimEnd() - start);
@@ -315,8 +324,8 @@ namespace rf
         job.meter = s_.music.meter;
         job.frame = MusicFrameSettings();
         job.vars = FrameVars{track_->name, 0, 0, L""};
-        job.plan = PlanMusic(job.frame, s_.music.squareSize);
-        job.background = SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.size);
+        job.plan = MusicPlanFor(job.frame);
+        job.background = job.plan.square ? SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW) : Image();
         job.artist = track_->artist;
         job.title = track_->title;
         job.cover = track_->cover;

@@ -123,7 +123,7 @@ namespace rf
             rb->value = value;
             rb->group = &resultValue_;
             rb->onChange = [this](int v) {
-                s_.video.square = v == 1;
+                (mode_ == MusicMode ? s_.music.square : s_.video.square) = v == 1;
                 Changed();
             };
             return rb;
@@ -177,8 +177,8 @@ namespace rf
         hint2->color = Rgb(0x40, 0x40, 0x40);
 
         mediaOnly_ = {playButton_, scrub_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
-                      resultBox, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_};
-        videoOnly_ = {r1, r2, l4, gifFps_, gifWidth_, hint2};
+                      resultBox, r1, r2, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_};
+        videoOnly_ = {l4, gifFps_, gifWidth_, hint2};
     }
 
     void MainView::UpdateFormatItems()
@@ -283,7 +283,8 @@ namespace rf
         fill(startField_, TrimStart());
         fill(endField_, TrimEnd());
         fragLabel_->text = has ? L"Длина фрагмента: " + FormatPrecise(TrimEnd() - TrimStart()) : std::wstring();
-        const bool square = mode_ == MusicMode || s_.video.square;
+        const bool square = mode_ == MusicMode ? s_.music.square : s_.video.square;
+        resultValue_ = square ? 1 : 0;
         squareSize_->index = IndexOf(SquareSizes, int(std::size(SquareSizes)), mode_ == MusicMode ? s_.music.squareSize : s_.video.squareSize, 0);
         squareSize_->enabled = square;
         bgSwatch_->color = s_.background;
@@ -296,7 +297,6 @@ namespace rf
             SyncMusicControls();
             return;
         }
-        resultValue_ = s_.video.square ? 1 : 0;
         const bool gif = s_.video.format == 3;
         gifFps_->index = IndexOf(GifFpsChoices, int(std::size(GifFpsChoices)), s_.video.gifFps, 2);
         gifFps_->enabled = gif;
