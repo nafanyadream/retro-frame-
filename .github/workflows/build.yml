@@ -25,6 +25,9 @@ jobs:
   build:
     needs: tests
     runs-on: windows-latest
+    env:
+      FFMPEG_VERSION: '8.0.1'
+      FFMPEG_SHA256: 'e2aaeaa0fdbc397d4794828086424d4aaa2102cef1fb6874f6ffd29c0b88b673'
     steps:
       - uses: actions/checkout@v4
 
@@ -34,11 +37,43 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Cache ffmpeg
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg.zip
+          key: ffmpeg-${{ env.FFMPEG_VERSION }}-essentials
+
+      - name: Download ffmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/GyanD/codexffmpeg/releases/download/$env:FFMPEG_VERSION/ffmpeg-$env:FFMPEG_VERSION-essentials_build.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+
       - name: Collect
         shell: pwsh
         run: |
+          $hash = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:FFMPEG_SHA256) { throw "ffmpeg.zip: неожиданная контрольная сумма $hash" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
           New-Item -ItemType Directory -Force out | Out-Null
           Copy-Item build/Release/RetroFrame.exe out/
+          $root = "ffmpeg-$env:FFMPEG_VERSION-essentials_build"
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path ffmpeg.zip))
+          foreach ($pair in @(@("$root/bin/ffmpeg.exe", "out/ffmpeg.exe"), @("$root/LICENSE", "out/ffmpeg-LICENSE.txt"))) {
+            $entry = $zip.GetEntry($pair[0])
+            if ($null -eq $entry) { throw "в архиве нет $($pair[0])" }
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $PWD $pair[1]), $true)
+          }
+          $zip.Dispose()
+          $about = "ffmpeg $env:FFMPEG_VERSION, сборка essentials с https://www.gyan.dev/ffmpeg/builds/`r`n" +
+                   "Это отдельная программа, Ретро-рамка запускает её для видео и музыки.`r`n" +
+                   "Лицензия GNU GPL v3 (файл ffmpeg-LICENSE.txt), исходный код: https://ffmpeg.org/download.html`r`n"
+          [System.IO.File]::WriteAllText((Join-Path $PWD "out/ffmpeg-README.txt"), $about, [System.Text.UTF8Encoding]::new($true))
+          $version = & out/ffmpeg.exe -hide_banner -version
+          if ($LASTEXITCODE -ne 0) { throw "ffmpeg.exe не запускается" }
+          $version | Select-Object -First 1
           Get-ChildItem out | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v4
@@ -52,6 +87,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          Compress-Archive -Path out/* -DestinationPath RetroFrame-with-ffmpeg.zip -Force
           gh release delete latest --yes --cleanup-tag 2>$null
           $global:LASTEXITCODE = 0
-          gh release create latest out/RetroFrame.exe --title "Последняя сборка" --notes "Собрано автоматически из коммита ${{ github.sha }}." --target ${{ github.sha }}
+          $notes = "Собрано автоматически из коммита ${{ github.sha }}.`n`nRetroFrame-with-ffmpeg.zip — программа вместе с ffmpeg для видео и музыки. RetroFrame.exe — только программа."
+          gh release create latest out/RetroFrame.exe RetroFrame-with-ffmpeg.zip --title "Последняя сборка" --notes $notes --target ${{ github.sha }}

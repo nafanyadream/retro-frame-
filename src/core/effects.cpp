@@ -405,22 +405,13 @@ namespace rf
             popupActive_ = ScaleNearest(RenderPopup(e, frame, true, &button), k);
             popupInactive_ = ScaleNearest(RenderPopup(e, frame, false, nullptr), k);
             popupButton_ = Rect{button.x * k, button.y * k, button.w * k, button.h * k};
-            const int n = e.popups == 1 ? 1 : CascadeCount;
-            const int d = 22 * k;
-            const int pw = popupActive_.width;
-            const int ph = popupActive_.height;
-            const int x0 = stage.window.x + stage.window.w / 2 - pw / 2 - (n - 1) * d / 2;
-            const int y0 = stage.window.y + stage.window.h / 2 - ph / 2 - (n - 1) * d / 2;
-            for (int i = 0; i < n; ++i)
-            {
-                popupRects_.push_back(Rect{x0 + i * d, y0 + i * d, pw, ph});
-            }
+            popupCount_ = e.popups == 1 ? 1 : CascadeCount;
         }
     }
 
     int EffectsLayer::VisiblePopups(double t, bool animate) const
     {
-        const int n = int(popupRects_.size());
+        const int n = popupCount_;
         if (n == 0 || t < 0.0)
         {
             return 0;
@@ -434,6 +425,36 @@ namespace rf
             return 0;
         }
         return std::min(n, 1 + int((t - PopupStart) / PopupStep));
+    }
+
+    std::vector<Rect> EffectsLayer::PopupRects(int width, int height) const
+    {
+        std::vector<Rect> rects;
+        const int n = popupCount_;
+        if (n == 0)
+        {
+            return rects;
+        }
+        const int k = stage_.scale;
+        const int pw = popupActive_.width;
+        const int ph = popupActive_.height;
+        int step = 22 * k;
+        if (n > 1)
+        {
+            step = std::clamp(std::min(width - pw, height - ph) / (n - 1), 4 * k, 22 * k);
+        }
+        const Rect& w = stage_.window;
+        int x0 = w.x + w.w / 2 - pw / 2 - (n - 1) * step / 2;
+        int y0 = w.y + w.h / 2 - ph / 2 - (n - 1) * step / 2;
+        const int spanW = pw + (n - 1) * step;
+        const int spanH = ph + (n - 1) * step;
+        x0 = spanW <= width ? std::clamp(x0, 0, width - spanW) : (width - spanW) / 2;
+        y0 = spanH <= height ? std::clamp(y0, 0, height - spanH) : (height - spanH) / 2;
+        for (int i = 0; i < n; ++i)
+        {
+            rects.push_back(Rect{x0 + i * step, y0 + i * step, pw, ph});
+        }
+        return rects;
     }
 
     void EffectsLayer::DrawIntro(Image& out, const Image& background, double t) const
@@ -480,36 +501,12 @@ namespace rf
     {
         const int k = stage_.scale;
         const int shown = VisiblePopups(t, animate);
-        int dx = 0;
-        int dy = 0;
-        if (!popupRects_.empty())
-        {
-            Rect box = popupRects_.front();
-            const Rect& last = popupRects_.back();
-            box.w = last.Right() - box.x;
-            box.h = last.Bottom() - box.y;
-            if (box.Right() > out.width)
-            {
-                dx = out.width - box.Right();
-            }
-            if (box.x + dx < 0)
-            {
-                dx = -box.x;
-            }
-            if (box.Bottom() > out.height)
-            {
-                dy = out.height - box.Bottom();
-            }
-            if (box.y + dy < 0)
-            {
-                dy = -box.y;
-            }
-        }
+        const std::vector<Rect> rects = PopupRects(out.width, out.height);
         Rect button;
         bool haveButton = false;
         for (int i = 0; i < shown; ++i)
         {
-            const Rect r = popupRects_[std::size_t(i)].Offset(dx, dy);
+            const Rect& r = rects[std::size_t(i)];
             const bool top = i == shown - 1;
             Put(out, top ? popupActive_ : popupInactive_, r.x, r.y);
             if (top)

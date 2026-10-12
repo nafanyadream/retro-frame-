@@ -118,6 +118,16 @@ namespace
         }
         Check(changed > img.width * img.height / 4, "cascade drawn over the window");
         rftest::WritePpm(out + "/fx_cascade.ppm", img);
+        const int pw = rf::RenderPopup(e, f, true, nullptr).width * k;
+        const rf::EffectsLayer narrow(e, f, rf::Stage{rf::Rect{0, 0, pw + 40, 900}, k});
+        const std::vector<rf::Rect> rects = narrow.PopupRects(pw + 40, 900);
+        bool inside = rects.size() == std::size_t(rf::CascadeCount);
+        for (const auto& r : rects)
+        {
+            inside = inside && r.x >= 0 && r.Right() <= pw + 40 && r.y >= 0 && r.Bottom() <= 900;
+        }
+        const std::vector<rf::Rect> roomy = cascade.PopupRects(4000, 4000);
+        Check(inside && roomy.size() == std::size_t(rf::CascadeCount) && roomy[1].x - roomy[0].x == 22 * k, "cascade fits a narrow frame");
         e.popups = 1;
         img = framed;
         rf::EffectsLayer(e, f, stage).Apply(img, 0.0, 0, false);

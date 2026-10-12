@@ -45,6 +45,7 @@ namespace rf
         void DrawIntro(Image& out, const Image& background, double t) const;
         void Apply(Image& out, double t, int seed, bool animate) const;
         int VisiblePopups(double t, bool animate) const;
+        std::vector<Rect> PopupRects(int width, int height) const;
 
     private:
         EffectSettings e_;
@@ -52,7 +53,7 @@ namespace rf
         Stage stage_;
         Image popupActive_;
         Image popupInactive_;
-        std::vector<Rect> popupRects_;
+        int popupCount_ = 0;
         Rect popupButton_;
         Rect close_;
     };
