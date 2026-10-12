@@ -68,6 +68,29 @@ namespace rf
 
     float MeterAt(const std::vector<float>& levels, double seconds);
 
+    class SoundPreview
+    {
+    public:
+        SoundPreview(Host& host, const std::wstring& path, double start, double duration);
+        SoundPreview(const SoundPreview&) = delete;
+        SoundPreview& operator=(const SoundPreview&) = delete;
+
+        bool Active() const { return out_ != nullptr; }
+        void Prime();
+        void Pump(bool release);
+
+        static constexpr int Rate = 44100;
+        static constexpr int Channels = 2;
+
+    private:
+        void Fill(std::size_t limit);
+
+        std::unique_ptr<Process> proc_;
+        std::unique_ptr<AudioOut> out_;
+        std::vector<unsigned char> buf_;
+        bool ended_ = false;
+    };
+
     class FrameStream
     {
     public:

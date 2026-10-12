@@ -53,6 +53,14 @@ namespace rf
         std::uint64_t size = 0;
     };
 
+    class AudioOut
+    {
+    public:
+        virtual ~AudioOut() = default;
+        virtual std::size_t Space() = 0;
+        virtual bool Write(const void* data, std::size_t size) = 0;
+    };
+
     class Process
     {
     public:
@@ -80,6 +88,7 @@ namespace rf
         virtual std::wstring AskOpenVideo(const std::wstring& folder) = 0;
         virtual std::wstring AskOpenAudio(const std::wstring& folder) = 0;
         virtual std::wstring AskOpenLyrics(const std::wstring& folder) = 0;
+        virtual std::unique_ptr<AudioOut> OpenAudio(int rate, int channels) = 0;
         virtual std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) = 0;
         virtual bool AskColor(Color initial, Color& result) = 0;
 

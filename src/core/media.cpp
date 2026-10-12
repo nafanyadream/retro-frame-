@@ -926,6 +926,108 @@ namespace rf
         }
     }
 
+    SoundPreview::SoundPreview(Host& host, const std::wstring& path, double start, double duration)
+    {
+        const std::wstring ffmpeg = host.FfmpegPath();
+        if (ffmpeg.empty() || duration <= 0.0)
+        {
+            return;
+        }
+        out_ = host.OpenAudio(Rate, Channels);
+        if (!out_)
+        {
+            return;
+        }
+        std::vector<std::wstring> args = {L"-v", L"error", L"-nostdin"};
+        if (start > 0.0)
+        {
+            args.insert(args.end(), {L"-ss", Number(start)});
+        }
+        args.insert(args.end(), {L"-t", Number(duration), L"-i", path, L"-vn", L"-sn", L"-ac", Int(Channels), L"-ar", Int(Rate), L"-f", L"s16le", L"pipe:1"});
+        proc_ = host.StartProcess(ffmpeg, args, false, true);
+        if (!proc_)
+        {
+            out_.reset();
+        }
+    }
+
+    void SoundPreview::Fill(std::size_t limit)
+    {
+        while (!ended_ && buf_.size() < limit)
+        {
+            const std::size_t n = proc_->Available();
+            if (n == 0)
+            {
+                if (!proc_->Running() && proc_->Available() == 0)
+                {
+                    ended_ = true;
+                }
+                break;
+            }
+            const std::size_t take = std::min(n, limit - buf_.size());
+            const std::size_t at = buf_.size();
+            buf_.resize(at + take);
+            if (!proc_->Read(buf_.data() + at, take))
+            {
+                buf_.resize(at);
+                ended_ = true;
+            }
+        }
+    }
+
+    void SoundPreview::Prime()
+    {
+        if (!out_)
+        {
+            return;
+        }
+        const std::size_t want = std::size_t(Rate) * Channels * 2 / 6;
+        const std::size_t at = buf_.size();
+        if (at < want)
+        {
+            buf_.resize(want);
+            std::size_t got = at;
+            while (got < want)
+            {
+                if (!proc_->Read(buf_.data() + got, 4))
+                {
+                    ended_ = true;
+                    break;
+                }
+                got += 4;
+                const std::size_t more = std::min(proc_->Available(), want - got) & ~std::size_t(3);
+                if (more > 0)
+                {
+                    if (!proc_->Read(buf_.data() + got, more))
+                    {
+                        ended_ = true;
+                        break;
+                    }
+                    got += more;
+                }
+            }
+            buf_.resize(got);
+        }
+    }
+
+    void SoundPreview::Pump(bool release)
+    {
+        if (!out_)
+        {
+            return;
+        }
+        Fill(std::size_t(Rate) * Channels * 2 * 2);
+        if (!release || buf_.empty())
+        {
+            return;
+        }
+        const std::size_t n = std::min(out_->Space(), buf_.size()) & ~std::size_t(3);
+        if (n > 0 && out_->Write(buf_.data(), n))
+        {
+            buf_.erase(buf_.begin(), buf_.begin() + std::ptrdiff_t(n));
+        }
+    }
+
     float MeterAt(const std::vector<float>& levels, double seconds)
     {
         if (levels.empty())

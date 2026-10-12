@@ -258,6 +258,7 @@ namespace rf
         o << "fx.screen=" << s.effects.screen << "\n";
         o << "background=" << Hex(s.background) << "\n";
         o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
+        o << "previewSound=" << (s.previewSound ? 1 : 0) << "\n";
         o << "format=" << s.format << "\n";
         o << "openFolder=" << Escape(s.openFolder) << "\n";
         o << "saveFolder=" << Escape(s.saveFolder) << "\n";
@@ -447,6 +448,7 @@ namespace rf
         getInt("fx.screen", s.effects.screen, 0, 2);
         getColor("background", s.background);
         getBool("backgroundPicture", s.backgroundPicture);
+        getBool("previewSound", s.previewSound);
         getInt("format", s.format, 0, 2);
         getText("openFolder", s.openFolder);
         getText("saveFolder", s.saveFolder);

@@ -66,6 +66,7 @@ namespace rf::win
         std::wstring AskOpenVideo(const std::wstring& folder) override;
         std::wstring AskOpenAudio(const std::wstring& folder) override;
         std::wstring AskOpenLyrics(const std::wstring& folder) override;
+        std::unique_ptr<AudioOut> OpenAudio(int rate, int channels) override;
         std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) override;
         bool AskColor(Color initial, Color& result) override;
 

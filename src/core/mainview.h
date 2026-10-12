@@ -91,6 +91,7 @@ namespace rf
         Media* Cur();
         const Media* Cur() const;
         bool Playing() const { return play_ != nullptr || musicPlay_; }
+        bool SoundPlaying() const { return sound_ != nullptr && sound_->Active(); }
         void BuildMusic();
         void SyncMusicControls();
         void UpdateMusicPreview();
@@ -231,6 +232,8 @@ namespace rf
         int resultValue_ = 0;
         ui::Button* playButton_ = nullptr;
         ui::TrackBar* scrub_ = nullptr;
+        ui::CheckBox* soundCheck_ = nullptr;
+        std::unique_ptr<SoundPreview> sound_;
         ui::Label* timeLabel_ = nullptr;
         ui::CheckBox* wholeCheck_ = nullptr;
         ui::TextField* startField_ = nullptr;

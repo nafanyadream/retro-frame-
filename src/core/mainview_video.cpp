@@ -83,13 +83,23 @@ namespace rf
         playButton_ = Place<ui::Button>(r, 16, 414, 92, 24);
         playButton_->text = L"Проиграть";
         playButton_->onClick = [this]() { TogglePlay(); };
-        scrub_ = Place<ui::TrackBar>(r, 112, 414, 404, 24);
+        scrub_ = Place<ui::TrackBar>(r, 112, 414, 344, 24);
         scrub_->onChange = [this](double v) {
             if (Media* m = Cur())
             {
                 StopPlay();
                 SetPosition(v * m->info.duration);
             }
+        };
+        soundCheck_ = AddCheck(r, 462, 418, 54, L"Звук");
+        soundCheck_->onChange = [this](bool v) {
+            s_.previewSound = v;
+            if (!v)
+            {
+                sound_.reset();
+            }
+            dirty_ = true;
+            dirtyAt_ = host_.Ticks();
         };
         timeLabel_ = AddLabel(r, 520, 420, 98, L"");
         timeLabel_->align = ui::Align::Right;
@@ -203,7 +213,7 @@ namespace rf
         auto* hint2 = AddLabel(r, 324, 570, 284, L"MP4 со звуком, GIF без звука и по кругу.");
         hint2->color = Rgb(0x40, 0x40, 0x40);
 
-        mediaOnly_ = {playButton_, scrub_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
+        mediaOnly_ = {playButton_, scrub_, soundCheck_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
                       resultBox, r1, r2, canvas_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
         videoOnly_ = {l4, gifFps_, gifWidth_, hint2};
     }
@@ -282,6 +292,8 @@ namespace rf
         const double duration = has ? m->info.duration : 0.0;
         playButton_->enabled = has;
         playButton_->text = Playing() ? L"Стоп" : L"Проиграть";
+        soundCheck_->checked = s_.previewSound;
+        soundCheck_->enabled = has;
         scrub_->enabled = has;
         scrub_->value = has && duration > 0.0 ? m->position / duration : 0.0;
         scrub_->range = has && !m->whole;
@@ -465,6 +477,10 @@ namespace rf
                 UpdatePreview();
             }
         }
+        if (sound_)
+        {
+            sound_->Pump(musicPlay_ || (play_ && playFrames_ > 0));
+        }
         if (musicPlay_ && track_)
         {
             const double now = musicFrom_ + double(ms - musicStart_) / 1000.0;
@@ -472,6 +488,7 @@ namespace rf
             {
                 track_->position = std::max(0.0, TrimEnd() - 0.05);
                 musicPlay_ = false;
+                sound_.reset();
             }
             else
             {
@@ -516,6 +533,10 @@ namespace rf
                     playStart_ = ms;
                     playFrames_ = 1;
                     shown = true;
+                    if (sound_)
+                    {
+                        sound_->Pump(true);
+                    }
                 }
             }
             while (playFrames_ > 0 && double(ms - playStart_) / 1000.0 >= playFrames_ / PreviewFps && play_->Poll(img))
@@ -553,6 +574,12 @@ namespace rf
             }
             track_->position = from;
             musicFrom_ = from;
+            if (s_.previewSound)
+            {
+                sound_ = std::make_unique<SoundPreview>(host_, track_->path, from, TrimEnd() - from);
+                sound_->Prime();
+                sound_->Pump(true);
+            }
             musicStart_ = host_.Ticks();
             musicPlay_ = true;
             SyncVideoControls();
@@ -582,6 +609,11 @@ namespace rf
         playFrom_ = from;
         playFrames_ = 0;
         clip_->position = from;
+        if (s_.previewSound && clip_->info.hasAudio)
+        {
+            sound_ = std::make_unique<SoundPreview>(host_, clip_->path, from, TrimEnd() - from);
+            sound_->Prime();
+        }
         SyncVideoControls();
         UpdatePreview();
     }
@@ -593,6 +625,7 @@ namespace rf
             return;
         }
         play_.reset();
+        sound_.reset();
         musicPlay_ = false;
         SyncVideoControls();
         root.dirty = true;

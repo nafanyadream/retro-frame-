@@ -399,8 +399,10 @@ int main(int argc, char** argv)
         click(60, 426);
         settle(ms, 30);
         shot("ui_video_playing");
+        Check(host.audioOpen == 1 && host.audioBytes > 0, "sound plays with the video preview");
         click(60, 426);
         settle(ms, 2);
+        Check(host.audioOpen == 0, "video preview sound stops");
         main.root.Wheel(435, 524, -120);
         main.root.Wheel(435, 524, -120);
         settle(ms, 2);

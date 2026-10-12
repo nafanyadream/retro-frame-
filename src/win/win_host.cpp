@@ -1,5 +1,6 @@
 #include "win_host.h"
 
+#include "audio.h"
 #include "files.h"
 #include "imaging.h"
 #include "process.h"
@@ -960,6 +961,11 @@ namespace rf::win
     std::wstring WinHost::FfmpegPath()
     {
         return FindFfmpeg();
+    }
+
+    std::unique_ptr<AudioOut> WinHost::OpenAudio(int rate, int channels)
+    {
+        return OpenWaveOut(rate, channels);
     }
 
     std::unique_ptr<Process> WinHost::StartProcess(const std::wstring& exe, const std::vector<std::wstring>& args, bool input, bool output)

@@ -13,4 +13,4 @@ add_executable(RetroFrame WIN32 ${CORE_SOURCES} ${WIN_SOURCES} res/app.rc)
 
 target_compile_definitions(RetroFrame PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(RetroFrame PRIVATE /utf-8 /W4 /permissive- /wd4100)
-target_link_libraries(RetroFrame PRIVATE user32 gdi32 ole32 oleaut32 windowscodecs shell32 comdlg32 advapi32 uuid)
+target_link_libraries(RetroFrame PRIVATE user32 gdi32 ole32 oleaut32 windowscodecs shell32 comdlg32 advapi32 uuid winmm)

@@ -267,9 +267,29 @@ namespace rftest
         std::vector<unsigned char> data_;
     };
 
+    class FakeAudio : public rf::AudioOut
+    {
+    public:
+        FakeAudio(long long& bytes, int& open) : bytes_(bytes), open_(open) { ++open_; }
+        ~FakeAudio() override { --open_; }
+        std::size_t Space() override { return 1u << 16; }
+        bool Write(const void*, std::size_t size) override
+        {
+            bytes_ += (long long)size;
+            return true;
+        }
+
+    private:
+        long long& bytes_;
+        int& open_;
+    };
+
     class TestHost : public rf::Host
     {
     public:
+        long long audioBytes = 0;
+        int audioOpen = 0;
+        bool audioDevice = true;
         std::wstring folderAnswer;
         std::wstring archiveAnswer;
         std::wstring videoAnswer;
@@ -291,6 +311,14 @@ namespace rftest
         std::wstring AskOpenVideo(const std::wstring&) override { return videoAnswer; }
         std::wstring AskOpenAudio(const std::wstring&) override { return videoAnswer; }
         std::wstring AskOpenLyrics(const std::wstring&) override { return lyricsAnswer; }
+        std::unique_ptr<rf::AudioOut> OpenAudio(int, int) override
+        {
+            if (!audioDevice)
+            {
+                return nullptr;
+            }
+            return std::make_unique<FakeAudio>(audioBytes, audioOpen);
+        }
         std::wstring AskSaveVideo(const std::wstring&, const std::wstring&, bool) override { return saveAnswer; }
         bool AskColor(rf::Color, rf::Color&) override { return false; }
         bool ReadImage(const std::wstring& path, rf::Image& out, std::wstring& e) override { return ReadIcon(path, out, e); }

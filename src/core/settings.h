@@ -67,6 +67,7 @@ namespace rf
         EffectSettings effects;
         Color background = Rgb(0x3A, 0x6E, 0xA5);
         bool backgroundPicture = false;
+        bool previewSound = true;
         std::wstring openFolder;
         std::wstring saveFolder;
         std::wstring videoFolder;
