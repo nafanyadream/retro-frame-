@@ -736,12 +736,9 @@ namespace rf::win
         return RunSave(Owner(), folder, suggested, L"Сохранить видео", gif ? L"Анимация GIF" : L"Видео MP4", gif ? L"*.gif" : L"*.mp4", gif ? L"gif" : L"mp4");
     }
 
-    std::wstring WinHost::AskOpenAudio(const std::wstring& folder)
+    std::vector<std::wstring> WinHost::AskOpenAudio(const std::wstring& folder)
     {
-        const auto r = RunOpen(Owner(), folder, L"Открыть песню",
-                               {{L"Музыка", L"*.mp3;*.flac;*.wav;*.ogg;*.m4a;*.aac;*.wma;*.opus"}, {L"Все файлы", L"*.*"}},
-                               false, false);
-        return r.empty() ? std::wstring() : r.front();
+        return RunOpen(Owner(), folder, L"Открыть песни", {{L"Музыка", L"*.mp3;*.flac;*.wav;*.ogg;*.m4a;*.aac;*.wma;*.opus"}, {L"Все файлы", L"*.*"}}, true, false);
     }
 
     std::wstring WinHost::AskOpenLyrics(const std::wstring& folder)
@@ -750,12 +747,10 @@ namespace rf::win
         return r.empty() ? std::wstring() : r.front();
     }
 
-    std::wstring WinHost::AskOpenVideo(const std::wstring& folder)
+    std::vector<std::wstring> WinHost::AskOpenVideo(const std::wstring& folder)
     {
-        const auto r = RunOpen(Owner(), folder, L"Открыть видео",
-                               {{L"Видео и GIF", L"*.mp4;*.mov;*.avi;*.mkv;*.webm;*.m4v;*.wmv;*.mpg;*.mpeg;*.3gp;*.flv;*.ts;*.gif"}, {L"Все файлы", L"*.*"}},
-                               false, false);
-        return r.empty() ? std::wstring() : r.front();
+        return RunOpen(Owner(), folder, L"Открыть видео",
+                       {{L"Видео и GIF", L"*.mp4;*.mov;*.avi;*.mkv;*.webm;*.m4v;*.wmv;*.mpg;*.mpeg;*.3gp;*.flv;*.ts;*.gif"}, {L"Все файлы", L"*.*"}}, true, false);
     }
 
     std::wstring WinHost::AskFolder(const std::wstring& folder, const std::wstring& title)

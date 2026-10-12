@@ -1,8 +1,11 @@
 #include "mainview.h"
 
+#include "glyphs.h"
 #include "icons.h"
 #include "library_view.h"
 #include "utf.h"
+
+#include <cstring>
 
 namespace rf
 {
@@ -89,9 +92,22 @@ namespace rf
         effectsButton_ = toolButton(L"Эффекты...", 86, [this]() { EditEffects(); }, false);
         toolButton(L"Наборы...", 80, [this]() { EditPresets(); }, false);
         saveAllButton_ = toolButton(L"Сохранить все...", 112, [this]() { SaveAll(); }, false);
+        const int queueX = bx;
         copyButton_ = toolButton(L"Копировать", 88, [this]() { CopyCurrent(); }, false);
-        photoOnly_.push_back(saveAllButton_);
         photoOnly_.push_back(copyButton_);
+        const auto arrow = [](const Glyph& g) {
+            Image img(int(std::strlen(g.front())), int(g.size()), 0);
+            Painter(img).DrawGlyph(0, 0, g, Rgb(0, 0, 0));
+            return img;
+        };
+        prevButton_ = Place<ui::Button>(r, queueX, 48, 22, 23);
+        prevButton_->icon = arrow(glyphs::Left);
+        prevButton_->onClick = [this]() { StepQueue(-1); };
+        queueLabel_ = AddLabel(r, queueX + 24, 53, 44, L"");
+        queueLabel_->align = ui::Align::Center;
+        nextButton_ = Place<ui::Button>(r, queueX + 70, 48, 22, 23);
+        nextButton_->icon = arrow(glyphs::Right);
+        nextButton_->onClick = [this]() { StepQueue(1); };
 
         AddLabel(r, WindowW - 4 - 6 - 150 - 52, 53, 50, L"Формат:");
         format_ = Place<ui::ComboBox>(r, WindowW - 4 - 6 - 150, 49, 150, 21);
@@ -360,8 +376,8 @@ namespace rf
         view.items.push_back(MenuItem{L"Стиль Windows 98", L"", [this]() { SetStyle(Style::Win98); }, true, false});
         view.items.push_back(MenuItem{L"Стиль Windows 2000", L"", [this]() { SetStyle(Style::Win2000); }, true, false});
         view.items.push_back(sep);
-        view.items.push_back(MenuItem{L"Предыдущее фото", L"←", [this]() { Select(current_ - 1); }, true, false});
-        view.items.push_back(MenuItem{L"Следующее фото", L"→", [this]() { Select(current_ + 1); }, true, false});
+        view.items.push_back(MenuItem{L"Предыдущий файл", L"←", [this]() { StepQueue(-1); }, true, false});
+        view.items.push_back(MenuItem{L"Следующий файл", L"→", [this]() { StepQueue(1); }, true, false});
         view.items[4].shortcut = L"Влево";
         view.items[5].shortcut = L"Вправо";
         view.items.push_back(sep);
@@ -475,8 +491,8 @@ namespace rf
     void MainView::OnDropFiles(const std::vector<std::wstring>& paths)
     {
         std::vector<std::wstring> images;
-        std::wstring video;
-        std::wstring song;
+        std::vector<std::wstring> videos;
+        std::vector<std::wstring> songs;
         std::wstring lyrics;
         for (const auto& path : paths)
         {
@@ -487,31 +503,28 @@ namespace rf
             }
             const std::wstring lower = ToLower(path);
             const bool gif = lower.size() >= 4 && lower.compare(lower.size() - 4, 4, L".gif") == 0;
-            if (video.empty() && (IsVideoFile(path) || (gif && mode_ == VideoMode)))
+            if (IsVideoFile(path) || (gif && mode_ == VideoMode))
             {
-                video = path;
+                videos.push_back(path);
             }
             else if (IsAudioFile(path))
             {
-                if (song.empty())
-                {
-                    song = path;
-                }
+                songs.push_back(path);
             }
             else
             {
                 images.push_back(path);
             }
         }
-        if (!video.empty())
+        if (!videos.empty())
         {
-            OpenVideo(video);
+            OpenMedia(VideoMode, videos);
             return;
         }
-        if (!song.empty())
+        if (!songs.empty())
         {
-            OpenTrack(song);
-            if (!lyrics.empty() && track_)
+            OpenMedia(MusicMode, songs);
+            if (!lyrics.empty() && track_ && songs.size() == 1)
             {
                 LoadLyrics(lyrics, false);
             }
@@ -584,6 +597,14 @@ namespace rf
         {
             w->visible = mode_ == PhotoMode;
         }
+        const bool queue = mode_ != PhotoMode && QueueSize() > 1;
+        saveAllButton_->visible = mode_ == PhotoMode || queue;
+        prevButton_->visible = queue;
+        nextButton_->visible = queue;
+        queueLabel_->visible = queue;
+        prevButton_->enabled = QueuePosition() > 0;
+        nextButton_->enabled = QueuePosition() + 1 < QueueSize();
+        queueLabel_->text = std::to_wstring(QueuePosition() + 1) + L" / " + std::to_wstring(QueueSize());
         removeButton_->enabled = current_ >= 0;
         sunken_->text = mode_ == VideoMode ? L"Видео во вдавленной области" : L"Фото во вдавленной области";
         sunken_->enabled = mode_ != MusicMode;
@@ -960,6 +981,19 @@ namespace rf
         return path;
     }
 
+    bool MainView::Fail(std::wstring* failure, const std::wstring& text)
+    {
+        if (failure != nullptr)
+        {
+            *failure = text;
+        }
+        else
+        {
+            Warn(text);
+        }
+        return false;
+    }
+
     void MainView::Warn(const std::wstring& text)
     {
         ShowMessage(host_, L"Ретро-рамка", text, MessageKind::Warning);
@@ -969,19 +1003,19 @@ namespace rf
     {
         if (mode_ == VideoMode)
         {
-            const std::wstring path = host_.AskOpenVideo(s_.videoFolder.empty() ? s_.openFolder : s_.videoFolder);
-            if (!path.empty())
+            const auto paths = host_.AskOpenVideo(s_.videoFolder.empty() ? s_.openFolder : s_.videoFolder);
+            if (!paths.empty())
             {
-                OpenVideo(path);
+                OpenMedia(VideoMode, paths);
             }
             return;
         }
         if (mode_ == MusicMode)
         {
-            const std::wstring path = host_.AskOpenAudio(s_.musicFolder.empty() ? s_.openFolder : s_.musicFolder);
-            if (!path.empty())
+            const auto paths = host_.AskOpenAudio(s_.musicFolder.empty() ? s_.openFolder : s_.musicFolder);
+            if (!paths.empty())
             {
-                OpenTrack(path);
+                OpenMedia(MusicMode, paths);
             }
             return;
         }
@@ -1065,11 +1099,133 @@ namespace rf
         UpdateStatus();
     }
 
+    void MainView::OpenMedia(int mode, const std::vector<std::wstring>& paths)
+    {
+        if (paths.empty())
+        {
+            return;
+        }
+        StopPlay();
+        queue_[std::size_t(mode)] = paths;
+        queuePos_[std::size_t(mode)] = 0;
+        if (mode == VideoMode)
+        {
+            OpenVideo(paths.front());
+        }
+        else
+        {
+            OpenTrack(paths.front());
+        }
+        SyncControls();
+        UpdateStatus();
+    }
+
+    void MainView::StepQueue(int delta)
+    {
+        if (mode_ == PhotoMode)
+        {
+            Select(current_ + delta);
+            return;
+        }
+        auto& q = queue_[std::size_t(mode_)];
+        int& pos = queuePos_[std::size_t(mode_)];
+        const int next = std::clamp(pos + delta, 0, int(q.size()) - 1);
+        if (q.empty() || next == pos)
+        {
+            return;
+        }
+        StopPlay();
+        pos = next;
+        if (mode_ == VideoMode)
+        {
+            OpenVideo(q[std::size_t(pos)]);
+        }
+        else
+        {
+            OpenTrack(q[std::size_t(pos)]);
+        }
+        SyncControls();
+        UpdateStatus();
+    }
+
+    void MainView::SaveQueue()
+    {
+        const auto q = queue_[std::size_t(mode_)];
+        if (q.size() < 2)
+        {
+            SaveCurrent();
+            return;
+        }
+        if (host_.FfmpegPath().empty())
+        {
+            ShowMessage(host_, L"Ретро-рамка", FfmpegMissingText(), MessageKind::Warning);
+            return;
+        }
+        const std::wstring dir = host_.AskFolder(s_.saveFolder, L"Папка для сохранения всех файлов");
+        if (dir.empty())
+        {
+            return;
+        }
+        StopPlay();
+        s_.saveFolder = dir;
+        dirty_ = true;
+        dirtyAt_ = host_.Ticks();
+        const bool video = mode_ == VideoMode;
+        const std::wstring ext = video ? (s_.video.format == 3 ? L".gif" : L".mp4") : (s_.music.format == 3 ? L".png" : L".mp4");
+        const int n = int(q.size());
+        int saved = 0;
+        bool cancelled = false;
+        std::wstring problems;
+        for (int i = 0; i < n; ++i)
+        {
+            queuePos_[std::size_t(mode_)] = i;
+            const std::wstring& source = q[std::size_t(i)];
+            std::wstring err;
+            const bool opened = video ? OpenVideo(source, &err) : OpenTrack(source, &err);
+            if (!opened)
+            {
+                problems += L"\n" + FileNameOf(source);
+                continue;
+            }
+            std::wstring path = JoinPath(dir, StemOf(FileNameOf(source)) + L"_retro" + ext);
+            for (int k = 2; host_.FileExists(path); ++k)
+            {
+                path = JoinPath(dir, StemOf(FileNameOf(source)) + L"_retro (" + std::to_wstring(k) + L")" + ext);
+            }
+            const std::wstring title = L"Сохранение: файл " + std::to_wstring(i + 1) + L" из " + std::to_wstring(n);
+            const ExportResult outcome = video ? ExportClip(path, title, err) : ExportTrack(path, title, err);
+            if (outcome == ExportResult::Cancelled)
+            {
+                cancelled = true;
+                break;
+            }
+            if (outcome == ExportResult::Failed)
+            {
+                problems += L"\n" + FileNameOf(source);
+                continue;
+            }
+            ++saved;
+        }
+        SyncControls();
+        UpdatePreview();
+        UpdateStatus();
+        std::wstring text = L"Сохранено файлов: " + std::to_wstring(saved) + L" из " + std::to_wstring(n) + L".";
+        if (cancelled)
+        {
+            text += L"\nСохранение остановлено.";
+        }
+        if (!problems.empty())
+        {
+            text += L"\n\nНе получилось:" + problems;
+        }
+        ShowMessage(host_, L"Сохранить все", text, problems.empty() ? MessageKind::Info : MessageKind::Warning);
+    }
+
     void MainView::SaveAll()
     {
         if (mode_ != PhotoMode)
         {
-            Warn(L"Пакетное сохранение есть только для фото: нажмите «Сохранить...».");
+            SaveQueue();
             return;
         }
         if (photos_.empty())
@@ -1424,6 +1580,11 @@ namespace rf
         }
         if (mode_ != PhotoMode)
         {
+            if (e.key == ui::KeyCode::PageUp || e.key == ui::KeyCode::PageDown)
+            {
+                StepQueue(e.key == ui::KeyCode::PageUp ? -1 : 1);
+                return true;
+            }
             if (Cur() && (e.key == ui::KeyCode::Left || e.key == ui::KeyCode::Right))
             {
                 StopPlay();

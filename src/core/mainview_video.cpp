@@ -386,25 +386,22 @@ namespace rf
         return m && !m->whole ? m->end : (m ? m->info.duration : 0.0);
     }
 
-    void MainView::OpenVideo(const std::wstring& path)
+    bool MainView::OpenVideo(const std::wstring& path, std::wstring* failure)
     {
         SetMode(VideoMode);
         if (host_.FfmpegPath().empty())
         {
-            ShowMessage(host_, L"Ретро-рамка", FfmpegMissingText(), MessageKind::Warning);
-            return;
+            return Fail(failure, FfmpegMissingText());
         }
         MediaInfo info;
         std::wstring err;
         if (!ProbeMedia(host_, path, info, err))
         {
-            Warn(L"Не удалось открыть видео «" + FileNameOf(path) + L"»:\n" + err);
-            return;
+            return Fail(failure, L"Не удалось открыть видео «" + FileNameOf(path) + L"»:\n" + err);
         }
         if (info.duration <= 0.0)
         {
-            Warn(L"Не удалось узнать длительность видео «" + FileNameOf(path) + L"».");
-            return;
+            return Fail(failure, L"Не удалось узнать длительность видео «" + FileNameOf(path) + L"».");
         }
         StopPlay();
         fetch_.reset();
@@ -422,6 +419,7 @@ namespace rf
         SyncControls();
         UpdatePreview();
         UpdateStatus();
+        return true;
     }
 
     void MainView::SetPosition(double seconds)
@@ -827,6 +825,14 @@ namespace rf
         {
             return;
         }
+        std::wstring err;
+        const ExportResult outcome = ExportClip(path, L"", err);
+        FinishExport(outcome, path, err);
+    }
+
+    ExportResult MainView::ExportClip(const std::wstring& path, const std::wstring& title, std::wstring& err)
+    {
+        const bool gif = s_.video.format == 3;
         const MediaInfo& info = clip_->info;
         ExportJob job;
         job.source = clip_->path;
@@ -845,14 +851,12 @@ namespace rf
         {
             job.background = CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH);
         }
-        std::wstring err;
-        const ExportResult outcome = WithProgress(path, [&](const ExportStep& step) { return ExportVideo(host_, job, step, err); });
-        FinishExport(outcome, path, err);
+        return WithProgress(path, [&](const ExportStep& step) { return ExportVideo(host_, job, step, err); }, title);
     }
 
-    ExportResult MainView::WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work)
+    ExportResult MainView::WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work, const std::wstring& title)
     {
-        ProgressView progress(mode_ == MusicMode ? L"Сохранение песни" : L"Сохранение видео");
+        ProgressView progress(!title.empty() ? title : mode_ == MusicMode ? L"Сохранение песни" : L"Сохранение видео");
         const std::wstring line1 = L"Сохраняется: " + FileNameOf(path);
         progress.Update(line1, L"Подготовка...", 0.0);
         void* handle = host_.OpenModeless(progress);

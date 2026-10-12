@@ -293,6 +293,7 @@ namespace rftest
         std::wstring folderAnswer;
         std::wstring archiveAnswer;
         std::wstring videoAnswer;
+        std::vector<std::wstring> mediaAnswers;
         std::wstring lyricsAnswer;
         std::wstring saveAnswer;
         std::wstring ffmpeg;
@@ -308,8 +309,16 @@ namespace rftest
         std::wstring AskSavePath(const std::wstring&, const std::wstring&, rf::ImageFormat) override { return saveAnswer; }
         std::wstring AskFolder(const std::wstring&, const std::wstring&) override { return folderAnswer; }
         std::wstring AskOpenArchive(const std::wstring&) override { return archiveAnswer; }
-        std::wstring AskOpenVideo(const std::wstring&) override { return videoAnswer; }
-        std::wstring AskOpenAudio(const std::wstring&) override { return videoAnswer; }
+        std::vector<std::wstring> AskOpenVideo(const std::wstring&) override { return OpenAnswer(); }
+        std::vector<std::wstring> AskOpenAudio(const std::wstring&) override { return OpenAnswer(); }
+        std::vector<std::wstring> OpenAnswer() const
+        {
+            if (!mediaAnswers.empty())
+            {
+                return mediaAnswers;
+            }
+            return videoAnswer.empty() ? std::vector<std::wstring>() : std::vector<std::wstring>{videoAnswer};
+        }
         std::wstring AskOpenLyrics(const std::wstring&) override { return lyricsAnswer; }
         std::unique_ptr<rf::AudioOut> OpenAudio(int, int) override
         {

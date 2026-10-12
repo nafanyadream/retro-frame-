@@ -20,8 +20,11 @@ namespace rf
         void SaveSettings();
         void AddFiles(const std::vector<std::wstring>& paths);
         void AddImage(Image full, const std::wstring& path, const std::wstring& name, bool keepFull);
-        void OpenVideo(const std::wstring& path);
-        void OpenTrack(const std::wstring& path);
+        bool OpenVideo(const std::wstring& path, std::wstring* failure = nullptr);
+        bool OpenTrack(const std::wstring& path, std::wstring* failure = nullptr);
+        void OpenMedia(int mode, const std::vector<std::wstring>& paths);
+        int QueueSize() const { return int(queue_[std::size_t(mode_)].size()); }
+        int QueuePosition() const { return queuePos_[std::size_t(mode_)]; }
         void SetMode(int mode);
         bool HasClip() const { return clip_ != nullptr; }
         bool HasTrack() const { return track_ != nullptr; }
@@ -108,7 +111,9 @@ namespace rf
         bool ShowLyrics() const;
         bool LoadLyrics(const std::wstring& path, bool quiet);
         void PickLyrics();
-        ExportResult WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work);
+        ExportResult WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work, const std::wstring& title = L"");
+        ExportResult ExportClip(const std::wstring& path, const std::wstring& title, std::wstring& err);
+        ExportResult ExportTrack(const std::wstring& path, const std::wstring& title, std::wstring& err);
         void FinishExport(ExportResult outcome, const std::wstring& path, const std::wstring& error);
 
         void BuildVideo();
@@ -160,6 +165,9 @@ namespace rf
         void SetScheme(int index);
         bool HandleKey(const ui::KeyEvent& e);
         void Warn(const std::wstring& text);
+        bool Fail(std::wstring* failure, const std::wstring& text);
+        void StepQueue(int delta);
+        void SaveQueue();
 
         Host& host_;
         AppSettings s_;
@@ -207,6 +215,11 @@ namespace rf
         std::vector<ui::Widget*> photoOnly_;
         std::vector<ui::Widget*> videoOnly_;
 
+        std::array<std::vector<std::wstring>, 3> queue_;
+        std::array<int, 3> queuePos_{};
+        ui::Button* prevButton_ = nullptr;
+        ui::Button* nextButton_ = nullptr;
+        ui::Label* queueLabel_ = nullptr;
         std::unique_ptr<Media> clip_;
         std::unique_ptr<Media> track_;
         std::unique_ptr<LevelReader> levels_;

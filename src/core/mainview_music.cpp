@@ -231,25 +231,22 @@ namespace rf
         return PlanMusic(frame, c.width, c.height, s_.music.square, ShowLyrics());
     }
 
-    void MainView::OpenTrack(const std::wstring& path)
+    bool MainView::OpenTrack(const std::wstring& path, std::wstring* failure)
     {
         SetMode(MusicMode);
         if (host_.FfmpegPath().empty())
         {
-            ShowMessage(host_, L"Ретро-рамка", FfmpegMissingText(), MessageKind::Warning);
-            return;
+            return Fail(failure, FfmpegMissingText());
         }
         MediaInfo info;
         std::wstring err;
         if (!ProbeAudio(host_, path, info, err))
         {
-            Warn(L"Не удалось открыть песню «" + FileNameOf(path) + L"»:\n" + err);
-            return;
+            return Fail(failure, L"Не удалось открыть песню «" + FileNameOf(path) + L"»:\n" + err);
         }
         if (info.duration <= 0.0)
         {
-            Warn(L"Не удалось узнать длительность песни «" + FileNameOf(path) + L"».");
-            return;
+            return Fail(failure, L"Не удалось узнать длительность песни «" + FileNameOf(path) + L"».");
         }
         StopPlay();
         levels_.reset();
@@ -282,6 +279,7 @@ namespace rf
         SyncControls();
         UpdatePreview();
         UpdateStatus();
+        return true;
     }
 
     void MainView::EnsureLevels()
@@ -387,38 +385,29 @@ namespace rf
         }
         StopPlay();
         const std::wstring stem = StemOf(track_->name);
-        if (s_.music.format == 3)
-        {
-            const std::wstring path = host_.AskSavePath(s_.saveFolder, stem + L"_retro.png", ImageFormat::Png);
-            if (path.empty())
-            {
-                return;
-            }
-            Image img;
-            std::wstring err;
-            MusicStill(img);
-            if (!host_.WriteImage(path, img, ImageFormat::Png, 100, err))
-            {
-                Warn(L"Не удалось сохранить файл:\n" + err);
-                return;
-            }
-            s_.saveFolder = DirectoryOf(path);
-            dirty_ = true;
-            dirtyAt_ = host_.Ticks();
-            flash_ = L"Сохранено: " + FileNameOf(path);
-            flashUntil_ = host_.Ticks() + 4000;
-            UpdateStatus();
-            return;
-        }
-        if (host_.FfmpegPath().empty())
+        const bool png = s_.music.format == 3;
+        if (!png && host_.FfmpegPath().empty())
         {
             ShowMessage(host_, L"Ретро-рамка", FfmpegMissingText(), MessageKind::Warning);
             return;
         }
-        const std::wstring path = host_.AskSaveVideo(s_.saveFolder, stem + L"_retro.mp4", false);
+        const std::wstring path = png ? host_.AskSavePath(s_.saveFolder, stem + L"_retro.png", ImageFormat::Png) : host_.AskSaveVideo(s_.saveFolder, stem + L"_retro.mp4", false);
         if (path.empty())
         {
             return;
+        }
+        std::wstring err;
+        const ExportResult outcome = ExportTrack(path, L"", err);
+        FinishExport(outcome, path, err);
+    }
+
+    ExportResult MainView::ExportTrack(const std::wstring& path, const std::wstring& title, std::wstring& err)
+    {
+        if (s_.music.format == 3)
+        {
+            Image img;
+            MusicStill(img);
+            return host_.WriteImage(path, img, ImageFormat::Png, 100, err) ? ExportResult::Done : ExportResult::Failed;
         }
         MusicJob job;
         job.source = track_->path;
@@ -439,8 +428,7 @@ namespace rf
         job.artist = track_->artist;
         job.title = track_->title;
         job.cover = track_->cover;
-        std::wstring err;
-        const ExportResult outcome = WithProgress(path, [&](const ExportStep& step) {
+        const auto work = [&](const ExportStep& step) {
             if ((s_.music.meter || s_.music.equalizer) && !track_->levelsReady)
             {
                 step(-1, 0);
@@ -454,8 +442,8 @@ namespace rf
                 job.lyrics = track_->lyrics;
             }
             return ExportMusic(host_, job, step, err);
-        });
-        FinishExport(outcome, path, err);
+        };
+        return WithProgress(path, work, title);
     }
 
     void MainView::CopyMusic()

@@ -506,6 +506,52 @@ int main(int argc, char** argv)
               "save mp4 720 from music tab at 30 fps");
         std::printf("    saved %.2f s\n", saved.duration);
     }
+    {
+        const std::wstring third = dir + L"/третья.wav";
+        Check(Run(host, {L"-v", L"error", L"-y", L"-f", L"lavfi", L"-i", L"sine=frequency=660:sample_rate=22050:duration=2", third}), "make third song");
+        const std::wstring batch = dir + L"/batch";
+        rftest::fs::remove_all(rftest::Narrow(batch));
+        rftest::fs::create_directories(rftest::Narrow(batch));
+        rf::MainView main(host);
+        unsigned long long ms = 100000;
+        const auto settle = [&](int ticks) {
+            for (int i = 0; i < ticks; ++i)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                ms += 40;
+                main.OnTick(ms);
+            }
+        };
+        const auto click = [&](int x, int y) {
+            main.root.MouseDown(x, y, false, false, 1);
+            main.root.MouseUp(x, y);
+        };
+        main.OnDropFiles({track, bare, third});
+        Check(main.HasTrack() && main.QueueSize() == 3 && main.QueuePosition() == 0, "several songs make a queue");
+        click(660, 59);
+        settle(1);
+        Check(main.QueuePosition() == 1, "next button in the queue");
+        main.root.Key(rf::ui::KeyEvent{rf::ui::KeyCode::PageDown});
+        settle(1);
+        Check(main.QueuePosition() == 2, "page down moves through the queue");
+        rf::Image shot;
+        main.root.Paint(shot);
+        rftest::WritePpm(out + "/ui_music_queue.ppm", shot);
+        main.MutableSettings().music.format = 2;
+        main.MutableSettings().music.square = false;
+        main.MutableSettings().effects = rf::EffectSettings();
+        main.Refresh();
+        host.folderAnswer = batch + L"/";
+        const int modals = host.modalCalls;
+        click(520, 59);
+        rf::MediaInfo a;
+        rf::MediaInfo b;
+        rf::MediaInfo c;
+        Check(rf::ProbeMedia(host, batch + L"/песня_retro.mp4", a, err) && rf::ProbeMedia(host, batch + L"/bare_retro.mp4", b, err) &&
+                  rf::ProbeMedia(host, batch + L"/третья_retro.mp4", c, err) && a.hasAudio && b.hasAudio && c.hasAudio && Near(c.duration, 2.0, 0.2) &&
+                  host.modalCalls == modals + 1,
+              "save all songs of the queue");
+    }
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);
     return failures == 0 ? 0 : 2;
 }

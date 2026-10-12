@@ -418,6 +418,34 @@ int main(int argc, char** argv)
         main.SetMode(rf::PhotoMode);
         Check(!main.HasClip() || main.Settings().mode == rf::PhotoMode, "back to photo tab");
     }
+    {
+        const std::wstring second = dir + L"/второй.mp4";
+        Check(Run(host, {L"-v", L"error", L"-y", L"-f", L"lavfi", L"-i", L"testsrc2=size=320x240:rate=25", L"-t", L"1", L"-c:v", L"libx264", L"-pix_fmt", L"yuv420p",
+                         second}),
+              "make second clip");
+        const std::wstring batch = dir + L"/batch";
+        rftest::fs::remove_all(rftest::Narrow(batch));
+        rftest::fs::create_directories(rftest::Narrow(batch));
+        rf::MainView main(host);
+        main.SetMode(rf::VideoMode);
+        host.mediaAnswers = {clip, second};
+        const auto click = [&](int x, int y) {
+            main.root.MouseDown(x, y, false, false, 1);
+            main.root.MouseUp(x, y);
+        };
+        click(50, 59);
+        Check(main.HasClip() && main.QueueSize() == 2, "open several videos at once");
+        main.MutableSettings().video.format = 2;
+        main.MutableSettings().video.square = false;
+        main.Refresh();
+        host.folderAnswer = batch + L"/";
+        click(520, 59);
+        rf::MediaInfo a;
+        rf::MediaInfo b;
+        Check(rf::ProbeMedia(host, batch + L"/clip_retro.mp4", a, err) && rf::ProbeMedia(host, batch + L"/второй_retro.mp4", b, err) && a.hasAudio && !b.hasAudio,
+              "save all videos of the queue");
+        host.mediaAnswers.clear();
+    }
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);
     return failures == 0 ? 0 : 2;
 }

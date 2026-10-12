@@ -85,8 +85,8 @@ namespace rf
         virtual std::wstring AskSavePath(const std::wstring& folder, const std::wstring& suggested, ImageFormat format) = 0;
         virtual std::wstring AskFolder(const std::wstring& folder, const std::wstring& title) = 0;
         virtual std::wstring AskOpenArchive(const std::wstring& folder) = 0;
-        virtual std::wstring AskOpenVideo(const std::wstring& folder) = 0;
-        virtual std::wstring AskOpenAudio(const std::wstring& folder) = 0;
+        virtual std::vector<std::wstring> AskOpenVideo(const std::wstring& folder) = 0;
+        virtual std::vector<std::wstring> AskOpenAudio(const std::wstring& folder) = 0;
         virtual std::wstring AskOpenLyrics(const std::wstring& folder) = 0;
         virtual std::unique_ptr<AudioOut> OpenAudio(int rate, int channels) = 0;
         virtual std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) = 0;
