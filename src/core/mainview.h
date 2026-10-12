@@ -3,6 +3,7 @@
 #include "dialogs.h"
 #include "library.h"
 #include "media.h"
+#include "music.h"
 #include "settings.h"
 
 #include <array>
@@ -20,8 +21,11 @@ namespace rf
         void AddFiles(const std::vector<std::wstring>& paths);
         void AddImage(Image full, const std::wstring& path, const std::wstring& name, bool keepFull);
         void OpenVideo(const std::wstring& path);
+        void OpenTrack(const std::wstring& path);
         void SetMode(int mode);
         bool HasClip() const { return clip_ != nullptr; }
+        bool HasTrack() const { return track_ != nullptr; }
+        bool LevelsReady() const { return track_ && track_->levelsReady; }
 
         void OnTick(unsigned long long ms) override;
         bool OnCloseRequest() override;
@@ -62,7 +66,7 @@ namespace rf
         std::wstring UniquePath(const std::wstring& dir, const std::wstring& stem) const;
 
         void Open();
-        struct Clip
+        struct Media
         {
             std::wstring path;
             std::wstring name;
@@ -72,7 +76,30 @@ namespace rf
             double start = 0.0;
             double end = 0.0;
             Image frame;
+            std::wstring artist;
+            std::wstring title;
+            Image cover;
+            Image tagCover;
+            std::vector<float> levels;
+            bool levelsReady = false;
         };
+
+        Media* Cur();
+        const Media* Cur() const;
+        bool Playing() const { return play_ != nullptr || musicPlay_; }
+        void BuildMusic();
+        void SyncMusicControls();
+        void UpdateMusicPreview();
+        void UpdateMusicStatus(std::wstring& first, std::wstring& second, std::wstring& third);
+        FrameSettings MusicFrameSettings() const;
+        bool MusicStill(Image& out);
+        void SaveMusic();
+        void CopyMusic();
+        void LoadCover();
+        void ResetCover();
+        void EnsureLevels();
+        ExportResult WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work);
+        void FinishExport(ExportResult outcome, const std::wstring& path, const std::wstring& error);
 
         void BuildVideo();
         void SyncVideoControls();
@@ -163,7 +190,22 @@ namespace rf
         std::vector<ui::Widget*> photoOnly_;
         std::vector<ui::Widget*> videoOnly_;
 
-        std::unique_ptr<Clip> clip_;
+        std::unique_ptr<Media> clip_;
+        std::unique_ptr<Media> track_;
+        std::unique_ptr<LevelReader> levels_;
+        bool musicPlay_ = false;
+        unsigned long long musicStart_ = 0;
+        double musicFrom_ = 0.0;
+        std::vector<ui::Widget*> mediaOnly_;
+        std::vector<ui::Widget*> musicOnly_;
+        ui::TextField* artistField_ = nullptr;
+        ui::TextField* songField_ = nullptr;
+        ui::Button* coverLoad_ = nullptr;
+        ui::Button* coverReset_ = nullptr;
+        ui::CheckBox* spinCheck_ = nullptr;
+        ui::CheckBox* meterCheck_ = nullptr;
+        ui::ComboBox* fade_ = nullptr;
+        ui::Label* levelsLabel_ = nullptr;
         std::unique_ptr<FrameStream> fetch_;
         double fetchAt_ = -1.0;
         bool fetchAgain_ = false;

@@ -13,11 +13,17 @@ namespace rf
         double fps = 0.0;
         bool hasVideo = false;
         bool hasAudio = false;
+        bool hasCover = false;
+        int coverW = 0;
+        int coverH = 0;
+        std::wstring artist;
+        std::wstring title;
     };
 
     bool ParseProbe(const std::string& log, MediaInfo& info);
     std::wstring FormatClock(double seconds);
     std::wstring FormatPrecise(double seconds);
+    std::wstring FormatShort(double seconds);
     bool ParseClock(const std::wstring& text, double& seconds);
     bool IsVideoFile(const std::wstring& path);
     bool IsAudioFile(const std::wstring& path);
@@ -25,6 +31,33 @@ namespace rf
     std::string LastLines(const std::string& log, int count);
 
     bool ProbeMedia(Host& host, const std::wstring& path, MediaInfo& info, std::wstring& error);
+    bool ProbeAudio(Host& host, const std::wstring& path, MediaInfo& info, std::wstring& error);
+    bool ReadCover(Host& host, const std::wstring& path, const MediaInfo& info, int maxSide, Image& out);
+
+    constexpr int LevelRate = 25;
+
+    std::vector<float> LevelsFromSamples(const std::vector<std::int16_t>& samples, int sampleRate);
+
+    class LevelReader
+    {
+    public:
+        LevelReader(Host& host, const std::wstring& path);
+        LevelReader(const LevelReader&) = delete;
+        LevelReader& operator=(const LevelReader&) = delete;
+
+        bool Poll();
+        bool Wait();
+        bool Done() const { return done_; }
+        std::vector<float> Levels() const;
+
+    private:
+        void Take(std::size_t n);
+        std::unique_ptr<Process> proc_;
+        std::vector<unsigned char> bytes_;
+        bool done_ = false;
+    };
+
+    float MeterAt(const std::vector<float>& levels, double seconds);
 
     class FrameStream
     {
@@ -117,5 +150,23 @@ namespace rf
     };
 
     using ExportStep = std::function<bool(int frame, int total)>;
+
+    struct EncoderSpec
+    {
+        std::wstring output;
+        bool gif = false;
+        int quality = 0;
+        int width = 0;
+        int height = 0;
+        double fps = 30.0;
+        bool audio = false;
+        std::wstring source;
+        double start = 0.0;
+        double duration = 0.0;
+        double fade = 0.0;
+    };
+
+    using FrameSource = std::function<const Image*(int index)>;
+    ExportResult Encode(Host& host, const EncoderSpec& spec, int total, const FrameSource& frames, const ExportStep& step, std::wstring& error);
     ExportResult ExportVideo(Host& host, const ExportJob& job, const ExportStep& step, std::wstring& error);
 }

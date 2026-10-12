@@ -22,6 +22,11 @@ namespace rf::glyphs
     inline const Glyph Rewind = {"...x...x", "..xx..xx", ".xxx.xxx", "xxxxxxxx", ".xxx.xxx", "..xx..xx", "...x...x"};
     inline const Glyph FastForward = {"x...x...", "xx..xx..", "xxx.xxx.", "xxxxxxxx", "xxx.xxx.", "xx..xx..", "x...x..."};
     inline const Glyph Next = {"x...xx", "xx..xx", "xxx.xx", "xxxxxx", "xxx.xx", "xx..xx", "x...xx"};
+    inline const Glyph Plus = {"...x...", "...x...", "...x...", "xxxxxxx", "...x...", "...x...", "...x..."};
+    inline const Glyph Minus = {"xxxxxxx"};
+    inline const Glyph Shuffle = {"......x..", "xx....xxx", "..x..x.x.", "...xx....", "..x..x.x.", "xx....xxx", "......x.."};
+    inline const Glyph Repeat = {".xxxxxx..", "x......x.", "x.....xxx", "x......x.", "x........", "x.......x", ".xxxxxxx."};
+    inline const Glyph Heart = {".xx.xx.", "xxxxxxx", "xxxxxxx", ".xxxxx.", "..xxx..", "...x..."};
     inline const Glyph Info = {
         "...........xxxxxxxxxx...........",
         "........xxxxxxxxxxxxxxxx........",

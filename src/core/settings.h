@@ -37,6 +37,15 @@ namespace rf
         int gifWidth = 0;
     };
 
+    struct MusicSettings
+    {
+        int format = 0;
+        int squareSize = 1080;
+        int fade = 2;
+        bool spin = true;
+        bool meter = true;
+    };
+
     struct AppSettings
     {
         FrameSettings frame;
@@ -48,11 +57,13 @@ namespace rf
         std::wstring playerStatus = L"Воспроизведение";
         bool playerTime = true;
         VideoSettings video;
+        MusicSettings music;
         Color background = Rgb(0x3A, 0x6E, 0xA5);
         bool backgroundPicture = false;
         std::wstring openFolder;
         std::wstring saveFolder;
         std::wstring videoFolder;
+        std::wstring musicFolder;
         std::wstring libraryFolder;
         std::vector<std::wstring> library;
         int windowX = -100000;
@@ -67,6 +78,7 @@ namespace rf
     constexpr int SquareSizes[] = {1080, 720};
     constexpr int GifFpsChoices[] = {10, 12, 15, 20, 25, 30};
     constexpr int GifWidthChoices[] = {0, 800, 640, 480, 320};
+    constexpr int FadeChoices[] = {0, 1, 2, 3, 5};
 
     std::string SerializeSettings(const AppSettings& s);
     void ParseSettings(const std::string& text, AppSettings& s);

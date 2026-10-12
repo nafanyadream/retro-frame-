@@ -163,7 +163,7 @@ namespace rf
         }
         else if (mode == MusicMode)
         {
-            look.iconIndex = 6;
+            look.iconIndex = NoIconIndex;
             look.titleFromName = false;
             look.customTitle = L"Песня";
             look.kind = WindowKind::Bare;
@@ -192,7 +192,7 @@ namespace rf
         std::ostringstream o;
         const FrameSettings& f = s.frame;
         const FrameColors& c = f.colors;
-        o << "version=2\n";
+        o << "version=3\n";
         o << "mode=" << s.mode << "\n";
         o << "style=" << int(f.style) << "\n";
         o << "active=" << (f.active ? 1 : 0) << "\n";
@@ -237,12 +237,18 @@ namespace rf
         o << "video.squareSize=" << s.video.squareSize << "\n";
         o << "video.gifFps=" << s.video.gifFps << "\n";
         o << "video.gifWidth=" << s.video.gifWidth << "\n";
+        o << "music.format=" << s.music.format << "\n";
+        o << "music.squareSize=" << s.music.squareSize << "\n";
+        o << "music.fade=" << s.music.fade << "\n";
+        o << "music.spin=" << (s.music.spin ? 1 : 0) << "\n";
+        o << "music.meter=" << (s.music.meter ? 1 : 0) << "\n";
         o << "background=" << Hex(s.background) << "\n";
         o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
         o << "format=" << s.format << "\n";
         o << "openFolder=" << Escape(s.openFolder) << "\n";
         o << "saveFolder=" << Escape(s.saveFolder) << "\n";
         o << "videoFolder=" << Escape(s.videoFolder) << "\n";
+        o << "musicFolder=" << Escape(s.musicFolder) << "\n";
         o << "libraryFolder=" << Escape(s.libraryFolder) << "\n";
         o << "library=" << EscapeList(s.library) << "\n";
         o << "windowX=" << s.windowX << "\n";
@@ -361,6 +367,12 @@ namespace rf
             getBool(p + "address", l.address);
             getBool(p + "corner", l.corner);
         }
+        int version = 1;
+        getInt("version", version, 1, 1000);
+        if (version < 3)
+        {
+            s.looks[MusicMode] = DefaultLook(MusicMode);
+        }
         getList("playerMenu", s.playerMenu);
         getText("playerStatus", s.playerStatus);
         getBool("playerTime", s.playerTime);
@@ -369,12 +381,18 @@ namespace rf
         getInt("video.squareSize", s.video.squareSize, 240, 2160);
         getInt("video.gifFps", s.video.gifFps, 5, 50);
         getInt("video.gifWidth", s.video.gifWidth, 0, 4000);
+        getInt("music.format", s.music.format, 0, 3);
+        getInt("music.squareSize", s.music.squareSize, 240, 2160);
+        getInt("music.fade", s.music.fade, 0, 30);
+        getBool("music.spin", s.music.spin);
+        getBool("music.meter", s.music.meter);
         getColor("background", s.background);
         getBool("backgroundPicture", s.backgroundPicture);
         getInt("format", s.format, 0, 2);
         getText("openFolder", s.openFolder);
         getText("saveFolder", s.saveFolder);
         getText("videoFolder", s.videoFolder);
+        getText("musicFolder", s.musicFolder);
         getText("libraryFolder", s.libraryFolder);
         getList("library", s.library);
         getInt("windowX", s.windowX, -100000, 100000);

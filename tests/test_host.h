@@ -275,15 +275,19 @@ namespace rftest
         std::wstring videoAnswer;
         std::wstring saveAnswer;
         std::wstring ffmpeg;
+        std::wstring written;
+        rf::Image writtenImage;
+        rf::Image clipboard;
         std::wstring sevenZip;
         int modalCalls = 0;
 
         std::vector<std::wstring> AskOpenImages(const std::wstring&) override { return {}; }
         std::wstring AskOpenIcon(const std::wstring&) override { return L""; }
-        std::wstring AskSavePath(const std::wstring&, const std::wstring&, rf::ImageFormat) override { return L""; }
+        std::wstring AskSavePath(const std::wstring&, const std::wstring&, rf::ImageFormat) override { return saveAnswer; }
         std::wstring AskFolder(const std::wstring&, const std::wstring&) override { return folderAnswer; }
         std::wstring AskOpenArchive(const std::wstring&) override { return archiveAnswer; }
         std::wstring AskOpenVideo(const std::wstring&) override { return videoAnswer; }
+        std::wstring AskOpenAudio(const std::wstring&) override { return videoAnswer; }
         std::wstring AskSaveVideo(const std::wstring&, const std::wstring&, bool) override { return saveAnswer; }
         bool AskColor(rf::Color, rf::Color&) override { return false; }
         bool ReadImage(const std::wstring& path, rf::Image& out, std::wstring& e) override { return ReadIcon(path, out, e); }
@@ -296,7 +300,12 @@ namespace rftest
             }
             return true;
         }
-        bool WriteImage(const std::wstring&, const rf::Image&, rf::ImageFormat, int, std::wstring&) override { return true; }
+        bool WriteImage(const std::wstring& path, const rf::Image& image, rf::ImageFormat, int, std::wstring&) override
+        {
+            written = path;
+            writtenImage = image;
+            return true;
+        }
         bool DecodeIcon(const std::vector<unsigned char>& data, rf::Image& out, std::wstring& e) override
         {
             if (!DecodePpm(data, out))
@@ -309,7 +318,11 @@ namespace rftest
         bool ReadFileIcons(const std::wstring&, std::vector<rf::Image>&, std::wstring&) override { return false; }
         bool ClipboardImage(rf::Image&) override { return false; }
         std::vector<std::wstring> ClipboardFiles() override { return {}; }
-        bool SetClipboardImage(const rf::Image&) override { return true; }
+        bool SetClipboardImage(const rf::Image& image) override
+        {
+            clipboard = image;
+            return true;
+        }
         bool FileExists(const std::wstring& path) override { return fs::exists(Narrow(path)); }
         std::wstring SettingsFolder() override { return L""; }
         bool ReadText(const std::wstring&, std::string&) override { return false; }

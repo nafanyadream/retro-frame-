@@ -73,10 +73,10 @@ namespace rf
         playButton_->onClick = [this]() { TogglePlay(); };
         scrub_ = Place<ui::TrackBar>(r, 112, 414, 404, 24);
         scrub_->onChange = [this](double v) {
-            if (clip_)
+            if (Media* m = Cur())
             {
                 StopPlay();
-                SetPosition(v * clip_->info.duration);
+                SetPosition(v * m->info.duration);
             }
         };
         timeLabel_ = AddLabel(r, 520, 420, 98, L"");
@@ -86,15 +86,16 @@ namespace rf
         trim->text = L"Обрезка";
         wholeCheck_ = AddCheck(r, 26, 463, 260, L"Весь ролик целиком");
         wholeCheck_->onChange = [this](bool v) {
-            if (!clip_)
+            Media* m = Cur();
+            if (!m)
             {
                 return;
             }
-            clip_->whole = v;
-            if (!v && clip_->end - clip_->start < 0.1)
+            m->whole = v;
+            if (!v && m->end - m->start < 0.1)
             {
-                clip_->start = 0.0;
-                clip_->end = clip_->info.duration;
+                m->start = 0.0;
+                m->end = m->info.duration;
             }
             Changed();
         };
@@ -132,7 +133,7 @@ namespace rf
         squareSize_ = Place<ui::ComboBox>(r, 516, 460, 92, 21);
         squareSize_->items = {L"1080 x 1080", L"720 x 720"};
         squareSize_->onChange = [this](int i) {
-            s_.video.squareSize = SquareSizes[std::clamp(i, 0, 1)];
+            (mode_ == MusicMode ? s_.music.squareSize : s_.video.squareSize) = SquareSizes[std::clamp(i, 0, 1)];
             Changed();
         };
         auto* l3 = AddLabel(r, 324, 490, 82, L"Фон квадрата:");
@@ -175,8 +176,9 @@ namespace rf
         hint2->rect.h = 26;
         hint2->color = Rgb(0x40, 0x40, 0x40);
 
-        videoOnly_ = {playButton_, scrub_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
-                      resultBox, r1, r2, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_, l4, gifFps_, gifWidth_, hint2};
+        mediaOnly_ = {playButton_, scrub_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
+                      resultBox, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_};
+        videoOnly_ = {r1, r2, l4, gifFps_, gifWidth_, hint2};
     }
 
     void MainView::UpdateFormatItems()
@@ -185,6 +187,11 @@ namespace rf
         {
             format_->items = {L"MP4, высокое качество", L"MP4, среднее качество", L"MP4, низкое качество", L"GIF без звука"};
             format_->index = std::clamp(s_.video.format, 0, 3);
+        }
+        else if (mode_ == MusicMode)
+        {
+            format_->items = {L"MP4, высокое качество", L"MP4, среднее качество", L"MP4, низкое качество", L"PNG, один кадр"};
+            format_->index = std::clamp(s_.music.format, 0, 3);
         }
         else
         {
@@ -206,40 +213,61 @@ namespace rf
         s_.mode = mode;
         dirty_ = true;
         dirtyAt_ = host_.Ticks();
-        preview_->rect.h = mode_ == VideoMode ? 296 : 350;
+        preview_->rect.w = mode_ == MusicMode ? 300 : 602;
+        preview_->rect.h = mode_ == PhotoMode ? 350 : 296;
         UpdateFormatItems();
         SyncControls();
         UpdatePreview();
         UpdateStatus();
     }
 
+    MainView::Media* MainView::Cur()
+    {
+        return mode_ == VideoMode ? clip_.get() : mode_ == MusicMode ? track_.get() : nullptr;
+    }
+
+    const MainView::Media* MainView::Cur() const
+    {
+        return mode_ == VideoMode ? clip_.get() : mode_ == MusicMode ? track_.get() : nullptr;
+    }
+
     void MainView::SyncVideoControls()
     {
-        const bool on = mode_ == VideoMode;
+        const bool media = mode_ == VideoMode || mode_ == MusicMode;
+        for (ui::Widget* w : mediaOnly_)
+        {
+            w->visible = media;
+        }
         for (ui::Widget* w : videoOnly_)
         {
-            w->visible = on;
+            w->visible = mode_ == VideoMode;
         }
-        if (!on)
+        for (ui::Widget* w : musicOnly_)
+        {
+            w->visible = mode_ == MusicMode;
+        }
+        if (!media)
         {
             return;
         }
-        const bool has = clip_ != nullptr;
-        const double duration = has ? clip_->info.duration : 0.0;
+        const Media* m = Cur();
+        const bool has = m != nullptr;
+        const double duration = has ? m->info.duration : 0.0;
         playButton_->enabled = has;
-        playButton_->text = play_ ? L"Стоп" : L"Проиграть";
+        playButton_->text = Playing() ? L"Стоп" : L"Проиграть";
         scrub_->enabled = has;
-        scrub_->value = has && duration > 0.0 ? clip_->position / duration : 0.0;
-        scrub_->range = has && !clip_->whole;
+        scrub_->value = has && duration > 0.0 ? m->position / duration : 0.0;
+        scrub_->range = has && !m->whole;
         if (has && duration > 0.0)
         {
             scrub_->rangeStart = TrimStart() / duration;
             scrub_->rangeEnd = TrimEnd() / duration;
         }
-        timeLabel_->text = has ? FormatPrecise(clip_->position) + L" / " + FormatPrecise(duration) : std::wstring();
+        timeLabel_->text = has ? FormatPrecise(m->position) + L" / " + FormatPrecise(duration) : std::wstring();
+        wholeCheck_->text = mode_ == MusicMode ? L"Вся песня целиком" : L"Весь ролик целиком";
         wholeCheck_->enabled = has;
-        wholeCheck_->checked = !has || clip_->whole;
-        const bool parts = has && !clip_->whole;
+        wholeCheck_->checked = !has || m->whole;
+        const bool parts = has && !m->whole;
         for (ui::Widget* w : {static_cast<ui::Widget*>(startField_), static_cast<ui::Widget*>(endField_), static_cast<ui::Widget*>(startHere_),
                               static_cast<ui::Widget*>(endHere_)})
         {
@@ -255,14 +283,20 @@ namespace rf
         fill(startField_, TrimStart());
         fill(endField_, TrimEnd());
         fragLabel_->text = has ? L"Длина фрагмента: " + FormatPrecise(TrimEnd() - TrimStart()) : std::wstring();
-        resultValue_ = s_.video.square ? 1 : 0;
-        squareSize_->index = IndexOf(SquareSizes, int(std::size(SquareSizes)), s_.video.squareSize, 0);
-        squareSize_->enabled = s_.video.square;
+        const bool square = mode_ == MusicMode || s_.video.square;
+        squareSize_->index = IndexOf(SquareSizes, int(std::size(SquareSizes)), mode_ == MusicMode ? s_.music.squareSize : s_.video.squareSize, 0);
+        squareSize_->enabled = square;
         bgSwatch_->color = s_.background;
-        bgSwatch_->enabled = s_.video.square;
+        bgSwatch_->enabled = square;
         bgPicture_->checked = s_.backgroundPicture && !s_.backgroundImage.Empty();
-        bgPicture_->enabled = s_.video.square;
-        bgLoad_->enabled = s_.video.square;
+        bgPicture_->enabled = square;
+        bgLoad_->enabled = square;
+        if (mode_ == MusicMode)
+        {
+            SyncMusicControls();
+            return;
+        }
+        resultValue_ = s_.video.square ? 1 : 0;
         const bool gif = s_.video.format == 3;
         gifFps_->index = IndexOf(GifFpsChoices, int(std::size(GifFpsChoices)), s_.video.gifFps, 2);
         gifFps_->enabled = gif;
@@ -291,12 +325,14 @@ namespace rf
 
     double MainView::TrimStart() const
     {
-        return clip_ && !clip_->whole ? clip_->start : 0.0;
+        const Media* m = Cur();
+        return m && !m->whole ? m->start : 0.0;
     }
 
     double MainView::TrimEnd() const
     {
-        return clip_ && !clip_->whole ? clip_->end : (clip_ ? clip_->info.duration : 0.0);
+        const Media* m = Cur();
+        return m && !m->whole ? m->end : (m ? m->info.duration : 0.0);
     }
 
     void MainView::OpenVideo(const std::wstring& path)
@@ -321,7 +357,7 @@ namespace rf
         }
         StopPlay();
         fetch_.reset();
-        auto clip = std::make_unique<Clip>();
+        auto clip = std::make_unique<Media>();
         clip->path = path;
         clip->name = FileNameOf(path);
         clip->info = info;
@@ -339,12 +375,16 @@ namespace rf
 
     void MainView::SetPosition(double seconds)
     {
-        if (!clip_)
+        Media* m = Cur();
+        if (!m)
         {
             return;
         }
-        clip_->position = std::clamp(seconds, 0.0, std::max(0.0, clip_->info.duration - 0.05));
-        RequestFrame();
+        m->position = std::clamp(seconds, 0.0, std::max(0.0, m->info.duration - 0.05));
+        if (mode_ == VideoMode)
+        {
+            RequestFrame();
+        }
         SyncVideoControls();
         UpdatePreview();
     }
@@ -374,6 +414,35 @@ namespace rf
 
     void MainView::PollVideo(unsigned long long ms)
     {
+        if (levels_ && track_ && levels_->Poll())
+        {
+            track_->levels = levels_->Levels();
+            track_->levelsReady = true;
+            levels_.reset();
+            if (mode_ == MusicMode)
+            {
+                SyncVideoControls();
+                UpdatePreview();
+            }
+        }
+        if (musicPlay_ && track_)
+        {
+            const double now = musicFrom_ + double(ms - musicStart_) / 1000.0;
+            if (now >= TrimEnd() - 0.01)
+            {
+                track_->position = std::max(0.0, TrimEnd() - 0.05);
+                musicPlay_ = false;
+            }
+            else
+            {
+                track_->position = now;
+            }
+            if (mode_ == MusicMode)
+            {
+                SyncVideoControls();
+                UpdatePreview();
+            }
+        }
         if (fetch_ && clip_)
         {
             Image img;
@@ -430,12 +499,27 @@ namespace rf
 
     void MainView::TogglePlay()
     {
-        if (play_)
+        if (Playing())
         {
             StopPlay();
             return;
         }
-        if (!clip_)
+        if (mode_ == MusicMode && track_)
+        {
+            double from = track_->position;
+            if (from < TrimStart() || from >= TrimEnd() - 0.1)
+            {
+                from = TrimStart();
+            }
+            track_->position = from;
+            musicFrom_ = from;
+            musicStart_ = host_.Ticks();
+            musicPlay_ = true;
+            SyncVideoControls();
+            UpdatePreview();
+            return;
+        }
+        if (!clip_ || mode_ != VideoMode)
         {
             return;
         }
@@ -464,40 +548,40 @@ namespace rf
 
     void MainView::StopPlay()
     {
-        if (!play_)
+        if (!Playing())
         {
             return;
         }
         play_.reset();
-        if (mode_ == VideoMode)
-        {
-            SyncVideoControls();
-            root.dirty = true;
-        }
+        musicPlay_ = false;
+        SyncVideoControls();
+        root.dirty = true;
     }
 
     void MainView::SetTrim(bool start)
     {
-        if (!clip_)
+        Media* m = Cur();
+        if (!m)
         {
             return;
         }
-        const double d = clip_->info.duration;
-        const double p = clip_->position;
+        const double d = m->info.duration;
+        const double p = m->position;
         if (start)
         {
-            clip_->start = std::clamp(std::min(p, clip_->end - 0.1), 0.0, d);
+            m->start = std::clamp(std::min(p, m->end - 0.1), 0.0, d);
         }
         else
         {
-            clip_->end = std::clamp(std::max(p, clip_->start + 0.1), 0.0, d);
+            m->end = std::clamp(std::max(p, m->start + 0.1), 0.0, d);
         }
         Changed();
     }
 
     void MainView::TrimFieldChanged(bool start, const std::wstring& text)
     {
-        if (!clip_ || clip_->whole)
+        Media* m = Cur();
+        if (!m || m->whole)
         {
             return;
         }
@@ -506,14 +590,14 @@ namespace rf
         {
             return;
         }
-        v = std::clamp(v, 0.0, clip_->info.duration);
-        if (start && v < clip_->end - 0.05)
+        v = std::clamp(v, 0.0, m->info.duration);
+        if (start && v < m->end - 0.05)
         {
-            clip_->start = v;
+            m->start = v;
         }
-        else if (!start && v > clip_->start + 0.05)
+        else if (!start && v > m->start + 0.05)
         {
-            clip_->end = v;
+            m->end = v;
         }
         else
         {
@@ -683,21 +767,31 @@ namespace rf
         {
             job.background = SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW);
         }
-        ProgressView progress(L"Сохранение видео");
+        std::wstring err;
+        const ExportResult outcome = WithProgress(path, [&](const ExportStep& step) { return ExportVideo(host_, job, step, err); });
+        FinishExport(outcome, path, err);
+    }
+
+    ExportResult MainView::WithProgress(const std::wstring& path, const std::function<ExportResult(const ExportStep&)>& work)
+    {
+        ProgressView progress(mode_ == MusicMode ? L"Сохранение песни" : L"Сохранение видео");
         const std::wstring line1 = L"Сохраняется: " + FileNameOf(path);
         progress.Update(line1, L"Подготовка...", 0.0);
         void* handle = host_.OpenModeless(progress);
         host_.Pump();
         const unsigned long long began = host_.Ticks();
         unsigned long long last = 0;
-        std::wstring err;
-        const ExportResult outcome = ExportVideo(host_, job, [&](int i, int total) {
+        const ExportResult outcome = work([&](int i, int total) {
             const unsigned long long now = host_.Ticks();
-            if (now - last >= 100 || i == 0)
+            if (now - last >= 100 || i <= 0)
             {
                 last = now;
                 std::wstring line2;
-                if (i >= total)
+                if (i < 0)
+                {
+                    line2 = L"Подготовка: считаю громкость песни...";
+                }
+                else if (i >= total)
                 {
                     line2 = L"Завершение записи...";
                 }
@@ -710,12 +804,17 @@ namespace rf
                         line2 += L", осталось примерно " + FormatClock(left + 0.999);
                     }
                 }
-                progress.Update(line1, line2, double(i) / double(std::max(1, total)));
+                progress.Update(line1, line2, i < 0 ? 0.0 : double(i) / double(std::max(1, total)));
                 host_.Pump();
             }
             return !progress.cancelled;
-        }, err);
+        });
         host_.CloseModeless(handle);
+        return outcome;
+    }
+
+    void MainView::FinishExport(ExportResult outcome, const std::wstring& path, const std::wstring& error)
+    {
         if (outcome == ExportResult::Done)
         {
             s_.saveFolder = DirectoryOf(path);
@@ -729,7 +828,7 @@ namespace rf
         }
         else
         {
-            Warn(L"Не удалось сохранить видео:\n" + err);
+            Warn(L"Не удалось сохранить:\n" + error);
         }
         flashUntil_ = host_.Ticks() + 4000;
         UpdateStatus();

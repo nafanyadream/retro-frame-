@@ -2,6 +2,7 @@
 
 #include "utf.h"
 
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -157,6 +158,7 @@ namespace rf
         info = MediaInfo();
         std::size_t start = 0;
         int rotation = 0;
+        bool tags = false;
         while (start < log.size())
         {
             std::size_t end = log.find('\n', start);
@@ -193,6 +195,53 @@ namespace rf
             }
             if (line.find("Stream #") != std::string::npos)
             {
+                tags = line.find("Audio:") != std::string::npos;
+            }
+            else if (line.rfind("Input #", 0) == 0)
+            {
+                tags = true;
+            }
+            else if (tags && line.size() > 4 && line.compare(0, 4, "    ") == 0)
+            {
+                const std::size_t colon = line.find(" : ");
+                if (colon != std::string::npos)
+                {
+                    std::string key = line.substr(0, colon);
+                    key.erase(0, key.find_first_not_of(' '));
+                    key.erase(key.find_last_not_of(' ') + 1);
+                    for (auto& c : key)
+                    {
+                        c = char(std::tolower(static_cast<unsigned char>(c)));
+                    }
+                    std::string value = line.substr(colon + 3);
+                    value.erase(value.find_last_not_of(" \t") + 1);
+                    if (key == "artist" && info.artist.empty())
+                    {
+                        info.artist = FromUtf8(value);
+                    }
+                    else if (key == "album_artist" && info.artist.empty())
+                    {
+                        info.artist = FromUtf8(value);
+                    }
+                    else if (key == "title" && info.title.empty())
+                    {
+                        info.title = FromUtf8(value);
+                    }
+                }
+            }
+            if (line.find("Stream #") != std::string::npos)
+            {
+                if (line.find("Video:") != std::string::npos && line.find("(attached pic)") != std::string::npos && !info.hasCover)
+                {
+                    int w = 0;
+                    int h = 0;
+                    if (FrameSize(line, w, h))
+                    {
+                        info.hasCover = true;
+                        info.coverW = w;
+                        info.coverH = h;
+                    }
+                }
                 if (line.find("Video:") != std::string::npos && line.find("(attached pic)") == std::string::npos && !info.hasVideo)
                 {
                     int w = 0;
@@ -281,6 +330,19 @@ namespace rf
     {
         const long long tenths = std::max(0LL, (long long)std::floor(seconds * 10.0 + 1e-6));
         return FormatClock(double(tenths / 10)) + L"." + std::to_wstring(tenths % 10);
+    }
+
+    std::wstring FormatShort(double seconds)
+    {
+        const long long total = std::max(0LL, (long long)std::floor(seconds + 1e-6));
+        const int h = int(total / 3600);
+        const int m = int((total / 60) % 60);
+        const int s = int(total % 60);
+        if (h > 0)
+        {
+            return std::to_wstring(h) + L":" + TwoDigits(m) + L":" + TwoDigits(s);
+        }
+        return std::to_wstring(m) + L":" + TwoDigits(s);
     }
 
     bool ParseClock(const std::wstring& text, double& seconds)
@@ -422,6 +484,197 @@ namespace rf
             return false;
         }
         return true;
+    }
+
+    bool ProbeAudio(Host& host, const std::wstring& path, MediaInfo& info, std::wstring& error)
+    {
+        const std::wstring ffmpeg = host.FfmpegPath();
+        if (ffmpeg.empty())
+        {
+            error = FfmpegMissingText();
+            return false;
+        }
+        auto proc = host.StartProcess(ffmpeg, {L"-hide_banner", L"-nostdin", L"-i", path}, false, false);
+        if (!proc)
+        {
+            error = L"не удалось запустить ffmpeg";
+            return false;
+        }
+        int code = 0;
+        proc->Finish(code, []() { return true; });
+        const std::string log = proc->Log();
+        if (!ParseProbe(log, info))
+        {
+            error = LastLines(log, 1).find("No such file") != std::string::npos ? L"файл не найден" : L"ffmpeg не смог прочитать файл";
+            return false;
+        }
+        if (!info.hasAudio)
+        {
+            error = L"в файле нет звука";
+            return false;
+        }
+        return true;
+    }
+
+    bool ReadCover(Host& host, const std::wstring& path, const MediaInfo& info, int maxSide, Image& out)
+    {
+        const std::wstring ffmpeg = host.FfmpegPath();
+        if (ffmpeg.empty() || !info.hasCover || info.coverW < 2 || info.coverH < 2)
+        {
+            return false;
+        }
+        const double k = std::min(1.0, double(maxSide) / double(std::max(info.coverW, info.coverH)));
+        const int w = std::max(2, int(std::lround(info.coverW * k)));
+        const int h = std::max(2, int(std::lround(info.coverH * k)));
+        auto proc = host.StartProcess(ffmpeg, {L"-v", L"error", L"-nostdin", L"-i", path, L"-map", L"0:v:0", L"-frames:v", L"1", L"-vf",
+                                               L"scale=" + Int(w) + L":" + Int(h) + L":flags=area", L"-pix_fmt", L"bgra", L"-f", L"rawvideo", L"pipe:1"},
+                                      false, true);
+        if (!proc)
+        {
+            return false;
+        }
+        Image img(w, h);
+        const bool ok = proc->Read(img.pixels.data(), img.pixels.size() * sizeof(Color));
+        int code = 0;
+        proc->Finish(code, []() { return true; });
+        if (!ok)
+        {
+            return false;
+        }
+        out = std::move(img);
+        return true;
+    }
+
+    std::vector<float> LevelsFromSamples(const std::vector<std::int16_t>& samples, int sampleRate)
+    {
+        std::vector<float> levels;
+        const std::size_t window = std::size_t(std::max(1, sampleRate / LevelRate));
+        for (std::size_t i = 0; i < samples.size(); i += window)
+        {
+            const std::size_t end = std::min(samples.size(), i + window);
+            double sum = 0.0;
+            for (std::size_t j = i; j < end; ++j)
+            {
+                const double v = samples[j] / 32768.0;
+                sum += v * v;
+            }
+            const double rms = std::sqrt(sum / double(std::max<std::size_t>(1, end - i)));
+            const double db = 20.0 * std::log10(std::max(rms, 1e-6));
+            levels.push_back(float(std::clamp((db + 45.0) / 45.0, 0.0, 1.0)));
+        }
+        float hold = 0.0f;
+        for (auto& l : levels)
+        {
+            hold = std::max(l, hold - 0.07f);
+            l = hold;
+        }
+        return levels;
+    }
+
+    LevelReader::LevelReader(Host& host, const std::wstring& path)
+    {
+        const std::wstring ffmpeg = host.FfmpegPath();
+        if (!ffmpeg.empty())
+        {
+            proc_ = host.StartProcess(ffmpeg, {L"-v", L"error", L"-nostdin", L"-i", path, L"-vn", L"-sn", L"-ac", L"1", L"-ar", L"8000", L"-f", L"s16le", L"pipe:1"},
+                                      false, true);
+        }
+        done_ = proc_ == nullptr;
+    }
+
+    void LevelReader::Take(std::size_t n)
+    {
+        const std::size_t at = bytes_.size();
+        bytes_.resize(at + n);
+        if (!proc_->Read(bytes_.data() + at, n))
+        {
+            bytes_.resize(at);
+            done_ = true;
+        }
+    }
+
+    bool LevelReader::Poll()
+    {
+        if (done_)
+        {
+            return true;
+        }
+        for (int guard = 0; guard < 64; ++guard)
+        {
+            const std::size_t n = proc_->Available();
+            if (n == 0)
+            {
+                if (!proc_->Running() && proc_->Available() == 0)
+                {
+                    done_ = true;
+                }
+                break;
+            }
+            Take(std::min<std::size_t>(n, 1u << 20));
+            if (done_)
+            {
+                break;
+            }
+        }
+        return done_;
+    }
+
+    bool LevelReader::Wait()
+    {
+        while (!done_)
+        {
+            const std::size_t at = bytes_.size();
+            bytes_.resize(at + 65536);
+            std::size_t got = 0;
+            while (got < 65536)
+            {
+                const std::size_t n = proc_->Available();
+                if (n == 0)
+                {
+                    if (!proc_->Running() && proc_->Available() == 0)
+                    {
+                        done_ = true;
+                        break;
+                    }
+                    if (!proc_->Read(bytes_.data() + at + got, 1))
+                    {
+                        done_ = true;
+                        break;
+                    }
+                    ++got;
+                    continue;
+                }
+                const std::size_t take = std::min(n, std::size_t(65536) - got);
+                if (!proc_->Read(bytes_.data() + at + got, take))
+                {
+                    done_ = true;
+                    break;
+                }
+                got += take;
+            }
+            bytes_.resize(at + got);
+        }
+        return true;
+    }
+
+    std::vector<float> LevelReader::Levels() const
+    {
+        std::vector<std::int16_t> samples(bytes_.size() / 2);
+        for (std::size_t i = 0; i < samples.size(); ++i)
+        {
+            samples[i] = std::int16_t(std::uint16_t(bytes_[i * 2]) | (std::uint16_t(bytes_[i * 2 + 1]) << 8));
+        }
+        return LevelsFromSamples(samples, 8000);
+    }
+
+    float MeterAt(const std::vector<float>& levels, double seconds)
+    {
+        if (levels.empty())
+        {
+            return 0.0f;
+        }
+        const long long i = (long long)std::floor(seconds * LevelRate);
+        return levels[std::size_t(std::clamp<long long>(i, 0, (long long)levels.size() - 1))];
     }
 
     FrameStream::FrameStream(Host& host, const std::wstring& path, double start, double duration, double fps, int w, int h)
@@ -694,7 +947,7 @@ namespace rf
         return out_;
     }
 
-    ExportResult ExportVideo(Host& host, const ExportJob& job, const ExportStep& step, std::wstring& error)
+    ExportResult Encode(Host& host, const EncoderSpec& spec, int total, const FrameSource& frames, const ExportStep& step, std::wstring& error)
     {
         const std::wstring ffmpeg = host.FfmpegPath();
         if (ffmpeg.empty())
@@ -702,37 +955,35 @@ namespace rf
             error = FfmpegMissingText();
             return ExportResult::Failed;
         }
-        const double fps = std::clamp(job.fps, 1.0, 60.0);
-        const int total = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
-        FrameStream reader(host, job.source, job.start, job.duration, fps, job.plan.videoW, job.plan.videoH);
-        if (!reader.Started())
-        {
-            error = L"не удалось запустить ffmpeg";
-            return ExportResult::Failed;
-        }
+        const double fps = std::clamp(spec.fps, 1.0, 60.0);
         std::vector<std::wstring> args = {L"-v", L"error", L"-nostdin", L"-y", L"-f", L"rawvideo", L"-pix_fmt", L"bgra",
-                                          L"-s", Int(job.plan.outW) + L"x" + Int(job.plan.outH), L"-framerate", Number(fps), L"-i", L"pipe:0"};
-        if (job.gif)
+                                          L"-s", Int(spec.width) + L"x" + Int(spec.height), L"-framerate", Number(fps), L"-i", L"pipe:0"};
+        if (spec.gif)
         {
-            args.insert(args.end(), {L"-filter_complex", L"[0:v]split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse", L"-loop", L"0", L"-f", L"gif", job.output});
+            args.insert(args.end(), {L"-filter_complex", L"[0:v]split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse", L"-loop", L"0", L"-f", L"gif", spec.output});
         }
         else
         {
-            if (job.audio)
+            if (spec.audio)
             {
-                if (job.start > 0.0)
+                if (spec.start > 0.0)
                 {
-                    args.insert(args.end(), {L"-ss", Number(job.start)});
+                    args.insert(args.end(), {L"-ss", Number(spec.start)});
                 }
-                args.insert(args.end(), {L"-t", Number(job.duration), L"-i", job.source, L"-map", L"0:v:0", L"-map", L"1:a:0?"});
+                args.insert(args.end(), {L"-t", Number(spec.duration), L"-i", spec.source, L"-map", L"0:v:0", L"-map", L"1:a:0?"});
+                if (spec.fade > 0.0 && spec.duration > 0.2)
+                {
+                    const double f = std::min(spec.fade, spec.duration / 3.0);
+                    args.insert(args.end(), {L"-af", L"afade=t=in:st=0:d=" + Number(f) + L",afade=t=out:st=" + Number(spec.duration - f) + L":d=" + Number(f)});
+                }
             }
             const wchar_t* crf[] = {L"18", L"23", L"28"};
-            args.insert(args.end(), {L"-c:v", L"libx264", L"-preset", L"medium", L"-crf", crf[std::clamp(job.quality, 0, 2)], L"-pix_fmt", L"yuv420p"});
-            if (job.audio)
+            args.insert(args.end(), {L"-c:v", L"libx264", L"-preset", L"medium", L"-crf", crf[std::clamp(spec.quality, 0, 2)], L"-pix_fmt", L"yuv420p"});
+            if (spec.audio)
             {
                 args.insert(args.end(), {L"-c:a", L"aac", L"-b:a", L"192k", L"-shortest"});
             }
-            args.insert(args.end(), {L"-movflags", L"+faststart", L"-f", L"mp4", job.output});
+            args.insert(args.end(), {L"-movflags", L"+faststart", L"-f", L"mp4", spec.output});
         }
         auto writer = host.StartProcess(ffmpeg, args, true, false);
         if (!writer)
@@ -741,16 +992,13 @@ namespace rf
             return ExportResult::Failed;
         }
         const auto abort = [&](ExportResult result) {
-            reader.Stop();
             writer->Kill();
             int code = 0;
             writer->Finish(code, []() { return true; });
-            host.RemoveFile(job.output);
+            host.RemoveFile(spec.output);
             return result;
         };
-        PlayerComposer composer(job.frame, job.vars, job.plan, job.background);
-        const std::wstring length = FormatClock(job.duration);
-        Image frame;
+        const std::size_t bytes = std::size_t(spec.width) * std::size_t(spec.height) * sizeof(Color);
         int written = 0;
         for (int i = 0; i < total; ++i)
         {
@@ -758,13 +1006,12 @@ namespace rf
             {
                 return abort(ExportResult::Cancelled);
             }
-            if (!reader.Next(frame))
+            const Image* frame = frames(i);
+            if (frame == nullptr)
             {
                 break;
             }
-            const double t = i / fps;
-            const Image& out = composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length);
-            if (!writer->Write(out.pixels.data(), out.pixels.size() * sizeof(Color)))
+            if (frame->pixels.size() * sizeof(Color) != bytes || !writer->Write(frame->pixels.data(), bytes))
             {
                 error = FromUtf8(LastLines(writer->Log(), 3));
                 if (error.empty())
@@ -777,14 +1024,12 @@ namespace rf
         }
         if (written == 0)
         {
-            error = FromUtf8(LastLines(reader.Log(), 3));
             if (error.empty())
             {
-                error = L"не удалось прочитать кадры видео";
+                error = L"не удалось подготовить ни одного кадра";
             }
             return abort(ExportResult::Failed);
         }
-        reader.Stop();
         writer->CloseInput();
         int code = 0;
         if (!writer->Finish(code, [&]() { return step(total, total); }))
@@ -798,9 +1043,58 @@ namespace rf
             {
                 error = L"ffmpeg завершился с ошибкой " + std::to_wstring(code);
             }
-            host.RemoveFile(job.output);
+            host.RemoveFile(spec.output);
             return ExportResult::Failed;
         }
         return ExportResult::Done;
+    }
+
+    ExportResult ExportVideo(Host& host, const ExportJob& job, const ExportStep& step, std::wstring& error)
+    {
+        if (host.FfmpegPath().empty())
+        {
+            error = FfmpegMissingText();
+            return ExportResult::Failed;
+        }
+        const double fps = std::clamp(job.fps, 1.0, 60.0);
+        const int total = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        FrameStream reader(host, job.source, job.start, job.duration, fps, job.plan.videoW, job.plan.videoH);
+        if (!reader.Started())
+        {
+            error = L"не удалось запустить ffmpeg";
+            return ExportResult::Failed;
+        }
+        EncoderSpec spec;
+        spec.output = job.output;
+        spec.gif = job.gif;
+        spec.quality = job.quality;
+        spec.width = job.plan.outW;
+        spec.height = job.plan.outH;
+        spec.fps = fps;
+        spec.audio = job.audio && !job.gif;
+        spec.source = job.source;
+        spec.start = job.start;
+        spec.duration = job.duration;
+        PlayerComposer composer(job.frame, job.vars, job.plan, job.background);
+        const std::wstring length = FormatClock(job.duration);
+        Image frame;
+        const ExportResult result = Encode(host, spec, total, [&](int i) -> const Image* {
+            if (!reader.Next(frame))
+            {
+                if (i == 0)
+                {
+                    error = FromUtf8(LastLines(reader.Log(), 3));
+                    if (error.empty())
+                    {
+                        error = L"не удалось прочитать кадры видео";
+                    }
+                }
+                return nullptr;
+            }
+            const double t = i / fps;
+            return &composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length);
+        }, step, error);
+        reader.Stop();
+        return result;
     }
 }

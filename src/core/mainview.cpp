@@ -12,7 +12,7 @@ namespace rf
         constexpr int WindowH = 640;
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
-        const wchar_t* const AppVersion = L"0.3.0";
+        const wchar_t* const AppVersion = L"0.4.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
@@ -98,6 +98,10 @@ namespace rf
             {
                 s_.video.format = i;
             }
+            else if (mode_ == MusicMode)
+            {
+                s_.music.format = i;
+            }
             else
             {
                 s_.format = i;
@@ -130,6 +134,7 @@ namespace rf
         photoOnly_.push_back(clear);
         photoOnly_.push_back(thumbs_);
         BuildVideo();
+        BuildMusic();
 
         const int gx = 636;
         const int gw = WindowW - 4 - 4 - gx;
@@ -409,7 +414,8 @@ namespace rf
         }
         mode_ = s_.mode;
         tabs_->index = mode_;
-        preview_->rect.h = mode_ == VideoMode ? 296 : 350;
+        preview_->rect.w = mode_ == MusicMode ? 300 : 602;
+        preview_->rect.h = mode_ == PhotoMode ? 350 : 296;
     }
 
     void MainView::SaveSettings()
@@ -441,6 +447,7 @@ namespace rf
     {
         StopPlay();
         fetch_.reset();
+        levels_.reset();
         SaveSettings();
         return true;
     }
@@ -449,7 +456,7 @@ namespace rf
     {
         std::vector<std::wstring> images;
         std::wstring video;
-        bool audio = false;
+        std::wstring song;
         for (const auto& path : paths)
         {
             const std::wstring lower = ToLower(path);
@@ -460,7 +467,10 @@ namespace rf
             }
             else if (IsAudioFile(path))
             {
-                audio = true;
+                if (song.empty())
+                {
+                    song = path;
+                }
             }
             else
             {
@@ -472,10 +482,9 @@ namespace rf
             OpenVideo(video);
             return;
         }
-        if (images.empty() && audio)
+        if (!song.empty())
         {
-            SetMode(MusicMode);
-            Warn(L"Режим «Музыка» появится на следующем этапе.");
+            OpenTrack(song);
             return;
         }
         SetMode(PhotoMode);
@@ -535,6 +544,7 @@ namespace rf
         }
         removeButton_->enabled = current_ >= 0;
         sunken_->text = mode_ == VideoMode ? L"Видео во вдавленной области" : L"Фото во вдавленной области";
+        sunken_->enabled = mode_ != MusicMode;
         SyncVideoControls();
         root.dirty = true;
     }
@@ -594,9 +604,7 @@ namespace rf
         }
         if (mode_ == MusicMode)
         {
-            preview_->image = Image();
-            preview_->message = L"Режим «Музыка» появится на следующем этапе.";
-            root.dirty = true;
+            UpdateMusicPreview();
             return;
         }
         if (current_ < 0 || current_ >= int(photos_.size()))
@@ -649,7 +657,7 @@ namespace rf
         }
         else if (mode_ == MusicMode)
         {
-            first = L"Этот режим пока в разработке";
+            UpdateMusicStatus(first, second, third);
         }
         if (!flash_.empty())
         {
@@ -794,6 +802,15 @@ namespace rf
             }
             return;
         }
+        if (mode_ == MusicMode)
+        {
+            const std::wstring path = host_.AskOpenAudio(s_.musicFolder.empty() ? s_.openFolder : s_.musicFolder);
+            if (!path.empty())
+            {
+                OpenTrack(path);
+            }
+            return;
+        }
         const auto paths = host_.AskOpenImages(s_.openFolder);
         if (!paths.empty())
         {
@@ -815,6 +832,11 @@ namespace rf
             Warn(L"В буфере обмена нет видеофайла.\nСкопируйте ролик в Проводнике и вставьте снова.");
             return;
         }
+        if (mode_ == MusicMode)
+        {
+            Warn(L"В буфере обмена нет песни.\nСкопируйте файл в Проводнике и вставьте снова.");
+            return;
+        }
         Image img;
         if (host_.ClipboardImage(img))
         {
@@ -830,6 +852,11 @@ namespace rf
         if (mode_ == VideoMode)
         {
             SaveVideo();
+            return;
+        }
+        if (mode_ == MusicMode)
+        {
+            SaveMusic();
             return;
         }
         if (current_ < 0)
@@ -866,9 +893,9 @@ namespace rf
 
     void MainView::SaveAll()
     {
-        if (mode_ == VideoMode)
+        if (mode_ != PhotoMode)
         {
-            Warn(L"Видео сохраняется по одному: нажмите «Сохранить...».");
+            Warn(L"Пакетное сохранение есть только для фото: нажмите «Сохранить...».");
             return;
         }
         if (photos_.empty())
@@ -932,6 +959,11 @@ namespace rf
         if (mode_ == VideoMode)
         {
             Warn(L"Видео нельзя положить в буфер обмена: нажмите «Сохранить...».");
+            return;
+        }
+        if (mode_ == MusicMode)
+        {
+            CopyMusic();
             return;
         }
         if (current_ < 0)
@@ -1106,7 +1138,7 @@ namespace rf
 
     void MainView::EditTexts()
     {
-        if (mode_ == VideoMode)
+        if (mode_ != PhotoMode)
         {
             PlayerTextsView dialog(s_.playerMenu, s_.playerStatus, s_.playerTime, s_.frame.addressText);
             if (host_.RunModal(dialog) == 1)
@@ -1145,7 +1177,7 @@ namespace rf
     {
         ShowMessage(host_, L"О программе",
                     std::wstring(L"Ретро-рамка, версия ") + AppVersion +
-                        L"\n\nОформляет фото и видео в окна в стиле Windows 95, 98 и 2000.\nМузыка появится в следующей версии.",
+                        L"\n\nОформляет фото, видео и музыку в окна в стиле Windows 95, 98 и 2000.",
                     MessageKind::Info);
     }
 
@@ -1214,12 +1246,12 @@ namespace rf
         {
             return false;
         }
-        if (mode_ == VideoMode)
+        if (mode_ != PhotoMode)
         {
-            if (clip_ && (e.key == ui::KeyCode::Left || e.key == ui::KeyCode::Right))
+            if (Cur() && (e.key == ui::KeyCode::Left || e.key == ui::KeyCode::Right))
             {
                 StopPlay();
-                SetPosition(clip_->position + (e.key == ui::KeyCode::Left ? -1.0 : 1.0));
+                SetPosition(Cur()->position + (e.key == ui::KeyCode::Left ? -1.0 : 1.0));
                 return true;
             }
             return false;

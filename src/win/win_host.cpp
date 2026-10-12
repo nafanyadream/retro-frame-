@@ -730,6 +730,14 @@ namespace rf::win
         return RunSave(Owner(), folder, suggested, L"Сохранить видео", gif ? L"Анимация GIF" : L"Видео MP4", gif ? L"*.gif" : L"*.mp4", gif ? L"gif" : L"mp4");
     }
 
+    std::wstring WinHost::AskOpenAudio(const std::wstring& folder)
+    {
+        const auto r = RunOpen(Owner(), folder, L"Открыть песню",
+                               {{L"Музыка", L"*.mp3;*.flac;*.wav;*.ogg;*.m4a;*.aac;*.wma;*.opus"}, {L"Все файлы", L"*.*"}},
+                               false, false);
+        return r.empty() ? std::wstring() : r.front();
+    }
+
     std::wstring WinHost::AskOpenVideo(const std::wstring& folder)
     {
         const auto r = RunOpen(Owner(), folder, L"Открыть видео",
