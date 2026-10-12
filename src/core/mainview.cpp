@@ -15,7 +15,7 @@ namespace rf
         constexpr int WindowH = 640;
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
-        const wchar_t* const AppVersion = L"0.4.0";
+        const wchar_t* const AppVersion = L"0.5.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
