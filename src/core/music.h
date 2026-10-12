@@ -32,7 +32,7 @@ namespace rf
         float level = 0.0f;
     };
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int squareSize, bool square);
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square);
 
     class MusicComposer
     {

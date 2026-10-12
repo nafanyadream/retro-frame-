@@ -141,14 +141,17 @@ namespace rf
             return rb;
         };
         auto* r1 = radio(324, 104, L"Только окно", 0);
-        auto* r2 = radio(430, 80, L"Квадрат", 1);
-        squareSize_ = Place<ui::ComboBox>(r, 516, 460, 92, 21);
-        squareSize_->items = {L"1080 x 1080", L"720 x 720"};
-        squareSize_->onChange = [this](int i) {
-            (mode_ == MusicMode ? s_.music.squareSize : s_.video.squareSize) = SquareSizes[std::clamp(i, 0, 1)];
+        auto* r2 = radio(426, 70, L"На фоне", 1);
+        canvas_ = Place<ui::ComboBox>(r, 500, 460, 108, 21);
+        for (int i = 0; i < CanvasCount; ++i)
+        {
+            canvas_->items.push_back(CanvasName(i));
+        }
+        canvas_->onChange = [this](int i) {
+            (mode_ == MusicMode ? s_.music.canvas : s_.video.canvas) = std::clamp(i, 0, CanvasCount - 1);
             Changed();
         };
-        auto* l3 = AddLabel(r, 324, 490, 82, L"Фон квадрата:");
+        auto* l3 = AddLabel(r, 324, 490, 82, L"Фон:");
         bgSwatch_ = Place<ui::Swatch>(r, 408, 486, 24, 19);
         bgSwatch_->onClick = [this]() { PickBackground(); };
         bgPicture_ = AddCheck(r, 438, 488, 76, L"картинка");
@@ -201,7 +204,7 @@ namespace rf
         hint2->color = Rgb(0x40, 0x40, 0x40);
 
         mediaOnly_ = {playButton_, scrub_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
-                      resultBox, r1, r2, squareSize_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
+                      resultBox, r1, r2, canvas_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
         videoOnly_ = {l4, gifFps_, gifWidth_, hint2};
     }
 
@@ -309,8 +312,8 @@ namespace rf
         fragLabel_->text = has ? L"Длина фрагмента: " + FormatPrecise(TrimEnd() - TrimStart()) : std::wstring();
         const bool square = mode_ == MusicMode ? s_.music.square : s_.video.square;
         resultValue_ = square ? 1 : 0;
-        squareSize_->index = IndexOf(SquareSizes, int(std::size(SquareSizes)), mode_ == MusicMode ? s_.music.squareSize : s_.video.squareSize, 0);
-        squareSize_->enabled = square;
+        canvas_->index = std::clamp(mode_ == MusicMode ? s_.music.canvas : s_.video.canvas, 0, CanvasCount - 1);
+        canvas_->enabled = square;
         bgSwatch_->color = s_.background;
         bgSwatch_->enabled = square;
         bgPicture_->checked = s_.backgroundPicture && !s_.backgroundImage.Empty();
@@ -352,7 +355,9 @@ namespace rf
     {
         VideoTarget t;
         t.square = s_.video.square;
-        t.squareSize = s_.video.squareSize;
+        const CanvasSize c = CanvasAt(s_.video.canvas);
+        t.canvasW = c.width;
+        t.canvasH = c.height;
         t.width = s_.video.format == 3 ? s_.video.gifWidth : 0;
         return t;
     }
@@ -668,7 +673,7 @@ namespace rf
             Warn(L"Не удалось открыть картинку для фона:\n" + err);
             return;
         }
-        s_.backgroundImage = SquareBackground(img, s_.background, SquareSizes[0]);
+        s_.backgroundImage = std::max(img.width, img.height) > 1920 ? FitInside(img, 1920, 1920, false) : img;
         s_.backgroundPicture = true;
         bgKey_.clear();
         const std::wstring dir = host_.SettingsFolder();
@@ -704,13 +709,15 @@ namespace rf
         {
             const VideoPlan plan = PlanVideo(f, info.width, info.height, Target());
             const int k = plan.scale;
-            const int side = plan.outW / k;
+            const int w = plan.outW / k;
+            const int h = plan.outH / k;
             static const Image none;
             const Image& picture = s_.backgroundPicture ? s_.backgroundImage : none;
-            const std::wstring key = std::to_wstring(side) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width);
+            const std::wstring key = std::to_wstring(w) + L"x" + std::to_wstring(h) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width) +
+                                     L"x" + std::to_wstring(picture.height);
             if (key != bgKey_)
             {
-                bgPreview_ = SquareBackground(picture, s_.background, side);
+                bgPreview_ = CanvasBackground(picture, s_.background, w, h);
                 bgKey_ = key;
             }
             Image square = bgPreview_;
@@ -721,7 +728,7 @@ namespace rf
                 DrawCentered(window, ResizeSmooth(clip_->frame, std::max(2, plan.videoW / k), std::max(2, plan.videoH / k)), client);
             }
             Painter(square).DrawOpaque(window, plan.windowX / k, plan.windowY / k);
-            preview_->image = side > availW || side > availH ? FitInside(square, availW, availH, false) : square;
+            preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;
         }
         else
         {
@@ -756,7 +763,7 @@ namespace rf
         first = clip_->name + L" — " + std::to_wstring(info.width) + L" x " + std::to_wstring(info.height) + L", " + FpsText(info.fps) + L" к/с, " +
                 FormatClock(info.duration) + (info.hasAudio ? L"" : L", без звука");
         const VideoPlan plan = PlanVideo(VideoFrame(), info.width, info.height, Target());
-        second = s_.video.square ? L"Квадрат " + std::to_wstring(plan.outW) + L", окно " + std::to_wstring(plan.scale) + L"x"
+        second = s_.video.square ? std::to_wstring(plan.outW) + L"x" + std::to_wstring(plan.outH) + L", окно " + std::to_wstring(plan.scale) + L"x"
                                  : L"Итог " + std::to_wstring(plan.outW) + L" x " + std::to_wstring(plan.outH);
         third = L"Фрагмент: " + FormatPrecise(TrimEnd() - TrimStart());
         FrameSettings automatic = VideoFrame();
@@ -799,7 +806,7 @@ namespace rf
         job.plan = PlanVideo(job.frame, info.width, info.height, Target());
         if (job.plan.square)
         {
-            job.background = SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW);
+            job.background = CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH);
         }
         std::wstring err;
         const ExportResult outcome = WithProgress(path, [&](const ExportStep& step) { return ExportVideo(host_, job, step, err); });

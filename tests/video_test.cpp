@@ -100,10 +100,12 @@ namespace
         const rf::VideoPlan c = rf::PlanVideo(f, 1920, 1080, sq);
         Check(c.outW == 1080 && c.outH == 1080 && c.scale == 3 && c.windowX >= 0 && c.windowY >= 0 && c.windowW <= 1080 && c.windowH <= 1080 && c.windowW > 900,
               "plan: square 1080, window 3x fills most of it");
-        sq.squareSize = 720;
+        sq.canvasW = 720;
+        sq.canvasH = 720;
         const rf::VideoPlan d = rf::PlanVideo(f, 1920, 1080, sq);
         Check(d.outW == 720 && d.scale == 2 && d.windowW <= 720, "plan: square 720, 2x");
-        sq.squareSize = 1080;
+        sq.canvasW = 1080;
+        sq.canvasH = 1080;
         const rf::VideoPlan e = rf::PlanVideo(f, 1080, 1920, sq);
         Check(e.clientW >= rf::PlayerMinWidth && e.videoW < e.clientW * e.scale && e.windowH <= 1080, "plan: portrait video letterboxed in square");
         rf::VideoTarget gif;
@@ -114,6 +116,35 @@ namespace
         manual.scale = 2;
         const rf::VideoPlan h = rf::PlanVideo(manual, 1920, 1080, sq);
         Check(h.scale == 2 && h.windowW <= 1080, "plan: manual scale in square");
+        rf::VideoTarget tall;
+        tall.square = true;
+        tall.canvasW = 1080;
+        tall.canvasH = 1920;
+        const rf::VideoPlan v1 = rf::PlanVideo(f, 1920, 1080, tall);
+        Check(v1.outW == 1080 && v1.outH == 1920 && v1.scale == 3 && v1.windowW <= 1080 && v1.windowW > 900 && v1.windowY > 300 &&
+                  v1.windowY + v1.windowH <= 1920 && std::abs(v1.windowY - (1920 - v1.windowH) / 2) <= 1,
+              "plan: 9:16 frame, wide video in the middle");
+        const rf::VideoPlan v2 = rf::PlanVideo(f, 1080, 1920, tall);
+        Check(v2.windowH <= 1920 * 92 / 100 && v2.windowW <= 1080 && v2.videoH > v2.videoW && v2.windowH > 1200, "plan: 9:16 frame, phone video fills height");
+        rf::VideoTarget insta = tall;
+        insta.canvasH = 1350;
+        const rf::VideoPlan v3 = rf::PlanVideo(f, 1920, 1080, insta);
+        Check(v3.outW == 1080 && v3.outH == 1350 && v3.windowH <= 1350, "plan: 4:5 frame");
+        rf::VideoTarget gifTall = tall;
+        gifTall.width = 480;
+        const rf::VideoPlan v4 = rf::PlanVideo(f, 1920, 1080, gifTall);
+        Check(v4.outW == 480 && v4.outH == 852 && v4.outH % 2 == 0, "plan: gif width limit keeps 9:16 shape");
+        const rf::Image wide(400, 100, rf::Rgb(255, 0, 0));
+        rf::Image picture = wide;
+        for (int y = 0; y < 100; ++y)
+        {
+            for (int x = 0; x < 400; ++x)
+            {
+                picture.Row(y)[x] = x < 200 ? rf::Rgb(255, 0, 0) : rf::Rgb(0, 0, 255);
+            }
+        }
+        const rf::Image bg = rf::CanvasBackground(picture, rf::Rgb(0, 0, 0), 90, 160);
+        Check(bg.width == 90 && bg.height == 160 && rf::Opaque(bg.Row(80)[2]) != rf::Opaque(bg.Row(80)[87]), "background picture is cropped to the frame shape");
     }
     bool Has(const std::wstring& text, const std::wstring& part)
     {
@@ -279,7 +310,7 @@ int main(int argc, char** argv)
     sq.square = true;
     sq.width = 480;
     gif.plan = rf::PlanVideo(gif.frame, 320, 240, sq);
-    gif.background = rf::SquareBackground(rf::Image(), rf::Rgb(0x3A, 0x6E, 0xA5), gif.plan.outW);
+    gif.background = rf::CanvasBackground(rf::Image(), rf::Rgb(0x3A, 0x6E, 0xA5), gif.plan.outW, gif.plan.outH);
     gif.output = dir + L"/out.gif";
     rf::MediaInfo og;
     Check(rf::ExportVideo(host, gif, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, gif.output, og, err) && og.width == 480 &&
@@ -321,7 +352,7 @@ int main(int argc, char** argv)
         rf::Image big;
         rf::FrameStream two(host, clip, 1.2, 0.0, 0.0, sp.videoW, sp.videoH);
         two.Next(big);
-        rf::PlayerComposer s(job.frame, job.vars, sp, rf::SquareBackground(rf::Image(), rf::Rgb(0x3A, 0x6E, 0xA5), sp.outW));
+        rf::PlayerComposer s(job.frame, job.vars, sp, rf::CanvasBackground(rf::Image(), rf::Rgb(0x3A, 0x6E, 0xA5), sp.outW, sp.outH));
         rftest::WritePpm(out + "/player_square.ppm", s.Compose(big, 0.4, L"00:01 / 00:03"));
     }
     {

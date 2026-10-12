@@ -941,19 +941,27 @@ namespace rf
         const int fixed = frame.scale >= 1 && frame.scale <= 4 ? frame.scale : 0;
         if (target.square)
         {
-            int side = target.width > 0 ? std::min(target.width, target.squareSize) : target.squareSize;
-            side = std::max(120, side & ~1);
+            int outW = std::max(2, target.canvasW);
+            int outH = std::max(2, target.canvasH);
+            if (target.width > 0 && target.width < outW)
+            {
+                outH = int(std::lround(double(outH) * target.width / outW));
+                outW = target.width;
+            }
+            outW = std::max(120, outW & ~1);
+            outH = std::max(120, outH & ~1);
             p.square = true;
-            p.outW = side;
-            p.outH = side;
-            const int room = side * 92 / 100;
+            p.outW = outW;
+            p.outH = outH;
+            const int roomW = outW * 92 / 100;
+            const int roomH = outH * 92 / 100;
             int k = fixed;
             if (k == 0)
             {
                 k = 1;
                 for (int cand = 4; cand >= 1; --cand)
                 {
-                    if (room / cand - chromeW >= PlayerMinWidth && room / cand - chromeH >= 90)
+                    if (roomW / cand - chromeW >= PlayerMinWidth && roomH / cand - chromeH >= 90)
                     {
                         k = cand;
                         break;
@@ -961,8 +969,8 @@ namespace rf
                 }
             }
             p.scale = k;
-            const int maxW = std::max(PlayerMinWidth, room / k - chromeW);
-            const int maxH = std::max(40, room / k - chromeH);
+            const int maxW = std::max(PlayerMinWidth, roomW / k - chromeW);
+            const int maxH = std::max(40, roomH / k - chromeH);
             int cw = maxW;
             int ch = int(std::lround(cw / aspect));
             if (ch > maxH)
@@ -983,8 +991,8 @@ namespace rf
             p.videoH = std::max(2, vh);
             p.windowW = (p.clientW + chromeW) * k;
             p.windowH = (p.clientH + chromeH) * k;
-            p.windowX = std::max(0, (side - p.windowW) / 2);
-            p.windowY = std::max(0, (side - p.windowH) / 2);
+            p.windowX = std::max(0, (outW - p.windowW) / 2);
+            p.windowY = std::max(0, (outH - p.windowH) / 2);
             return p;
         }
         int vw = sw;
@@ -1032,15 +1040,21 @@ namespace rf
         return p;
     }
 
-    Image SquareBackground(const Image& picture, Color color, int size)
+    Image CanvasBackground(const Image& picture, Color color, int width, int height)
     {
         if (picture.Empty())
         {
-            return Image(size, size, Opaque(color));
+            return Image(width, height, Opaque(color));
         }
-        const int side = std::min(picture.width, picture.height);
-        const Image square = Crop(picture, Rect{(picture.width - side) / 2, (picture.height - side) / 2, side, side});
-        Image out = ResizeSmooth(square, size, size);
+        int cw = picture.width;
+        int ch = int(std::lround(double(cw) * height / width));
+        if (ch > picture.height)
+        {
+            ch = picture.height;
+            cw = std::max(1, int(std::lround(double(ch) * width / height)));
+        }
+        const Image part = Crop(picture, Rect{(picture.width - cw) / 2, (picture.height - ch) / 2, cw, ch});
+        Image out = ResizeSmooth(part, width, height);
         for (auto& c : out.pixels)
         {
             c = Alpha(c) == 255 ? c : Opaque(Over(Opaque(color), c));

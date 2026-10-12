@@ -225,7 +225,7 @@ namespace rf
         ui::Button* startHere_ = nullptr;
         ui::Button* endHere_ = nullptr;
         ui::Label* fragLabel_ = nullptr;
-        ui::ComboBox* squareSize_ = nullptr;
+        ui::ComboBox* canvas_ = nullptr;
         ui::Swatch* bgSwatch_ = nullptr;
         ui::CheckBox* bgPicture_ = nullptr;
         ui::Button* bgLoad_ = nullptr;

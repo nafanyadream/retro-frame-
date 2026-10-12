@@ -91,7 +91,8 @@ namespace rf
     struct VideoTarget
     {
         bool square = false;
-        int squareSize = 1080;
+        int canvasW = 1080;
+        int canvasH = 1080;
         int width = 0;
     };
 
@@ -112,7 +113,7 @@ namespace rf
     };
 
     VideoPlan PlanVideo(const FrameSettings& frame, int sourceW, int sourceH, const VideoTarget& target);
-    Image SquareBackground(const Image& picture, Color color, int size);
+    Image CanvasBackground(const Image& picture, Color color, int width, int height);
 
     class PlayerComposer
     {

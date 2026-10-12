@@ -32,7 +32,7 @@ namespace rf
     {
         int format = 0;
         bool square = false;
-        int squareSize = 1080;
+        int canvas = 0;
         int gifFps = 15;
         int gifWidth = 0;
         int fps = 0;
@@ -42,7 +42,7 @@ namespace rf
     {
         int format = 0;
         bool square = false;
-        int squareSize = 1080;
+        int canvas = 0;
         int fade = 2;
         bool spin = true;
         bool meter = true;
@@ -79,6 +79,15 @@ namespace rf
     constexpr int CustomIconIndex = 100;
     constexpr int NoIconIndex = -1;
     constexpr int SquareSizes[] = {1080, 720};
+
+    struct CanvasSize
+    {
+        int width;
+        int height;
+    };
+
+    constexpr CanvasSize CanvasSizes[] = {{1080, 1080}, {720, 720}, {1080, 1350}, {1080, 1920}, {720, 1280}, {1920, 1080}};
+    constexpr int CanvasCount = int(sizeof(CanvasSizes) / sizeof(CanvasSizes[0]));
     constexpr int GifFpsChoices[] = {10, 12, 15, 20, 25, 30};
     constexpr int GifWidthChoices[] = {0, 800, 640, 480, 320};
     constexpr int FadeChoices[] = {0, 1, 2, 3, 5};
@@ -88,4 +97,6 @@ namespace rf
     void ParseSettings(const std::string& text, AppSettings& s);
     AppSettings DefaultSettings();
     ModeLook DefaultLook(int mode);
+    CanvasSize CanvasAt(int index);
+    std::wstring CanvasName(int index);
 }

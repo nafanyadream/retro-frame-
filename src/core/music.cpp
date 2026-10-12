@@ -199,17 +199,19 @@ namespace rf
         }
     }
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int squareSize, bool square)
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square)
     {
         MusicPlan p;
         p.square = square;
-        const int side = std::max(120, squareSize & ~1);
+        const int outW = std::max(120, canvasW & ~1);
+        const int outH = std::max(120, canvasH & ~1);
         const FrameGeometry g = MeasureFrame(MusicWindow(frame), MusicClientW, MusicClientH);
-        const int room = square ? side * 92 / 100 : side;
+        const int roomW = square ? outW * 92 / 100 : outW;
+        const int roomH = square ? outH * 92 / 100 : outH;
         int fits = 1;
         for (int k = 4; k >= 1; --k)
         {
-            if (g.width * k <= room && g.height * k <= room)
+            if (g.width * k <= roomW && g.height * k <= roomH)
             {
                 fits = k;
                 break;
@@ -221,10 +223,10 @@ namespace rf
         {
             p.windowW = g.width * p.scale;
             p.windowH = g.height * p.scale;
-            p.windowX = std::max(0, (side - p.windowW) / 2);
-            p.windowY = std::max(0, (side - p.windowH) / 2);
-            p.outW = side;
-            p.outH = side;
+            p.windowX = std::max(0, (outW - p.windowW) / 2);
+            p.windowY = std::max(0, (outH - p.windowH) / 2);
+            p.outW = outW;
+            p.outH = outH;
             return p;
         }
         if ((g.width * p.scale) % 2 != 0)
@@ -302,8 +304,9 @@ namespace rf
             return window;
         }
         const int k = plan_.scale;
-        const int side = plan_.outW / k;
-        Image out = background.width == side && background.height == side ? background : Image(side, side, Rgb(0, 0, 0));
+        const int w = plan_.outW / k;
+        const int h = plan_.outH / k;
+        Image out = background.width == w && background.height == h ? background : Image(w, h, Rgb(0, 0, 0));
         Blit(out, window, plan_.windowX / k, plan_.windowY / k);
         return out;
     }

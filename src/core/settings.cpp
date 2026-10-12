@@ -234,13 +234,13 @@ namespace rf
         o << "playerTime=" << (s.playerTime ? 1 : 0) << "\n";
         o << "video.format=" << s.video.format << "\n";
         o << "video.square=" << (s.video.square ? 1 : 0) << "\n";
-        o << "video.squareSize=" << s.video.squareSize << "\n";
+        o << "video.canvas=" << s.video.canvas << "\n";
         o << "video.gifFps=" << s.video.gifFps << "\n";
         o << "video.gifWidth=" << s.video.gifWidth << "\n";
         o << "video.fps=" << s.video.fps << "\n";
         o << "music.format=" << s.music.format << "\n";
         o << "music.square=" << (s.music.square ? 1 : 0) << "\n";
-        o << "music.squareSize=" << s.music.squareSize << "\n";
+        o << "music.canvas=" << s.music.canvas << "\n";
         o << "music.fade=" << s.music.fade << "\n";
         o << "music.spin=" << (s.music.spin ? 1 : 0) << "\n";
         o << "music.meter=" << (s.music.meter ? 1 : 0) << "\n";
@@ -381,13 +381,26 @@ namespace rf
         getBool("playerTime", s.playerTime);
         getInt("video.format", s.video.format, 0, 3);
         getBool("video.square", s.video.square);
-        getInt("video.squareSize", s.video.squareSize, 240, 2160);
+        const auto getCanvas = [&](const std::string& prefix, int& target) {
+            if (get(prefix + "canvas") != nullptr)
+            {
+                getInt(prefix + "canvas", target, 0, CanvasCount - 1);
+                return;
+            }
+            int old = 0;
+            getInt(prefix + "squareSize", old, 0, 10000);
+            if (old == 720)
+            {
+                target = 1;
+            }
+        };
+        getCanvas("video.", s.video.canvas);
         getInt("video.gifFps", s.video.gifFps, 5, 50);
         getInt("video.gifWidth", s.video.gifWidth, 0, 4000);
         getInt("video.fps", s.video.fps, 0, 60);
         getInt("music.format", s.music.format, 0, 3);
         getBool("music.square", s.music.square);
-        getInt("music.squareSize", s.music.squareSize, 240, 2160);
+        getCanvas("music.", s.music.canvas);
         getInt("music.fade", s.music.fade, 0, 30);
         getBool("music.spin", s.music.spin);
         getBool("music.meter", s.music.meter);
@@ -421,5 +434,24 @@ namespace rf
         getList("library", s.library);
         getInt("windowX", s.windowX, -100000, 100000);
         getInt("windowY", s.windowY, -100000, 100000);
+    }
+
+    CanvasSize CanvasAt(int index)
+    {
+        return CanvasSizes[std::clamp(index, 0, CanvasCount - 1)];
+    }
+
+    std::wstring CanvasName(int index)
+    {
+        const CanvasSize c = CanvasAt(index);
+        int a = c.width;
+        int b = c.height;
+        while (b != 0)
+        {
+            const int t = a % b;
+            a = b;
+            b = t;
+        }
+        return std::to_wstring(c.width / a) + L":" + std::to_wstring(c.height / a) + L", " + std::to_wstring(c.width) + L"x" + std::to_wstring(c.height);
     }
 }

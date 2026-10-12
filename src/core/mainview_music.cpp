@@ -132,7 +132,8 @@ namespace rf
 
     MusicPlan MainView::MusicPlanFor(const FrameSettings& frame) const
     {
-        return PlanMusic(frame, s_.music.square ? s_.music.squareSize : SquareSizes[0], s_.music.square);
+        const CanvasSize c = s_.music.square ? CanvasAt(s_.music.canvas) : CanvasSize{SquareSizes[0], SquareSizes[0]};
+        return PlanMusic(frame, c.width, c.height, s_.music.square);
     }
 
     void MainView::OpenTrack(const std::wstring& path)
@@ -211,13 +212,15 @@ namespace rf
         const MusicPlan plan = MusicPlanFor(f);
         if (plan.square)
         {
-            const int side = plan.outW / plan.scale;
+            const int w = plan.outW / plan.scale;
+            const int h = plan.outH / plan.scale;
             static const Image none;
             const Image& picture = s_.backgroundPicture ? s_.backgroundImage : none;
-            const std::wstring key = std::to_wstring(side) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width);
+            const std::wstring key = std::to_wstring(w) + L"x" + std::to_wstring(h) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width) +
+                                     L"x" + std::to_wstring(picture.height);
             if (key != bgKey_)
             {
-                bgPreview_ = SquareBackground(picture, s_.background, side);
+                bgPreview_ = CanvasBackground(picture, s_.background, w, h);
                 bgKey_ = key;
             }
         }
@@ -246,8 +249,8 @@ namespace rf
         first = track_->name + L" — " + FormatClock(track_->info.duration) + (track_->artist.empty() ? std::wstring() : L", " + track_->artist);
         const FrameSettings f = MusicFrameSettings();
         const MusicPlan plan = MusicPlanFor(f);
-        const std::wstring kind = s_.music.format == 3 ? L"PNG " : plan.square ? L"Квадрат " : L"Окно ";
-        second = plan.square ? kind + std::to_wstring(plan.outW) + L", окно " + std::to_wstring(plan.scale) + L"x"
+        const std::wstring kind = s_.music.format == 3 ? L"PNG " : plan.square ? L"" : L"Окно ";
+        second = plan.square ? kind + std::to_wstring(plan.outW) + L"x" + std::to_wstring(plan.outH) + L", окно " + std::to_wstring(plan.scale) + L"x"
                              : kind + std::to_wstring(plan.outW) + L" x " + std::to_wstring(plan.outH) + L", " + std::to_wstring(plan.scale) + L"x";
         third = L"Фрагмент: " + FormatPrecise(TrimEnd() - TrimStart());
         FrameSettings automatic = f;
@@ -263,7 +266,7 @@ namespace rf
         }
         const FrameSettings f = MusicFrameSettings();
         const MusicPlan plan = MusicPlanFor(f);
-        const Image background = plan.square ? SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.outW) : Image();
+        const Image background = plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.outW, plan.outH) : Image();
         MusicComposer composer(f, FrameVars{track_->name, 0, 0, L""}, plan, background, track_->artist, track_->title, track_->cover);
         const double start = TrimStart();
         const double length = std::max(0.001, TrimEnd() - start);
@@ -326,7 +329,8 @@ namespace rf
         job.frame = MusicFrameSettings();
         job.vars = FrameVars{track_->name, 0, 0, L""};
         job.plan = MusicPlanFor(job.frame);
-        job.background = job.plan.square ? SquareBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW) : Image();
+        job.background =
+            job.plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH) : Image();
         job.artist = track_->artist;
         job.title = track_->title;
         job.cover = track_->cover;

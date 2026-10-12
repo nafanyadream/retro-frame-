@@ -406,7 +406,7 @@ namespace rf
         const std::wstring backgroundPath = JoinPath(dir, L"background.png");
         if (host_.FileExists(backgroundPath) && host_.ReadImage(backgroundPath, img, err))
         {
-            s_.backgroundImage = SquareBackground(img, s_.background, SquareSizes[0]);
+            s_.backgroundImage = std::max(img.width, img.height) > 1920 ? FitInside(img, 1920, 1920, false) : img;
         }
         library_.clear();
         for (const auto& entry : s_.library)

@@ -104,6 +104,15 @@ int main(int argc, char** argv)
         rf::ParseSettings(rf::SerializeSettings(now), back);
         Check(back.looks[rf::MusicMode].iconIndex == 4 && back.music.fade == 5 && back.music.square && back.music.fps == 50 && back.video.fps == 24,
               "music settings round trip");
+        rf::AppSettings legacy = rf::DefaultSettings();
+        rf::ParseSettings("video.squareSize=720\nmusic.squareSize=1080\n", legacy);
+        rf::AppSettings tallFrame = rf::DefaultSettings();
+        tallFrame.music.canvas = 3;
+        rf::AppSettings tallBack = rf::DefaultSettings();
+        rf::ParseSettings(rf::SerializeSettings(tallFrame), tallBack);
+        Check(legacy.video.canvas == 1 && legacy.music.canvas == 0 && tallBack.music.canvas == 3 && rf::CanvasName(3) == L"9:16, 1080x1920" &&
+                  rf::CanvasName(2) == L"4:5, 1080x1350",
+              "frame sizes: old square setting and new frame setting");
         rf::AppSettings odd = rf::DefaultSettings();
         rf::ParseSettings("music.fps=37\nvideo.fps=33\n", odd);
         Check(odd.music.fps == 25 && odd.video.fps == 0 && rf::DefaultSettings().music.fps == 25 && rf::DefaultSettings().video.fps == 0,
@@ -111,18 +120,23 @@ int main(int argc, char** argv)
         Check(!rf::DefaultSettings().music.square && !old.music.square, "music result is only the window by default");
     }
 
-    const rf::MusicPlan p1080 = rf::PlanMusic(Song(0), 1080, true);
-    const rf::MusicPlan p720 = rf::PlanMusic(Song(0), 720, true);
+    const rf::MusicPlan p1080 = rf::PlanMusic(Song(0), 1080, 1080, true);
+    const rf::MusicPlan p720 = rf::PlanMusic(Song(0), 720, 720, true);
     Check(p1080.scale == 3 && p1080.windowW <= 1080 && p1080.windowW > 850 && p720.scale == 2 && p720.windowW <= 720 && p1080.outW == 1080 && p1080.outH == 1080,
           "plan: window 3x in 1080, 2x in 720");
     rf::FrameSettings manual = Song(0);
     manual.scale = 4;
-    Check(rf::PlanMusic(manual, 1080, true).scale == 3, "plan: too big manual scale falls back to fitting one");
-    const rf::MusicPlan w1080 = rf::PlanMusic(Song(0), 1080, false);
+    Check(rf::PlanMusic(manual, 1080, 1080, true).scale == 3, "plan: too big manual scale falls back to fitting one");
+    const rf::MusicPlan w1080 = rf::PlanMusic(Song(0), 1080, 1080, false);
     Check(!w1080.square && w1080.scale == 3 && w1080.outW == w1080.windowW && w1080.outH == w1080.windowH && w1080.outW <= 1080 && w1080.outH <= 1080 &&
               w1080.windowX == 0 && w1080.windowY == 0,
           "plan: only the window, 3x");
-    Check(rf::PlanMusic(manual, 1080, false).scale == 4, "plan: only the window keeps manual 4x");
+    Check(rf::PlanMusic(manual, 1080, 1080, false).scale == 4, "plan: only the window keeps manual 4x");
+    const rf::MusicPlan tall = rf::PlanMusic(Song(0), 1080, 1920, true);
+    Check(tall.outW == 1080 && tall.outH == 1920 && tall.scale == 3 && std::abs(tall.windowY - (1920 - tall.windowH) / 2) <= 1 && tall.windowX >= 0,
+          "plan: 9:16 frame, player in the middle");
+    const rf::MusicPlan insta = rf::PlanMusic(Song(0), 1080, 1350, true);
+    Check(insta.outW == 1080 && insta.outH == 1350 && insta.scale == 3, "plan: 4:5 frame");
     {
         bool even = true;
         for (int k = 1; k <= 4; ++k)
@@ -136,7 +150,7 @@ int main(int argc, char** argv)
                 f.status = variant % 4 >= 2;
                 f.statusFields = {L"Воспроизведение", L"{время}"};
                 f.menuItems = {L"Файл", L"Вид"};
-                const rf::MusicPlan w = rf::PlanMusic(f, 1080, false);
+                const rf::MusicPlan w = rf::PlanMusic(f, 1080, 1080, false);
                 even = even && w.scale == k && w.outW % 2 == 0 && w.outH % 2 == 0 && w.clientW - rf::MusicClientW <= 1 && w.clientH - rf::MusicClientH <= 1;
             }
         }
@@ -192,7 +206,7 @@ int main(int argc, char** argv)
     job.frame = Song(2);
     job.vars.name = L"песня.mp3";
     job.plan = p1080;
-    job.background = rf::SquareBackground(rf::Image(), rf::Rgb(0x2E, 0x5B, 0x88), 1080);
+    job.background = rf::CanvasBackground(rf::Image(), rf::Rgb(0x2E, 0x5B, 0x88), 1080, 1080);
     job.artist = info.artist;
     job.title = info.title;
     job.cover = cover;
@@ -203,6 +217,19 @@ int main(int argc, char** argv)
     const std::vector<float> outLevels = Levels(host, job.output);
     Check(outLevels.size() > 90 && outLevels[1] + 0.1f < outLevels[75] && outLevels[outLevels.size() - 2] + 0.1f < outLevels[75], "fade in and out at fragment edges");
 
+    {
+        rf::MusicJob tallJob = job;
+        tallJob.output = dir + L"/song_tall.mp4";
+        tallJob.duration = 1.0;
+        tallJob.fade = 0.0;
+        tallJob.plan = tall;
+        tallJob.background = rf::CanvasBackground(rf::Image(), rf::Rgb(0x2E, 0x5B, 0x88), 1080, 1920);
+        rf::MediaInfo t;
+        Check(rf::ExportMusic(host, tallJob, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, tallJob.output, t, err) &&
+                  t.width == 1080 && t.height == 1920 && t.hasAudio,
+              "music mp4 9:16 with sound");
+    }
+
     rf::MusicJob cancel = job;
     cancel.output = dir + L"/song_cancel.mp4";
     Check(rf::ExportMusic(host, cancel, [](int i, int) { return i < 10; }, err) == rf::ExportResult::Cancelled && !host.FileExists(cancel.output), "cancel music export");
@@ -210,9 +237,9 @@ int main(int argc, char** argv)
     {
         rf::MusicComposer red(Song(2), job.vars, p1080, job.background, info.artist, info.title, cover);
         rftest::WritePpm(out + "/music_square.ppm", red.Compose(rf::MusicFrameAt(93.0 - 60.0, 205.0 - 60.0, 3.5, true, true, levels)));
-        rf::MusicComposer plainSong(Song(0), job.vars, p720, rf::SquareBackground(rf::Image(), rf::Rgb(0, 0x80, 0x80), 720), L"", L"bare", rf::Image());
+        rf::MusicComposer plainSong(Song(0), job.vars, p720, rf::CanvasBackground(rf::Image(), rf::Rgb(0, 0x80, 0x80), 720, 720), L"", L"bare", rf::Image());
         rftest::WritePpm(out + "/music_nocover.ppm", plainSong.Compose(rf::MusicFrameAt(0.0, 3.0, 0.0, true, true, {})));
-        const rf::Image small = red.Small(rf::MusicFrameAt(10.0, 30.0, 10.0, true, true, levels), rf::SquareBackground(rf::Image(), rf::Rgb(0x2E, 0x5B, 0x88), 360));
+        const rf::Image small = red.Small(rf::MusicFrameAt(10.0, 30.0, 10.0, true, true, levels), rf::CanvasBackground(rf::Image(), rf::Rgb(0x2E, 0x5B, 0x88), 360, 360));
         Check(small.width == 360 && small.height == 360, "small preview is square at 1x");
         rftest::WritePpm(out + "/music_small.ppm", small);
         rf::MusicComposer alone(Song(2), job.vars, w1080, rf::Image(), info.artist, info.title, cover);
@@ -306,12 +333,22 @@ int main(int argc, char** argv)
         click(240, 59);
         settle(2);
         Check(host.written == host.saveAnswer && host.writtenImage.width == 1080 && host.writtenImage.height == 1080, "save png frame 1080");
+        main.MutableSettings().music.canvas = 3;
+        main.Refresh();
+        shot("ui_music_tall");
+        host.saveAnswer = dir + L"/still_tall.png";
+        click(240, 59);
+        settle(2);
+        Check(host.writtenImage.width == 1080 && host.writtenImage.height == 1920, "save png frame 9:16");
+        rftest::WritePpm(out + "/ui_music_tall_still.ppm", host.writtenImage);
+        main.MutableSettings().music.canvas = 0;
+        main.Refresh();
         rftest::WritePpm(out + "/ui_music_still.ppm", host.writtenImage);
         main.root.Key(rf::ui::KeyEvent{rf::ui::KeyCode::Letter, L'C', false, true, false});
         settle(1);
         Check(host.clipboard.width == 1080, "ctrl+c copies the frame");
         main.MutableSettings().music.format = 1;
-        main.MutableSettings().music.squareSize = 720;
+        main.MutableSettings().music.canvas = 1;
         main.Refresh();
         main.root.Wheel(435, 524, 120);
         settle(1);
