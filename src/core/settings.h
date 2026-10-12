@@ -29,6 +29,20 @@ namespace rf
         bool corner = false;
     };
 
+    struct LookPreset
+    {
+        std::wstring name;
+        Style style = Style::Win98;
+        int scheme = 0;
+        FrameColors colors;
+        bool active = true;
+        bool sunken = false;
+        bool grip = true;
+        int scale = 0;
+        ModeLook look;
+        Image icon;
+    };
+
     struct VideoSettings
     {
         int format = 0;
@@ -65,6 +79,7 @@ namespace rf
         VideoSettings video;
         MusicSettings music;
         EffectSettings effects;
+        std::vector<LookPreset> presets;
         Color background = Rgb(0x3A, 0x6E, 0xA5);
         bool backgroundPicture = false;
         bool previewSound = true;
@@ -103,5 +118,6 @@ namespace rf
     AppSettings DefaultSettings();
     ModeLook DefaultLook(int mode);
     CanvasSize CanvasAt(int index);
+    std::vector<LookPreset> StarterPresets();
     std::wstring CanvasName(int index);
 }

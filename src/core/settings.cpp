@@ -3,6 +3,7 @@
 #include "utf.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <sstream>
 
@@ -184,7 +185,56 @@ namespace rf
         {
             s.looks[std::size_t(m)] = DefaultLook(m);
         }
+        s.presets = StarterPresets();
         return s;
+    }
+
+    std::vector<LookPreset> StarterPresets()
+    {
+        int burgundy = 0;
+        int sea = 0;
+        for (int i = 0; i < SchemeCount(); ++i)
+        {
+            if (SchemeName(i) == L"Бордовая")
+            {
+                burgundy = i;
+            }
+            if (SchemeName(i) == L"Морская волна")
+            {
+                sea = i;
+            }
+        }
+        std::vector<LookPreset> out;
+        LookPreset a;
+        a.name = L"Windows 95, классика";
+        a.style = Style::Win95;
+        a.scheme = 0;
+        a.colors = SchemeColors(0, a.style);
+        a.look.iconIndex = 0;
+        a.look.menu = true;
+        a.look.status = true;
+        out.push_back(a);
+        LookPreset b;
+        b.name = L"Windows 98, бордовая";
+        b.style = Style::Win98;
+        b.scheme = burgundy;
+        b.colors = SchemeColors(burgundy, b.style);
+        b.look.iconIndex = 2;
+        b.look.menu = true;
+        b.look.toolbar = true;
+        b.look.address = true;
+        out.push_back(b);
+        LookPreset c;
+        c.name = L"Windows 2000, диалог";
+        c.style = Style::Win2000;
+        c.scheme = sea;
+        c.colors = SchemeColors(sea, c.style);
+        c.look.iconIndex = NoIconIndex;
+        c.look.kind = WindowKind::Dialog;
+        c.look.titleFromName = false;
+        c.look.customTitle = L"Свойства";
+        out.push_back(c);
+        return out;
     }
 
     std::string SerializeSettings(const AppSettings& s)
@@ -268,6 +318,49 @@ namespace rf
         o << "library=" << EscapeList(s.library) << "\n";
         o << "windowX=" << s.windowX << "\n";
         o << "windowY=" << s.windowY << "\n";
+        o << "presets=" << s.presets.size() << "\n";
+        for (std::size_t i = 0; i < s.presets.size(); ++i)
+        {
+            const LookPreset& pr = s.presets[i];
+            const std::string p = "preset." + std::to_string(i) + ".";
+            o << p << "name=" << Escape(pr.name) << "\n";
+            o << p << "style=" << int(pr.style) << "\n";
+            o << p << "scheme=" << pr.scheme << "\n";
+            o << p << "face=" << Hex(pr.colors.face) << "\n";
+            o << p << "active1=" << Hex(pr.colors.active1) << "\n";
+            o << p << "active2=" << Hex(pr.colors.active2) << "\n";
+            o << p << "inactive1=" << Hex(pr.colors.inactive1) << "\n";
+            o << p << "inactive2=" << Hex(pr.colors.inactive2) << "\n";
+            o << p << "titleText=" << Hex(pr.colors.titleText) << "\n";
+            o << p << "inactiveText=" << Hex(pr.colors.inactiveText) << "\n";
+            o << p << "text=" << Hex(pr.colors.text) << "\n";
+            o << p << "window=" << Hex(pr.colors.window) << "\n";
+            o << p << "select=" << Hex(pr.colors.select) << "\n";
+            o << p << "active=" << (pr.active ? 1 : 0) << "\n";
+            o << p << "sunken=" << (pr.sunken ? 1 : 0) << "\n";
+            o << p << "grip=" << (pr.grip ? 1 : 0) << "\n";
+            o << p << "scale=" << pr.scale << "\n";
+            o << p << "icon=" << pr.look.iconIndex << "\n";
+            o << p << "titleFromName=" << (pr.look.titleFromName ? 1 : 0) << "\n";
+            o << p << "customTitle=" << Escape(pr.look.customTitle) << "\n";
+            o << p << "kind=" << int(pr.look.kind) << "\n";
+            o << p << "menu=" << (pr.look.menu ? 1 : 0) << "\n";
+            o << p << "status=" << (pr.look.status ? 1 : 0) << "\n";
+            o << p << "toolbar=" << (pr.look.toolbar ? 1 : 0) << "\n";
+            o << p << "address=" << (pr.look.address ? 1 : 0) << "\n";
+            o << p << "corner=" << (pr.look.corner ? 1 : 0) << "\n";
+            if (pr.icon.width == 16 && pr.icon.height == 16)
+            {
+                std::string pixels;
+                for (Color px : pr.icon.pixels)
+                {
+                    char buf[9];
+                    std::snprintf(buf, sizeof(buf), "%08X", unsigned(px));
+                    pixels += buf;
+                }
+                o << p << "iconData=" << pixels << "\n";
+            }
+        }
         return o.str();
     }
 
@@ -458,6 +551,72 @@ namespace rf
         getList("library", s.library);
         getInt("windowX", s.windowX, -100000, 100000);
         getInt("windowY", s.windowY, -100000, 100000);
+        if (get("presets") != nullptr)
+        {
+            int count = 0;
+            getInt("presets", count, 0, 200);
+            s.presets.clear();
+            for (int i = 0; i < count; ++i)
+            {
+                const std::string p = "preset." + std::to_string(i) + ".";
+                if (get(p + "name") == nullptr)
+                {
+                    continue;
+                }
+                LookPreset pr;
+                getText(p + "name", pr.name);
+                int presetStyle = int(pr.style);
+                getInt(p + "style", presetStyle, 0, 2);
+                pr.style = static_cast<Style>(presetStyle);
+                getInt(p + "scheme", pr.scheme, -1, SchemeCount() - 1);
+                pr.colors = SchemeColors(std::max(0, pr.scheme), pr.style);
+                getColor(p + "face", pr.colors.face);
+                getColor(p + "active1", pr.colors.active1);
+                getColor(p + "active2", pr.colors.active2);
+                getColor(p + "inactive1", pr.colors.inactive1);
+                getColor(p + "inactive2", pr.colors.inactive2);
+                getColor(p + "titleText", pr.colors.titleText);
+                getColor(p + "inactiveText", pr.colors.inactiveText);
+                getColor(p + "text", pr.colors.text);
+                getColor(p + "window", pr.colors.window);
+                getColor(p + "select", pr.colors.select);
+                getBool(p + "active", pr.active);
+                getBool(p + "sunken", pr.sunken);
+                getBool(p + "grip", pr.grip);
+                getInt(p + "scale", pr.scale, 0, 4);
+                getInt(p + "icon", pr.look.iconIndex, NoIconIndex, CustomIconIndex);
+                getBool(p + "titleFromName", pr.look.titleFromName);
+                getText(p + "customTitle", pr.look.customTitle);
+                int presetKind = int(pr.look.kind);
+                getInt(p + "kind", presetKind, 0, 3);
+                pr.look.kind = static_cast<WindowKind>(presetKind);
+                getBool(p + "menu", pr.look.menu);
+                getBool(p + "status", pr.look.status);
+                getBool(p + "toolbar", pr.look.toolbar);
+                getBool(p + "address", pr.look.address);
+                getBool(p + "corner", pr.look.corner);
+                if (const std::string* data = get(p + "iconData"))
+                {
+                    if (data->size() == 256 * 8)
+                    {
+                        Image icon(16, 16);
+                        bool ok = true;
+                        for (std::size_t k = 0; k < 256 && ok; ++k)
+                        {
+                            char* end = nullptr;
+                            const std::string hex = data->substr(k * 8, 8);
+                            icon.pixels[k] = Color(std::strtoul(hex.c_str(), &end, 16));
+                            ok = end == hex.c_str() + 8;
+                        }
+                        if (ok)
+                        {
+                            pr.icon = icon;
+                        }
+                    }
+                }
+                s.presets.push_back(pr);
+            }
+        }
     }
 
     CanvasSize CanvasAt(int index)

@@ -232,6 +232,78 @@ int main(int argc, char** argv)
         host.onModal = nullptr;
     }
 
+    {
+        rf::AppSettings s = rf::DefaultSettings();
+        Check(s.presets.size() == 3 && s.presets[0].style == rf::Style::Win95 && s.presets[2].look.kind == rf::WindowKind::Dialog, "three starter presets");
+        rf::LookPreset mine;
+        mine.name = L"Мой | набор";
+        mine.style = rf::Style::Win2000;
+        mine.scheme = -1;
+        mine.colors.active1 = rf::Rgb(0x12, 0x34, 0x56);
+        mine.look.iconIndex = rf::CustomIconIndex;
+        mine.look.customTitle = L"Привет";
+        mine.look.titleFromName = false;
+        mine.icon = rf::Image(16, 16, rf::Argb(0x80, 0xFF, 0x00, 0x00));
+        mine.scale = 3;
+        s.presets.push_back(mine);
+        rf::AppSettings back = rf::DefaultSettings();
+        rf::ParseSettings(rf::SerializeSettings(s), back);
+        const rf::LookPreset& b = back.presets.back();
+        Check(back.presets.size() == 4 && b.name == mine.name && b.style == rf::Style::Win2000 && b.colors.active1 == mine.colors.active1 &&
+                  b.look.iconIndex == rf::CustomIconIndex && b.look.customTitle == L"Привет" && b.icon.pixels == mine.icon.pixels && b.scale == 3,
+              "presets round trip with custom icon");
+        rf::AppSettings none = rf::DefaultSettings();
+        rf::ParseSettings("presets=0\n", none);
+        rf::AppSettings old = rf::DefaultSettings();
+        rf::ParseSettings("style=1\n", old);
+        Check(none.presets.empty() && old.presets.size() == 3, "deleted presets stay deleted, old settings get starters");
+
+        rftest::TestHost ph;
+        rf::MainView main(ph);
+        const auto click = [&](rf::View& v, int x, int y) {
+            v.root.MouseDown(x, y, false, false, 1);
+            v.root.MouseUp(x, y);
+        };
+        main.MutableSettings().frame.style = rf::Style::Win98;
+        int step = 0;
+        ph.onModal = [&](rf::View& v) {
+            if (dynamic_cast<rf::PresetsView*>(&v) == nullptr)
+            {
+                return 0;
+            }
+            rf::Image dialog;
+            v.root.Paint(dialog);
+            rftest::WritePpm(out + "/ui_presets.ppm", dialog);
+            click(v, 30, 46 + 2 + 9);
+            click(v, 350, 57);
+            step = 1;
+            click(v, 150, 252);
+            for (wchar_t ch : std::wstring(L"Для мемов"))
+            {
+                v.root.Char(ch);
+            }
+            click(v, 358, 252);
+            return 0;
+        };
+        click(main, 420, 59);
+        Check(step == 1 && main.Settings().frame.style == rf::Style::Win95 && main.Settings().looks[rf::PhotoMode].status, "apply a preset from the dialog");
+        Check(main.Settings().presets.size() == 4 && main.Settings().presets.back().name == L"Для мемов" &&
+                  main.Settings().presets.back().style == rf::Style::Win95,
+              "save the current look as a new preset");
+        ph.onModal = [&](rf::View& v) {
+            if (dynamic_cast<rf::PresetsView*>(&v) == nullptr)
+            {
+                return 0;
+            }
+            click(v, 30, 46 + 2 + 18 * 3 + 9);
+            click(v, 350, 85);
+            return 0;
+        };
+        click(main, 420, 59);
+        Check(main.Settings().presets.size() == 3, "delete a preset");
+        ph.onModal = nullptr;
+    }
+
     if (argc >= 3)
     {
         host.ffmpeg = rf::FromUtf8(argv[2]);

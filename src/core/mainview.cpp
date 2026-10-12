@@ -50,6 +50,7 @@ namespace rf
         icon = BuiltinIcon(IconId::Picture);
         Build();
         LoadSettings();
+        BuildMenu();
         UpdateFormatItems();
         SyncControls();
         UpdatePreview();
@@ -86,6 +87,7 @@ namespace rf
         bx += 10;
         toolButton(L"Сохранить...", 96, [this]() { SaveCurrent(); }, true);
         effectsButton_ = toolButton(L"Эффекты...", 86, [this]() { EditEffects(); }, false);
+        toolButton(L"Наборы...", 80, [this]() { EditPresets(); }, false);
         saveAllButton_ = toolButton(L"Сохранить все...", 112, [this]() { SaveAll(); }, false);
         copyButton_ = toolButton(L"Копировать", 88, [this]() { CopyCurrent(); }, false);
         photoOnly_.push_back(saveAllButton_);
@@ -364,9 +366,19 @@ namespace rf
         view.items[5].shortcut = L"Вправо";
         view.items.push_back(sep);
         view.items.push_back(MenuItem{L"Эффекты...", L"", [this]() { EditEffects(); }, true, false});
+        Menu sets{L"Наборы", {}};
+        for (int i = 0; i < int(s_.presets.size()); ++i)
+        {
+            sets.items.push_back(MenuItem{s_.presets[std::size_t(i)].name, L"", [this, i]() { ApplyPreset(i); }, true, false});
+        }
+        if (!s_.presets.empty())
+        {
+            sets.items.push_back(sep);
+        }
+        sets.items.push_back(MenuItem{L"Сохранить или удалить...", L"", [this]() { EditPresets(); }, true, false});
         Menu help{L"Справка", {}};
         help.items.push_back(MenuItem{L"О программе...", L"", [this]() { About(); }, true, false});
-        menu_->menus = {file, edit, view, help};
+        menu_->menus = {file, edit, view, sets, help};
     }
 
     int MainView::ShownFormat() const
@@ -626,6 +638,110 @@ namespace rf
             return;
         }
         EffectsLayer(s_.effects, frame, Stage{window, scale}).Apply(img, t, seed, false);
+    }
+
+    std::vector<ui::ListItem> MainView::PresetItems() const
+    {
+        std::vector<ui::ListItem> items;
+        for (const auto& pr : s_.presets)
+        {
+            ui::ListItem item;
+            item.text = pr.name;
+            if (pr.look.iconIndex == CustomIconIndex)
+            {
+                item.icon = pr.icon;
+            }
+            else if (pr.look.iconIndex >= 0 && pr.look.iconIndex < FrameIconCount())
+            {
+                item.icon = BuiltinIcon(FrameIconAt(pr.look.iconIndex));
+            }
+            items.push_back(item);
+        }
+        return items;
+    }
+
+    void MainView::ApplyPreset(int index)
+    {
+        if (index < 0 || index >= int(s_.presets.size()))
+        {
+            return;
+        }
+        const LookPreset pr = s_.presets[std::size_t(index)];
+        s_.frame.style = pr.style;
+        s_.frame.colors = pr.colors;
+        s_.frame.active = pr.active;
+        s_.frame.sunken = pr.sunken;
+        s_.frame.grip = pr.grip;
+        s_.frame.scale = pr.scale;
+        s_.scheme = pr.scheme;
+        Look() = pr.look;
+        if (pr.look.iconIndex == CustomIconIndex)
+        {
+            if (!pr.icon.Empty())
+            {
+                SetCustomIcon(pr.icon);
+            }
+            else if (s_.customIcon.Empty())
+            {
+                Look().iconIndex = DefaultLook(mode_).iconIndex;
+            }
+        }
+        flash_ = L"Набор: " + pr.name;
+        flashUntil_ = host_.Ticks() + 3000;
+        Changed();
+    }
+
+    bool MainView::SavePreset(const std::wstring& name)
+    {
+        LookPreset pr;
+        pr.name = name;
+        pr.style = s_.frame.style;
+        pr.scheme = s_.scheme;
+        pr.colors = s_.frame.colors;
+        pr.active = s_.frame.active;
+        pr.sunken = s_.frame.sunken;
+        pr.grip = s_.frame.grip;
+        pr.scale = s_.frame.scale;
+        pr.look = Look();
+        if (pr.look.iconIndex == CustomIconIndex)
+        {
+            pr.icon = s_.customIcon;
+        }
+        bool replaced = false;
+        for (auto& existing : s_.presets)
+        {
+            if (existing.name == name)
+            {
+                existing = pr;
+                replaced = true;
+            }
+        }
+        if (!replaced)
+        {
+            s_.presets.push_back(pr);
+        }
+        dirty_ = true;
+        dirtyAt_ = host_.Ticks();
+        return true;
+    }
+
+    void MainView::DeletePreset(int index)
+    {
+        if (index < 0 || index >= int(s_.presets.size()))
+        {
+            return;
+        }
+        s_.presets.erase(s_.presets.begin() + index);
+        dirty_ = true;
+        dirtyAt_ = host_.Ticks();
+    }
+
+    void MainView::EditPresets()
+    {
+        PresetsView view([this]() { return PresetItems(); }, [this](int i) { ApplyPreset(i); }, [this](const std::wstring& name) { return SavePreset(name); },
+                         [this](int i) { DeletePreset(i); });
+        host_.RunModal(view);
+        root.Post([this]() { BuildMenu(); });
     }
 
     void MainView::EditEffects()
@@ -1223,7 +1339,9 @@ namespace rf
         const Image corner = s_.cornerImage;
         const std::wstring openFolder = s_.openFolder;
         const std::wstring saveFolder = s_.saveFolder;
+        const std::vector<LookPreset> presets = s_.presets;
         s_ = DefaultSettings();
+        s_.presets = presets;
         s_.customIcon = icon;
         s_.cornerImage = corner;
         s_.openFolder = openFolder;

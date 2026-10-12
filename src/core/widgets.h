@@ -401,6 +401,7 @@ namespace rf::ui
         std::vector<ListItem> items;
         int selected = -1;
         std::function<void(int)> onSelect;
+        std::function<void(int)> onActivate;
 
         void Paint(Painter& p) override;
         bool Focusable() const override { return enabled; }

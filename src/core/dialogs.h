@@ -65,6 +65,22 @@ namespace rf
         ui::ComboBox* screen_ = nullptr;
     };
 
+    class PresetsView : public View
+    {
+    public:
+        PresetsView(std::function<std::vector<ui::ListItem>()> items, std::function<void(int)> apply, std::function<bool(const std::wstring&)> save,
+                    std::function<void(int)> remove);
+
+    private:
+        void Reload(int select);
+
+        std::function<std::vector<ui::ListItem>()> items_;
+        ui::ListBox* list_ = nullptr;
+        ui::TextField* name_ = nullptr;
+        ui::Button* apply_ = nullptr;
+        ui::Button* remove_ = nullptr;
+    };
+
     class ProgressView : public View
     {
     public:

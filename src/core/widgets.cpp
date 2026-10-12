@@ -1878,6 +1878,10 @@ namespace rf::ui
         if (index >= 0 && index < int(items.size()))
         {
             Pick(index);
+            if (e.clicks >= 2 && onActivate)
+            {
+                onActivate(index);
+            }
         }
     }
 

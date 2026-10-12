@@ -336,6 +336,108 @@ namespace rf
         return e;
     }
 
+    PresetsView::PresetsView(std::function<std::vector<ui::ListItem>()> items, std::function<void(int)> apply, std::function<bool(const std::wstring&)> save,
+                             std::function<void(int)> remove)
+        : View(420, 318), items_(std::move(items))
+    {
+        AddDialogChrome(*this, L"Наборы оформления");
+        auto* hint = root.Add<ui::Label>();
+        hint->rect = Rect{14, 30, 270, 13};
+        hint->text = L"Наборы (двойной щелчок применяет):";
+        list_ = root.Add<ui::ListBox>();
+        list_->rect = Rect{14, 46, 272, 170};
+        apply_ = root.Add<ui::Button>();
+        apply_->rect = Rect{296, 46, 110, 23};
+        apply_->text = L"Применить";
+        remove_ = root.Add<ui::Button>();
+        remove_->rect = Rect{296, 74, 110, 23};
+        remove_->text = L"Удалить";
+        auto* group = root.Add<ui::GroupBox>();
+        group->rect = Rect{8, 224, root.width - 16, 50};
+        group->text = L"Сохранить текущее оформление как набор";
+        auto* label = root.Add<ui::Label>();
+        label->rect = Rect{18, 246, 64, 13};
+        label->text = L"Название:";
+        name_ = root.Add<ui::TextField>();
+        name_->rect = Rect{82, 242, 220, 21};
+        auto* store = root.Add<ui::Button>();
+        store->rect = Rect{310, 241, 96, 23};
+        store->text = L"Сохранить";
+        auto* close = root.Add<ui::Button>();
+        close->rect = Rect{root.width - 14 - 75, root.height - 3 - 10 - 23, 75, 23};
+        close->text = L"Закрыть";
+        close->isDefault = true;
+        View* self = this;
+        PresetsView* me = this;
+        apply_->onClick = [me, apply]() {
+            if (me->list_->selected >= 0)
+            {
+                apply(me->list_->selected);
+            }
+        };
+        list_->onActivate = [apply](int i) { apply(i); };
+        list_->onSelect = [me](int) {
+            me->apply_->enabled = true;
+            me->remove_->enabled = true;
+        };
+        remove_->onClick = [me, remove]() {
+            const int i = me->list_->selected;
+            if (i >= 0)
+            {
+                remove(i);
+                me->Reload(std::min(i, int(me->items_().size()) - 1));
+            }
+        };
+        store->onClick = [me, save]() {
+            const std::wstring name = Trim(me->name_->text);
+            if (name.empty())
+            {
+                me->root.SetFocus(me->name_);
+                return;
+            }
+            if (save(name))
+            {
+                const auto all = me->items_();
+                int at = -1;
+                for (int k = 0; k < int(all.size()); ++k)
+                {
+                    if (all[std::size_t(k)].text == name)
+                    {
+                        at = k;
+                    }
+                }
+                me->Reload(at);
+                me->name_->SetText(L"");
+            }
+        };
+        close->onClick = [self]() { self->Close(0); };
+        InstallDialogKeys(
+            *this,
+            [me, store]() {
+                if (me->root.focus == me->name_ && !Trim(me->name_->text).empty())
+                {
+                    store->onClick();
+                    return;
+                }
+                me->Close(0);
+            },
+            [self]() { self->Close(0); });
+        Reload(-1);
+    }
+
+    void PresetsView::Reload(int select)
+    {
+        list_->items = items_();
+        list_->selected = select;
+        if (select >= 0)
+        {
+            list_->EnsureVisible(select);
+        }
+        apply_->enabled = select >= 0;
+        remove_->enabled = select >= 0;
+        list_->Invalidate();
+    }
+
     std::vector<std::wstring> PlayerTextsView::Menu() const
     {
         std::vector<std::wstring> items;
