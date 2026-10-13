@@ -13,8 +13,11 @@ namespace rf
     {
         PhotoMode = 0,
         VideoMode = 1,
-        MusicMode = 2
+        MusicMode = 2,
+        RecorderMode = 3
     };
+
+    constexpr int ModeCount = 4;
 
     struct ModeLook
     {
@@ -63,13 +66,14 @@ namespace rf
         bool meter = true;
         bool equalizer = false;
         bool lyrics = true;
+        bool russian = false;
         int fps = 25;
     };
 
     struct AppSettings
     {
         FrameSettings frame;
-        std::array<ModeLook, 3> looks;
+        std::array<ModeLook, ModeCount> looks;
         int mode = PhotoMode;
         int scheme = 0;
         int format = 0;
@@ -78,6 +82,7 @@ namespace rf
         bool playerTime = true;
         VideoSettings video;
         MusicSettings music;
+        MusicSettings recorder;
         EffectSettings effects;
         std::vector<LookPreset> presets;
         Color background = Rgb(0x3A, 0x6E, 0xA5);

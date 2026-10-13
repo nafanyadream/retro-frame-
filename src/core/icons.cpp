@@ -42,11 +42,11 @@ namespace rf
             return img;
         }
 
-        const std::array<IconId, 10> frameIcons = {IconId::Picture, IconId::Folder, IconId::Monitor, IconId::Document, IconId::Floppy,
-                                                   IconId::Globe, IconId::Music, IconId::Mail, IconId::Film, IconId::Disc};
+        const std::array<IconId, 11> frameIcons = {IconId::Picture, IconId::Folder, IconId::Monitor, IconId::Document, IconId::Floppy, IconId::Globe,
+                                                   IconId::Music,   IconId::Mail,   IconId::Film,    IconId::Disc,     IconId::Microphone};
 
-        const wchar_t* const frameIconNames[] = {L"Картинка", L"Папка", L"Монитор", L"Документ", L"Дискета",
-                                                 L"Глобус", L"Нота", L"Конверт", L"Видео", L"Диск"};
+        const wchar_t* const frameIconNames[] = {L"Картинка", L"Папка", L"Монитор", L"Документ", L"Дискета", L"Глобус",
+                                                 L"Нота",     L"Конверт", L"Видео", L"Диск",     L"Микрофон"};
     }
 
     const Image& BuiltinIcon(IconId id)

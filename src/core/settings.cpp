@@ -169,6 +169,13 @@ namespace rf
             look.customTitle = L"Песня";
             look.kind = WindowKind::Bare;
         }
+        else if (mode == RecorderMode)
+        {
+            look.iconIndex = 10;
+            look.titleFromName = true;
+            look.customTitle = L"Звук";
+            look.menu = true;
+        }
         else
         {
             look.customTitle = L"Моё фото";
@@ -181,7 +188,7 @@ namespace rf
         AppSettings s;
         s.frame.style = Style::Win98;
         s.frame.colors = SchemeColors(0, Style::Win98);
-        for (int m = 0; m < 3; ++m)
+        for (int m = 0; m < ModeCount; ++m)
         {
             s.looks[std::size_t(m)] = DefaultLook(m);
         }
@@ -264,8 +271,8 @@ namespace rf
         o << "sunken=" << (f.sunken ? 1 : 0) << "\n";
         o << "scale=" << f.scale << "\n";
         o << "scheme=" << s.scheme << "\n";
-        const char* prefixes[] = {"", "video.", "music."};
-        for (int m = 0; m < 3; ++m)
+        const char* prefixes[] = {"", "video.", "music.", "recorder."};
+        for (int m = 0; m < ModeCount; ++m)
         {
             const ModeLook& l = s.looks[std::size_t(m)];
             const std::string p = prefixes[m];
@@ -297,6 +304,12 @@ namespace rf
         o << "music.fps=" << s.music.fps << "\n";
         o << "music.equalizer=" << (s.music.equalizer ? 1 : 0) << "\n";
         o << "music.lyrics=" << (s.music.lyrics ? 1 : 0) << "\n";
+        o << "recorder.format=" << s.recorder.format << "\n";
+        o << "recorder.square=" << (s.recorder.square ? 1 : 0) << "\n";
+        o << "recorder.canvas=" << s.recorder.canvas << "\n";
+        o << "recorder.fade=" << s.recorder.fade << "\n";
+        o << "recorder.fps=" << s.recorder.fps << "\n";
+        o << "recorder.russian=" << (s.recorder.russian ? 1 : 0) << "\n";
         o << "fx.intro=" << (s.effects.intro ? 1 : 0) << "\n";
         o << "fx.cursor=" << s.effects.cursor << "\n";
         o << "fx.cursorPlace=" << s.effects.cursorPlace << "\n";
@@ -428,7 +441,7 @@ namespace rf
             }
         };
         FrameSettings& f = s.frame;
-        getInt("mode", s.mode, 0, 2);
+        getInt("mode", s.mode, 0, ModeCount - 1);
         int style = int(f.style);
         getInt("style", style, 0, 2);
         f.style = static_cast<Style>(style);
@@ -458,8 +471,8 @@ namespace rf
         getBool("sunken", f.sunken);
         getInt("scale", f.scale, 0, 4);
         getInt("scheme", s.scheme, -1, SchemeCount() - 1);
-        const char* prefixes[] = {"", "video.", "music."};
-        for (int m = 0; m < 3; ++m)
+        const char* prefixes[] = {"", "video.", "music.", "recorder."};
+        for (int m = 0; m < ModeCount; ++m)
         {
             ModeLook& l = s.looks[std::size_t(m)];
             const std::string p = prefixes[m];
@@ -511,6 +524,12 @@ namespace rf
         getBool("music.meter", s.music.meter);
         getBool("music.equalizer", s.music.equalizer);
         getBool("music.lyrics", s.music.lyrics);
+        getInt("recorder.format", s.recorder.format, 0, 3);
+        getBool("recorder.square", s.recorder.square);
+        getInt("recorder.canvas", s.recorder.canvas, 0, CanvasCount - 1);
+        getInt("recorder.fade", s.recorder.fade, 0, 30);
+        getInt("recorder.fps", s.recorder.fps, 10, 60);
+        getBool("recorder.russian", s.recorder.russian);
         getInt("music.fps", s.music.fps, 10, 60);
         const auto listed = [](int fps) {
             for (int choice : FpsChoices)
@@ -529,6 +548,10 @@ namespace rf
         if (!listed(s.music.fps))
         {
             s.music.fps = MusicSettings().fps;
+        }
+        if (!listed(s.recorder.fps))
+        {
+            s.recorder.fps = MusicSettings().fps;
         }
         getBool("fx.intro", s.effects.intro);
         getInt("fx.cursor", s.effects.cursor, 0, 3);

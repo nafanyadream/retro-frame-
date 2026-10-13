@@ -136,6 +136,119 @@ namespace rf
             }
         }
 
+        void CentredText(Painter& p, const Rect& r, int y, const std::wstring& text, const Font& f, Color ink)
+        {
+            p.Text(r.x + (r.w - Text().Width(text, f)) / 2, y, text, f, ink);
+        }
+
+        void DrawWave(Painter& p, const Rect& inner, const std::vector<std::int16_t>* samples, double seconds)
+        {
+            const Color green = Rgb(0x00, 0xFF, 0x00);
+            const int mid = inner.y + inner.h / 2;
+            const int half = inner.h / 2 - 1;
+            p.Fill(Rect{inner.x, mid, inner.w, 1}, green);
+            if (samples == nullptr || samples->empty())
+            {
+                return;
+            }
+            const double span = RecorderWaveSeconds * AnalysisRate;
+            const double first = seconds * AnalysisRate - span / 2.0;
+            const long long total = (long long)samples->size();
+            for (int x = 0; x < inner.w; ++x)
+            {
+                const long long a = (long long)std::floor(first + span * x / inner.w);
+                const long long b = std::max(a + 1, (long long)std::floor(first + span * (x + 1) / inner.w));
+                int lo = 0;
+                int hi = 0;
+                for (long long i = std::max(0LL, a); i < std::min(total, b); ++i)
+                {
+                    const int v = (*samples)[std::size_t(i)];
+                    lo = std::min(lo, v);
+                    hi = std::max(hi, v);
+                }
+                const int top = mid - int(std::lround(hi / 32768.0 * half * 0.92));
+                const int bottom = mid - int(std::lround(lo / 32768.0 * half * 0.92));
+                p.Fill(Rect{inner.x + x, std::min(top, mid), 1, std::max(bottom, mid) - std::min(top, mid) + 1}, green);
+            }
+        }
+
+        void DrawRecorder(Painter& p, int w, int h, const FrameSettings& s, const Shades& sh, const MusicFrame& m, bool russian, double length,
+                          const std::vector<std::int16_t>* samples)
+        {
+            const Font f{FamilyFor(s.style), false};
+            const Color ink = s.colors.text;
+            p.Fill(Rect{0, 0, w, h}, sh.face);
+            const Rect posBox{6, 6, 64, 36};
+            const Rect lenBox{w - 6 - 64, 6, 64, 36};
+            const Rect wave{posBox.Right() + 4, 4, lenBox.x - 4 - (posBox.Right() + 4), 40};
+            const int th = Text().Height(f);
+            for (const Rect* box : {&posBox, &lenBox})
+            {
+                p.ThinSunken(*box, sh);
+            }
+            CentredText(p, posBox, posBox.y + 4, russian ? L"Позиция:" : L"Position:", f, ink);
+            CentredText(p, posBox, posBox.Bottom() - 5 - th, RecorderSeconds(m.absolute, russian), f, ink);
+            CentredText(p, lenBox, lenBox.y + 4, russian ? L"Длина:" : L"Length:", f, ink);
+            CentredText(p, lenBox, lenBox.Bottom() - 5 - th, RecorderSeconds(length, russian), f, ink);
+            const Color black = Rgb(0, 0, 0);
+            p.Sunken(wave, sh, &black);
+            DrawWave(p, wave.Inflate(-2), samples, m.absolute);
+            const Rect channel{10, 56, w - 20, 4};
+            p.Sunken(channel, sh);
+            const double pos = length > 0.0 ? std::clamp(m.absolute / length, 0.0, 1.0) : 0.0;
+            const int thumbW = 11;
+            const int thumbX = channel.x + int(std::lround(pos * (channel.w - thumbW)));
+            p.Raised(Rect{thumbX, 47, thumbW, 21}, sh);
+            const int bw = (w - 12 - 4 * 2) / 5;
+            for (int i = 0; i < 5; ++i)
+            {
+                const Rect b{6 + i * (bw + 2), 72, i == 4 ? w - 6 - (6 + i * (bw + 2)) : bw, 24};
+                if (i == 3)
+                {
+                    p.Frame(b, black);
+                    p.Raised(b.Inflate(-1), sh);
+                    p.Dotted(b.Inflate(-4), ink);
+                }
+                else
+                {
+                    p.Raised(b, sh);
+                }
+                if (i == 0)
+                {
+                    Glyphed(p, b, glyphs::BigRewind, ink, 0);
+                }
+                else if (i == 1)
+                {
+                    Glyphed(p, b, glyphs::BigForward, ink, 0);
+                }
+                else if (i == 2)
+                {
+                    Glyphed(p, b, glyphs::BigPlay, sh.hilite, 1);
+                    Glyphed(p, b, glyphs::BigPlay, sh.shadow, 0);
+                }
+                else if (i == 3)
+                {
+                    Glyphed(p, b, glyphs::BigStop, ink, 0);
+                }
+                else
+                {
+                    const int cx = b.x + b.w / 2;
+                    const int cy = b.y + b.h / 2;
+                    for (int y = -5; y <= 5; ++y)
+                    {
+                        for (int x = -5; x <= 5; ++x)
+                        {
+                            const double r = std::hypot(x, y);
+                            if (r <= 4.6)
+                            {
+                                p.Pixel(cx + x, cy + y, r > 3.8 ? Rgb(0x80, 0x00, 0x00) : Rgb(0xD0, 0x00, 0x00));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         void DrawCombo(Painter& p, const Rect& r, const std::wstring& text, const Font& f, const FrameColors& colors, const Shades& sh)
         {
             const Color fill = colors.window;
@@ -255,15 +368,43 @@ namespace rf
         }
     }
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics)
+    std::wstring RecorderSeconds(double seconds, bool russian)
+    {
+        const long long hundredths = std::max(0LL, (long long)std::llround(seconds * 100.0));
+        const long long cents = hundredths % 100;
+        return std::to_wstring(hundredths / 100) + (russian ? L"," : L".") + (cents < 10 ? L"0" : L"") + std::to_wstring(cents) + (russian ? L" сек." : L" sec.");
+    }
+
+    std::wstring RecorderTitle(const std::wstring& base, bool russian)
+    {
+        const std::wstring app = russian ? L"Звукозапись" : L"Sound Recorder";
+        if (base.find(app) != std::wstring::npos)
+        {
+            return base;
+        }
+        return (base.empty() ? std::wstring(russian ? L"Звук" : L"Sound") : base) + L" - " + app;
+    }
+
+    std::vector<std::wstring> RecorderMenu(bool russian)
+    {
+        if (russian)
+        {
+            return {L"Файл", L"Правка", L"Эффекты", L"Справка"};
+        }
+        return {L"File", L"Edit", L"Effects", L"Help"};
+    }
+
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics, bool recorder)
     {
         MusicPlan p;
         p.square = square;
-        const int baseH = MusicClientH + (lyrics ? LyricsStripH : 0);
+        const int baseW = recorder ? RecorderClientW : MusicClientW;
+        const int baseH = recorder ? RecorderClientH : MusicClientH + (lyrics ? LyricsStripH : 0);
+        p.clientW = baseW;
         p.clientH = baseH;
         const int outW = std::max(120, canvasW & ~1);
         const int outH = std::max(120, canvasH & ~1);
-        const FrameGeometry g = MeasureFrame(MusicWindow(frame), MusicClientW, baseH);
+        const FrameGeometry g = MeasureFrame(MusicWindow(frame), baseW, baseH);
         const int roomW = square ? outW * 92 / 100 : outW;
         const int roomH = square ? outH * 92 / 100 : outH;
         int fits = 1;
@@ -295,7 +436,7 @@ namespace rf
         {
             ++p.clientH;
         }
-        p.windowW = (g.width - MusicClientW + p.clientW) * p.scale;
+        p.windowW = (g.width - baseW + p.clientW) * p.scale;
         p.windowH = (g.height - baseH + p.clientH) * p.scale;
         p.outW = p.windowW;
         p.outH = p.windowH;
@@ -315,8 +456,24 @@ namespace rf
         Image img = RenderFrame(frame_, plan_.clientW, plan_.clientH, v, &client);
         Painter p(img);
         Painter c = p.Sub(client);
-        DrawPanel(c, plan_.clientW, plan_.clientH, frame_, ShadesFor(frame_.colors.face, frame_.style), f, artist_, title_, !cover_.Empty());
+        const Shades sh = ShadesFor(frame_.colors.face, frame_.style);
+        if (recorder_)
+        {
+            DrawRecorder(c, plan_.clientW, plan_.clientH, frame_, sh, f, russian_, songLength_, samples_.get());
+        }
+        else
+        {
+            DrawPanel(c, plan_.clientW, plan_.clientH, frame_, sh, f, artist_, title_, !cover_.Empty());
+        }
         return img;
+    }
+
+    void MusicComposer::SetRecorder(bool russian, double songLength, std::shared_ptr<const std::vector<std::int16_t>> samples)
+    {
+        recorder_ = true;
+        russian_ = russian;
+        songLength_ = songLength;
+        samples_ = std::move(samples);
     }
 
     void MusicComposer::SetEffects(const EffectSettings& effects)
@@ -341,7 +498,7 @@ namespace rf
         const Image small = Window(f, client);
         const int k = plan_.scale;
         Image window = ScaleNearest(small, k);
-        if (coverBig_.Empty() && !cover_.Empty())
+        if (coverBig_.Empty() && !cover_.Empty() && !recorder_)
         {
             coverBig_ = SquareCrop(cover_, CoverInner * k);
         }
@@ -369,7 +526,7 @@ namespace rf
     {
         Rect client;
         Image window = Window(f, client);
-        if (!cover_.Empty())
+        if (!cover_.Empty() && !recorder_)
         {
             if (coverSmall_.Empty())
             {
@@ -395,6 +552,7 @@ namespace rf
         f.now = std::clamp(now, 0.0, std::max(0.0, length));
         f.length = length;
         f.position = length > 0.0 ? f.now / length : 0.0;
+        f.absolute = absolute;
         f.angle = spin ? absolute * DiscSpeed : 0.0;
         f.level = meter ? MeterAt(levels, absolute) : 0.0f;
         return f;
@@ -436,6 +594,10 @@ namespace rf
         spec.delay = intro / fps;
         MusicComposer composer(job.frame, job.vars, job.plan, job.background, job.artist, job.title, job.cover);
         composer.SetEffects(job.effects);
+        if (job.recorder)
+        {
+            composer.SetRecorder(job.recorderRussian, job.songLength, job.samples);
+        }
         return Encode(host, spec, total, [&](int i) -> const Image* {
             if (i < intro)
             {

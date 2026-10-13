@@ -10,6 +10,13 @@ namespace rf
     constexpr double MusicFps = 25.0;
     constexpr double DiscSpeed = 120.0;
     constexpr int LyricsStripH = 22;
+    constexpr int RecorderClientW = 260;
+    constexpr int RecorderClientH = 102;
+    constexpr double RecorderWaveSeconds = 0.1;
+
+    std::wstring RecorderSeconds(double seconds, bool russian);
+    std::wstring RecorderTitle(const std::wstring& base, bool russian);
+    std::vector<std::wstring> RecorderMenu(bool russian);
 
     struct MusicPlan
     {
@@ -30,6 +37,7 @@ namespace rf
         double position = 0.0;
         double now = 0.0;
         double length = 0.0;
+        double absolute = 0.0;
         double angle = 0.0;
         float level = 0.0f;
         bool equalizer = false;
@@ -40,7 +48,7 @@ namespace rf
         double lyricAge = 0.0;
     };
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics = false);
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics = false, bool recorder = false);
 
     class MusicComposer
     {
@@ -48,6 +56,7 @@ namespace rf
         MusicComposer(const FrameSettings& frame, const FrameVars& vars, const MusicPlan& plan, const Image& background, const std::wstring& artist,
                       const std::wstring& title, const Image& cover);
         void SetEffects(const EffectSettings& effects);
+        void SetRecorder(bool russian, double songLength, std::shared_ptr<const std::vector<std::int16_t>> samples);
         const Image& Compose(const MusicFrame& f, int seed = 0, bool animate = false);
         const Image& Intro(double t, int seed);
         Image Small(const MusicFrame& f, const Image& background);
@@ -68,6 +77,10 @@ namespace rf
         EffectSettings effects_;
         EffectsLayer fx_;
         bool fxOn_ = false;
+        bool recorder_ = false;
+        bool russian_ = false;
+        double songLength_ = 0.0;
+        std::shared_ptr<const std::vector<std::int16_t>> samples_;
     };
 
     struct MusicJob
@@ -92,6 +105,10 @@ namespace rf
         bool equalizer = false;
         std::vector<float> spectrum;
         std::vector<LyricLine> lyrics;
+        bool recorder = false;
+        bool recorderRussian = false;
+        double songLength = 0.0;
+        std::shared_ptr<const std::vector<std::int16_t>> samples;
         EffectSettings effects;
     };
 

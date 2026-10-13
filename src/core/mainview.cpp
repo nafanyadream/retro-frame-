@@ -117,9 +117,9 @@ namespace rf
             {
                 s_.video.format = i;
             }
-            else if (mode_ == MusicMode)
+            else if (AudioMode())
             {
-                s_.music.format = i;
+                Audio().format = i;
             }
             else
             {
@@ -132,7 +132,7 @@ namespace rf
         auto* page = Place<ui::Panel>(r, 8, 102, 618, 500);
         page->kind = ui::Panel::Kind::Raised;
         tabs_ = Place<ui::TabStrip>(r, 8, 82, 618, 21);
-        tabs_->tabs = {L"Фото", L"Видео", L"Музыка"};
+        tabs_->tabs = {L"Фото", L"Видео", L"Музыка", L"Звукозапись"};
         tabs_->onChange = [this](int i) { SetMode(i); };
         preview_ = Place<ui::PreviewPane>(r, 16, 112, 602, 350);
         filesLabel_ = AddLabel(r, 18, 474, 200, L"Файлы:");
@@ -154,6 +154,7 @@ namespace rf
         photoOnly_.push_back(thumbs_);
         BuildVideo();
         BuildMusic();
+        BuildRecorder();
 
         const int gx = 636;
         const int gw = WindowW - 4 - 4 - gx;
@@ -232,7 +233,7 @@ namespace rf
             }
             iconCells_[std::size_t(i)] = cell;
         }
-        const int cx = gx + 8 + 2 * 26 + 10;
+        const int cx = gx + 8 + 3 * 26 + 10;
         customCell_ = Place<ui::IconCell>(r, cx, y + 42, 24, 24);
         customCell_->emptyText = L"?";
         customCell_->onClick = [this]() {
@@ -246,10 +247,10 @@ namespace rf
             Changed();
         };
         Place<ui::Panel>(r, cx - 6, y + 44, 2, 20)->kind = ui::Panel::Kind::EtchedV;
-        auto* loadIcon = Place<ui::Button>(r, cx + 28, y + 43, 64, 22);
+        auto* loadIcon = Place<ui::Button>(r, cx + 28, y + 43, 50, 22);
         loadIcon->text = L"Своя...";
         loadIcon->onClick = [this]() { LoadCustomIcon(); };
-        auto* library = Place<ui::Button>(r, cx + 28 + 68, y + 43, gx + gw - 8 - (cx + 28 + 68), 22);
+        auto* library = Place<ui::Button>(r, cx + 28 + 54, y + 43, gx + gw - 8 - (cx + 28 + 54), 22);
         library->text = L"Библиотека...";
         library->onClick = [this]() { OpenLibrary(); };
 
@@ -426,7 +427,7 @@ namespace rf
         {
             s_.cornerImage = MakeIcon16(img);
         }
-        for (int m = 0; m < 3; ++m)
+        for (int m = 0; m < ModeCount; ++m)
         {
             ModeLook& look = s_.looks[std::size_t(m)];
             if (look.iconIndex == CustomIconIndex && s_.customIcon.Empty())
@@ -450,7 +451,7 @@ namespace rf
         }
         mode_ = s_.mode;
         tabs_->index = mode_;
-        preview_->rect.w = mode_ == MusicMode ? 300 : 602;
+        preview_->rect.w = AudioMode() ? 300 : 602;
         preview_->rect.h = mode_ == PhotoMode ? 350 : 296;
     }
 
@@ -483,7 +484,6 @@ namespace rf
     {
         StopPlay();
         fetch_.reset();
-        levels_.reset();
         SaveSettings();
         return true;
     }
@@ -523,8 +523,8 @@ namespace rf
         }
         if (!songs.empty())
         {
-            OpenMedia(MusicMode, songs);
-            if (!lyrics.empty() && track_ && songs.size() == 1)
+            OpenMedia(mode_ == RecorderMode ? RecorderMode : MusicMode, songs);
+            if (mode_ == MusicMode && !lyrics.empty() && track_ && songs.size() == 1)
             {
                 LoadLyrics(lyrics, false);
             }
@@ -607,7 +607,7 @@ namespace rf
         queueLabel_->text = std::to_wstring(QueuePosition() + 1) + L" / " + std::to_wstring(QueueSize());
         removeButton_->enabled = current_ >= 0;
         sunken_->text = mode_ == VideoMode ? L"Видео во вдавленной области" : L"Фото во вдавленной области";
-        sunken_->enabled = mode_ != MusicMode;
+        sunken_->enabled = !AudioMode();
         SyncVideoControls();
         root.dirty = true;
     }
@@ -794,7 +794,7 @@ namespace rf
             UpdateVideoPreview();
             return;
         }
-        if (mode_ == MusicMode)
+        if (AudioMode())
         {
             UpdateMusicPreview();
             return;
@@ -848,7 +848,7 @@ namespace rf
         {
             UpdateVideoStatus(first, second, third);
         }
-        else if (mode_ == MusicMode)
+        else if (AudioMode())
         {
             UpdateMusicStatus(first, second, third);
         }
@@ -1010,12 +1010,12 @@ namespace rf
             }
             return;
         }
-        if (mode_ == MusicMode)
+        if (AudioMode())
         {
             const auto paths = host_.AskOpenAudio(s_.musicFolder.empty() ? s_.openFolder : s_.musicFolder);
             if (!paths.empty())
             {
-                OpenMedia(MusicMode, paths);
+                OpenMedia(mode_, paths);
             }
             return;
         }
@@ -1040,7 +1040,7 @@ namespace rf
             Warn(L"В буфере обмена нет видеофайла.\nСкопируйте ролик в Проводнике и вставьте снова.");
             return;
         }
-        if (mode_ == MusicMode)
+        if (AudioMode())
         {
             Warn(L"В буфере обмена нет песни.\nСкопируйте файл в Проводнике и вставьте снова.");
             return;
@@ -1062,7 +1062,7 @@ namespace rf
             SaveVideo();
             return;
         }
-        if (mode_ == MusicMode)
+        if (AudioMode())
         {
             SaveMusic();
             return;
@@ -1114,6 +1114,7 @@ namespace rf
         }
         else
         {
+            SetMode(mode);
             OpenTrack(paths.front());
         }
         SyncControls();
@@ -1291,7 +1292,7 @@ namespace rf
             Warn(L"Видео нельзя положить в буфер обмена: нажмите «Сохранить...».");
             return;
         }
-        if (mode_ == MusicMode)
+        if (AudioMode())
         {
             CopyMusic();
             return;

@@ -57,9 +57,9 @@ namespace rf
         bool Done() const { return done_; }
         std::vector<float> Levels() const;
         std::vector<float> Spectrum() const;
+        std::vector<std::int16_t> Samples() const;
 
     private:
-        std::vector<std::int16_t> Samples() const;
         void Take(std::size_t n);
         std::unique_ptr<Process> proc_;
         std::vector<unsigned char> bytes_;

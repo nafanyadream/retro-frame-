@@ -25,7 +25,8 @@ namespace rf
         Film,
         Speaker,
         Disc,
-        Archive
+        Archive,
+        Microphone
     };
 
     const Image& BuiltinIcon(IconId id);

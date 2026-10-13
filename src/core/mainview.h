@@ -28,7 +28,12 @@ namespace rf
         void SetMode(int mode);
         bool HasClip() const { return clip_ != nullptr; }
         bool HasTrack() const { return track_ != nullptr; }
-        bool LevelsReady() const { return track_ && track_->levelsReady; }
+        bool HasRecording() const { return recording_ != nullptr; }
+        bool LevelsReady() const
+        {
+            const Media* m = mode_ == RecorderMode ? recording_.get() : track_.get();
+            return m && m->levelsReady;
+        }
         int ShownFormat() const;
 
         void OnTick(unsigned long long ms) override;
@@ -57,6 +62,13 @@ namespace rf
         void Changed();
         void UpdatePreview();
         void UpdateStatus();
+        bool AudioMode() const { return mode_ == MusicMode || mode_ == RecorderMode; }
+        bool Recorder() const { return mode_ == RecorderMode; }
+        MusicSettings& Audio() { return mode_ == RecorderMode ? s_.recorder : s_.music; }
+        const MusicSettings& Audio() const { return mode_ == RecorderMode ? s_.recorder : s_.music; }
+        void BuildRecorder();
+        void SyncRecorderControls();
+        void SetupComposer(MusicComposer& composer) const;
         ModeLook& Look() { return s_.looks[std::size_t(mode_)]; }
         const ModeLook& Look() const { return s_.looks[std::size_t(mode_)]; }
         FrameSettings LookFrame(int mode, const std::wstring& name) const;
@@ -86,6 +98,8 @@ namespace rf
             Image tagCover;
             std::vector<float> levels;
             std::vector<float> spectrum;
+            std::shared_ptr<const std::vector<std::int16_t>> samples;
+            std::unique_ptr<LevelReader> reader;
             bool levelsReady = false;
             std::vector<LyricLine> lyrics;
             std::wstring lyricsName;
@@ -93,6 +107,9 @@ namespace rf
 
         Media* Cur();
         const Media* Cur() const;
+        Media* Song() const { return mode_ == RecorderMode ? recording_.get() : track_.get(); }
+        std::unique_ptr<Media>& SongSlot() { return mode_ == RecorderMode ? recording_ : track_; }
+        void TakeLevels(Media& m);
         bool Playing() const { return play_ != nullptr || musicPlay_; }
         bool SoundPlaying() const { return sound_ != nullptr && sound_->Active(); }
         void BuildMusic();
@@ -194,7 +211,7 @@ namespace rf
         ui::ComboBox* kind_ = nullptr;
         ui::CheckBox* active_ = nullptr;
         ui::CheckBox* sunken_ = nullptr;
-        std::array<ui::IconCell*, 11> iconCells_{};
+        std::array<ui::IconCell*, 12> iconCells_{};
         ui::IconCell* customCell_ = nullptr;
         ui::ComboBox* scheme_ = nullptr;
         ui::Swatch* active1_ = nullptr;
@@ -215,19 +232,24 @@ namespace rf
         std::vector<ui::Widget*> photoOnly_;
         std::vector<ui::Widget*> videoOnly_;
 
-        std::array<std::vector<std::wstring>, 3> queue_;
-        std::array<int, 3> queuePos_{};
+        std::array<std::vector<std::wstring>, ModeCount> queue_;
+        std::array<int, ModeCount> queuePos_{};
         ui::Button* prevButton_ = nullptr;
         ui::Button* nextButton_ = nullptr;
         ui::Label* queueLabel_ = nullptr;
         std::unique_ptr<Media> clip_;
         std::unique_ptr<Media> track_;
-        std::unique_ptr<LevelReader> levels_;
+        std::unique_ptr<Media> recording_;
         bool musicPlay_ = false;
         unsigned long long musicStart_ = 0;
         double musicFrom_ = 0.0;
         std::vector<ui::Widget*> mediaOnly_;
         std::vector<ui::Widget*> musicOnly_;
+        std::vector<ui::Widget*> recorderOnly_;
+        ui::ComboBox* recLanguage_ = nullptr;
+        ui::ComboBox* recFade_ = nullptr;
+        ui::Label* recInfo_ = nullptr;
+        ui::Label* recLevels_ = nullptr;
         ui::TextField* artistField_ = nullptr;
         ui::TextField* songField_ = nullptr;
         ui::Button* coverLoad_ = nullptr;
