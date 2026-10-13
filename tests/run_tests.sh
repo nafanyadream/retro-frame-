@@ -18,12 +18,14 @@ g++ "${flags[@]}" -o "$out/video_test" src/core/*.cpp tests/video_test.cpp
 g++ "${flags[@]}" -o "$out/music_test" src/core/*.cpp tests/music_test.cpp
 g++ "${flags[@]}" -o "$out/effects_test" src/core/*.cpp tests/effects_test.cpp
 g++ "${flags[@]}" -o "$out/recorder_test" src/core/*.cpp tests/recorder_test.cpp
+g++ "${flags[@]}" -o "$out/voice_test" src/core/*.cpp tests/voice_test.cpp
 
 python3 tests/make_test_data.py "$out/data"
 python3 tests/check_zip.py "$out/zip_test" "$out/zip"
 "$out/library_test" "$out/data/icons" "$out/data/pack.zip" "$out"
 "$out/ui_test" "$out/data/photo1.ppm" "$out/data/photo2.ppm" "$out"
 "$out/frames_test" "$out/data/photo1.ppm" "$out"
+"$out/voice_test"
 if command -v ffmpeg > /dev/null; then
     "$out/video_test" "$out" "$(command -v ffmpeg)"
     "$out/music_test" "$out" "$(command -v ffmpeg)"

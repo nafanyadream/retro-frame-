@@ -110,6 +110,140 @@ namespace rf::win
             std::vector<char> data_[Count];
             bool used_[Count] = {};
         };
+
+        class WaveIn : public AudioIn
+        {
+        public:
+            static constexpr int Count = 16;
+
+            WaveIn(HWAVEIN device, std::size_t size) : device_(device)
+            {
+                for (auto& d : data_)
+                {
+                    d.resize(size);
+                }
+            }
+
+            WaveIn(const WaveIn&) = delete;
+            WaveIn& operator=(const WaveIn&) = delete;
+
+            ~WaveIn() override
+            {
+                waveInStop(device_);
+                waveInReset(device_);
+                for (int i = 0; i < Count; ++i)
+                {
+                    if (prepared_[i])
+                    {
+                        waveInUnprepareHeader(device_, &headers_[i], sizeof(WAVEHDR));
+                    }
+                }
+                waveInClose(device_);
+            }
+
+            bool Start()
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    if (!Queue(i))
+                    {
+                        return false;
+                    }
+                }
+                return waveInStart(device_) == MMSYSERR_NOERROR;
+            }
+
+            bool Read(std::vector<std::int16_t>& out) override
+            {
+                for (int guard = 0; guard < Count; ++guard)
+                {
+                    WAVEHDR& h = headers_[next_];
+                    if ((h.dwFlags & WHDR_DONE) == 0)
+                    {
+                        break;
+                    }
+                    const auto* p = reinterpret_cast<const std::int16_t*>(h.lpData);
+                    out.insert(out.end(), p, p + h.dwBytesRecorded / 2);
+                    waveInUnprepareHeader(device_, &h, sizeof(WAVEHDR));
+                    prepared_[next_] = false;
+                    if (!Queue(next_))
+                    {
+                        return false;
+                    }
+                    next_ = (next_ + 1) % Count;
+                }
+                return true;
+            }
+
+        private:
+            bool Queue(int i)
+            {
+                WAVEHDR& h = headers_[i];
+                std::memset(&h, 0, sizeof(h));
+                h.lpData = data_[i].data();
+                h.dwBufferLength = DWORD(data_[i].size());
+                if (waveInPrepareHeader(device_, &h, sizeof(WAVEHDR)) != MMSYSERR_NOERROR)
+                {
+                    return false;
+                }
+                prepared_[i] = true;
+                return waveInAddBuffer(device_, &h, sizeof(WAVEHDR)) == MMSYSERR_NOERROR;
+            }
+
+            HWAVEIN device_ = nullptr;
+            WAVEHDR headers_[Count] = {};
+            std::vector<char> data_[Count];
+            bool prepared_[Count] = {};
+            int next_ = 0;
+        };
+    }
+
+    std::vector<std::wstring> ListWaveIn()
+    {
+        std::vector<std::wstring> names;
+        const UINT count = waveInGetNumDevs();
+        for (UINT i = 0; i < count; ++i)
+        {
+            WAVEINCAPSW caps{};
+            if (waveInGetDevCapsW(i, &caps, sizeof(caps)) == MMSYSERR_NOERROR)
+            {
+                names.push_back(caps.szPname);
+            }
+        }
+        return names;
+    }
+
+    std::unique_ptr<AudioIn> OpenWaveIn(const std::wstring& name, int rate)
+    {
+        UINT id = WAVE_MAPPER;
+        const UINT count = waveInGetNumDevs();
+        for (UINT i = 0; i < count && !name.empty(); ++i)
+        {
+            WAVEINCAPSW caps{};
+            if (waveInGetDevCapsW(i, &caps, sizeof(caps)) == MMSYSERR_NOERROR && name == caps.szPname)
+            {
+                id = i;
+                break;
+            }
+        }
+        WAVEFORMATEX fmt{};
+        fmt.wFormatTag = WAVE_FORMAT_PCM;
+        fmt.nChannels = 1;
+        fmt.nSamplesPerSec = DWORD(rate);
+        fmt.wBitsPerSample = 16;
+        fmt.nBlockAlign = 2;
+        fmt.nAvgBytesPerSec = DWORD(rate) * 2;
+        HWAVEIN device = nullptr;
+        if (waveInOpen(&device, id, &fmt, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR)
+        {
+            return nullptr;
+        }
+        auto in = std::make_unique<WaveIn>(device, std::size_t(rate / 10) * 2);
+        if (!in->Start())
+        {
+            return nullptr;
+        }
+        return in;
     }
 
     std::unique_ptr<AudioOut> OpenWaveOut(int rate, int channels)

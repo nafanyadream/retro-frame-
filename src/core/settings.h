@@ -3,6 +3,7 @@
 #include "effects.h"
 #include "frame.h"
 #include "host.h"
+#include "voice.h"
 
 #include <array>
 #include <string>
@@ -83,6 +84,10 @@ namespace rf
         VideoSettings video;
         MusicSettings music;
         MusicSettings recorder;
+        VoiceChain voice = DefaultVoiceChain();
+        std::vector<VoicePreset> voicePresets;
+        std::wstring micName;
+        int micQuality = 0;
         EffectSettings effects;
         std::vector<LookPreset> presets;
         Color background = Rgb(0x3A, 0x6E, 0xA5);

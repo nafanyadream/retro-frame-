@@ -228,6 +228,25 @@ namespace rf::win
             dlg->Release();
             return result;
         }
+
+        bool WriteBytes(const std::wstring& path, const void* data, std::size_t size)
+        {
+            const std::wstring tmp = path + L".tmp";
+            HANDLE f = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (f == INVALID_HANDLE_VALUE)
+            {
+                return false;
+            }
+            DWORD written = 0;
+            const BOOL ok = size == 0 || WriteFile(f, data, DWORD(size), &written, nullptr);
+            CloseHandle(f);
+            if (!ok || written != size)
+            {
+                DeleteFileW(tmp.c_str());
+                return false;
+            }
+            return MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != FALSE;
+        }
     }
 
     HostWindow::HostWindow(WinHost& host, View& view, HWND owner, bool main)
@@ -736,6 +755,11 @@ namespace rf::win
         return RunSave(Owner(), folder, suggested, L"Сохранить видео", gif ? L"Анимация GIF" : L"Видео MP4", gif ? L"*.gif" : L"*.mp4", gif ? L"gif" : L"mp4");
     }
 
+    std::wstring WinHost::AskSaveSound(const std::wstring& folder, const std::wstring& suggested, bool mp3)
+    {
+        return RunSave(Owner(), folder, suggested, L"Сохранить звук", mp3 ? L"Звук MP3" : L"Звук WAV", mp3 ? L"*.mp3" : L"*.wav", mp3 ? L"mp3" : L"wav");
+    }
+
     std::vector<std::wstring> WinHost::AskOpenAudio(const std::wstring& folder)
     {
         return RunOpen(Owner(), folder, L"Открыть песни", {{L"Музыка", L"*.mp3;*.flac;*.wav;*.ogg;*.m4a;*.aac;*.wma;*.opus"}, {L"Все файлы", L"*.*"}}, true, false);
@@ -895,21 +919,26 @@ namespace rf::win
 
     bool WinHost::WriteText(const std::wstring& path, const std::string& utf8)
     {
-        const std::wstring tmp = path + L".tmp";
-        HANDLE f = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (f == INVALID_HANDLE_VALUE)
+        return WriteBytes(path, utf8.data(), utf8.size());
+    }
+
+    bool WinHost::WriteBinary(const std::wstring& path, const std::vector<unsigned char>& data)
+    {
+        return WriteBytes(path, data.data(), data.size());
+    }
+
+    std::wstring WinHost::RecordingsFolder()
+    {
+        wchar_t buf[MAX_PATH] = {};
+        if (FAILED(SHGetFolderPathW(nullptr, CSIDL_PERSONAL, nullptr, 0, buf)))
         {
-            return false;
+            return L"";
         }
-        DWORD written = 0;
-        const BOOL ok = WriteFile(f, utf8.data(), DWORD(utf8.size()), &written, nullptr);
-        CloseHandle(f);
-        if (!ok || written != utf8.size())
-        {
-            DeleteFileW(tmp.c_str());
-            return false;
-        }
-        return MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != FALSE;
+        const std::wstring app = JoinPath(buf, L"Ретро-рамка");
+        const std::wstring dir = JoinPath(app, L"Записи");
+        CreateDirectoryW(app.c_str(), nullptr);
+        CreateDirectoryW(dir.c_str(), nullptr);
+        return GetFileAttributesW(dir.c_str()) == INVALID_FILE_ATTRIBUTES ? std::wstring() : dir;
     }
 
     bool WinHost::RemoveFile(const std::wstring& path)
@@ -961,6 +990,16 @@ namespace rf::win
     std::unique_ptr<AudioOut> WinHost::OpenAudio(int rate, int channels)
     {
         return OpenWaveOut(rate, channels);
+    }
+
+    std::vector<std::wstring> WinHost::Microphones()
+    {
+        return ListWaveIn();
+    }
+
+    std::unique_ptr<AudioIn> WinHost::OpenMicrophone(const std::wstring& name, int rate)
+    {
+        return OpenWaveIn(name, rate);
     }
 
     std::unique_ptr<Process> WinHost::StartProcess(const std::wstring& exe, const std::vector<std::wstring>& args, bool input, bool output)

@@ -228,7 +228,13 @@ namespace rf
         else if (AudioMode())
         {
             format_->items = {L"MP4, высокое качество", L"MP4, среднее качество", L"MP4, низкое качество", L"PNG, один кадр"};
-            format_->index = std::clamp(Audio().format, 0, 3);
+            if (Recorder())
+            {
+                format_->items.push_back(L"WAV, только звук");
+                format_->items.push_back(L"MP3, только звук");
+            }
+            Audio().format = std::clamp(Audio().format, 0, int(format_->items.size()) - 1);
+            format_->index = Audio().format;
         }
         else
         {
@@ -246,8 +252,14 @@ namespace rf
             return;
         }
         StopPlay();
+        StopRecording(true);
+        tabs_->index = mode;
         mode_ = mode;
         s_.mode = mode;
+        if (mode_ == RecorderMode)
+        {
+            RefreshMicrophones();
+        }
         dirty_ = true;
         dirtyAt_ = host_.Ticks();
         preview_->rect.w = AudioMode() ? 300 : 602;
@@ -291,10 +303,10 @@ namespace rf
         {
             return;
         }
-        const Media* m = Cur();
+        const Media* m = mic_ ? nullptr : Cur();
         const bool has = m != nullptr;
         const double duration = has ? m->info.duration : 0.0;
-        playButton_->enabled = has;
+        playButton_->enabled = has && !mic_;
         playButton_->text = Playing() ? L"Стоп" : L"Проиграть";
         soundCheck_->checked = s_.previewSound;
         soundCheck_->enabled = has;
@@ -343,7 +355,7 @@ namespace rf
         if (AudioMode())
         {
             fps_->index = IndexOf(FpsChoices, int(std::size(FpsChoices)), Audio().fps, 3);
-            fps_->enabled = Audio().format != 3;
+            fps_->enabled = Audio().format < 3;
             if (Recorder())
             {
                 SyncRecorderControls();
@@ -574,6 +586,10 @@ namespace rf
             StopPlay();
             return;
         }
+        if (mic_)
+        {
+            return;
+        }
         if (AudioMode() && Song())
         {
             double from = Song()->position;
@@ -585,7 +601,7 @@ namespace rf
             musicFrom_ = from;
             if (s_.previewSound)
             {
-                sound_ = std::make_unique<SoundPreview>(host_, Song()->path, from, TrimEnd() - from);
+                sound_ = std::make_unique<SoundPreview>(host_, SoundOf(*Song()), from, TrimEnd() - from);
                 sound_->Prime();
                 sound_->Pump(true);
             }

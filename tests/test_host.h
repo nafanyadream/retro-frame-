@@ -3,6 +3,7 @@
 #include "../src/core/host.h"
 #include "../src/core/utf.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -284,11 +285,53 @@ namespace rftest
         int& open_;
     };
 
+    class FakeMic : public rf::AudioIn
+    {
+    public:
+        FakeMic(int rate, int& open, bool silent) : rate_(rate), open_(open), silent_(silent) { ++open_; }
+        ~FakeMic() override { --open_; }
+
+        bool Read(std::vector<std::int16_t>& out) override
+        {
+            const int n = rate_ / 25;
+            for (int i = 0; i < n; ++i, ++tick_)
+            {
+                const double t = double(tick_) / rate_;
+                const double env = silent_ ? 0.0 : std::max(0.0, std::sin(2.0 * 3.14159265358979 * 3.0 * t));
+                const double f0 = 140.0 + 20.0 * std::sin(2.0 * 3.14159265358979 * 0.5 * t);
+                phase_ += 2.0 * 3.14159265358979 * f0 / rate_;
+                double v = 0.0;
+                for (int h = 1; h <= 8; ++h)
+                {
+                    v += std::sin(h * phase_) / h;
+                }
+                out.push_back(std::int16_t(std::lround(v * env * 9000.0)));
+            }
+            return true;
+        }
+
+    private:
+        int rate_;
+        int& open_;
+        bool silent_;
+        long long tick_ = 0;
+        double phase_ = 0.0;
+    };
+
     class TestHost : public rf::Host
     {
     public:
         long long audioBytes = 0;
         int audioOpen = 0;
+        std::vector<std::wstring> microphones = {L"Тестовый микрофон"};
+        bool micWorks = true;
+        bool micSilent = false;
+        int micOpen = 0;
+        int micRate = 0;
+        std::wstring micName;
+        std::wstring recordingsFolder;
+        std::wstring tempFolder;
+        std::wstring soundAnswer;
         bool audioDevice = true;
         std::wstring folderAnswer;
         std::wstring archiveAnswer;
@@ -328,7 +371,19 @@ namespace rftest
             }
             return std::make_unique<FakeAudio>(audioBytes, audioOpen);
         }
+        std::vector<std::wstring> Microphones() override { return microphones; }
+        std::unique_ptr<rf::AudioIn> OpenMicrophone(const std::wstring& name, int rate) override
+        {
+            if (!micWorks)
+            {
+                return nullptr;
+            }
+            micName = name;
+            micRate = rate;
+            return std::make_unique<FakeMic>(rate, micOpen, micSilent);
+        }
         std::wstring AskSaveVideo(const std::wstring&, const std::wstring&, bool) override { return saveAnswer; }
+        std::wstring AskSaveSound(const std::wstring&, const std::wstring&, bool) override { return soundAnswer; }
         bool AskColor(rf::Color, rf::Color&) override { return false; }
         bool ReadImage(const std::wstring& path, rf::Image& out, std::wstring& e) override { return ReadIcon(path, out, e); }
         bool ReadIcon(const std::wstring& path, rf::Image& out, std::wstring& e) override
@@ -376,6 +431,13 @@ namespace rftest
             return true;
         }
         bool WriteText(const std::wstring&, const std::string&) override { return true; }
+        bool WriteBinary(const std::wstring& path, const std::vector<unsigned char>& data) override
+        {
+            std::ofstream f(Narrow(path), std::ios::binary);
+            f.write(reinterpret_cast<const char*>(data.data()), std::streamsize(data.size()));
+            return bool(f);
+        }
+        std::wstring RecordingsFolder() override { return recordingsFolder; }
         bool RemoveFile(const std::wstring& path) override
         {
             std::error_code ec;
@@ -413,7 +475,7 @@ namespace rftest
             e = L"нет 7-Zip";
             return false;
         }
-        std::wstring NewTempFolder() override { return L""; }
+        std::wstring NewTempFolder() override { return tempFolder; }
         void RemoveFolder(const std::wstring&) override {}
         std::wstring FfmpegPath() override { return ffmpeg; }
         std::unique_ptr<rf::Process> StartProcess(const std::wstring& exe, const std::vector<std::wstring>& args, bool input, bool output) override

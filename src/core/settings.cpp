@@ -310,6 +310,16 @@ namespace rf
         o << "recorder.fade=" << s.recorder.fade << "\n";
         o << "recorder.fps=" << s.recorder.fps << "\n";
         o << "recorder.russian=" << (s.recorder.russian ? 1 : 0) << "\n";
+        o << "voice=" << SerializeVoiceChain(s.voice) << "\n";
+        o << "micName=" << Escape(s.micName) << "\n";
+        o << "micQuality=" << s.micQuality << "\n";
+        o << "voicePresets=" << s.voicePresets.size() << "\n";
+        for (std::size_t i = 0; i < s.voicePresets.size(); ++i)
+        {
+            const std::string p = "voicePreset." + std::to_string(i) + ".";
+            o << p << "name=" << Escape(s.voicePresets[i].name) << "\n";
+            o << p << "chain=" << SerializeVoiceChain(s.voicePresets[i].chain) << "\n";
+        }
         o << "fx.intro=" << (s.effects.intro ? 1 : 0) << "\n";
         o << "fx.cursor=" << s.effects.cursor << "\n";
         o << "fx.cursorPlace=" << s.effects.cursorPlace << "\n";
@@ -524,12 +534,37 @@ namespace rf
         getBool("music.meter", s.music.meter);
         getBool("music.equalizer", s.music.equalizer);
         getBool("music.lyrics", s.music.lyrics);
-        getInt("recorder.format", s.recorder.format, 0, 3);
+        getInt("recorder.format", s.recorder.format, 0, 5);
         getBool("recorder.square", s.recorder.square);
         getInt("recorder.canvas", s.recorder.canvas, 0, CanvasCount - 1);
         getInt("recorder.fade", s.recorder.fade, 0, 30);
         getInt("recorder.fps", s.recorder.fps, 10, 60);
         getBool("recorder.russian", s.recorder.russian);
+        if (const std::string* v = get("voice"))
+        {
+            s.voice = ParseVoiceChain(*v);
+        }
+        getText("micName", s.micName);
+        getInt("micQuality", s.micQuality, 0, 1);
+        if (get("voicePresets") != nullptr)
+        {
+            int count = 0;
+            getInt("voicePresets", count, 0, 200);
+            s.voicePresets.clear();
+            for (int i = 0; i < count; ++i)
+            {
+                const std::string p = "voicePreset." + std::to_string(i) + ".";
+                const std::string* chain = get(p + "chain");
+                if (get(p + "name") == nullptr || chain == nullptr)
+                {
+                    continue;
+                }
+                VoicePreset vp;
+                getText(p + "name", vp.name);
+                vp.chain = ParseVoiceChain(*chain);
+                s.voicePresets.push_back(vp);
+            }
+        }
         getInt("music.fps", s.music.fps, 10, 60);
         const auto listed = [](int fps) {
             for (int choice : FpsChoices)

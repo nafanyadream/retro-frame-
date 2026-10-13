@@ -15,7 +15,7 @@ namespace rf
         constexpr int WindowH = 640;
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
-        const wchar_t* const AppVersion = L"0.5.0";
+        const wchar_t* const AppVersion = L"0.6.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
@@ -477,13 +477,20 @@ namespace rf
             flash_.clear();
             UpdateStatus();
         }
+        PollRecording();
         PollVideo(ms);
     }
 
     bool MainView::OnCloseRequest()
     {
         StopPlay();
+        StopRecording(false);
         fetch_.reset();
+        if (!voiceTemp_.empty())
+        {
+            host_.RemoveFolder(voiceTemp_);
+            voiceTemp_.clear();
+        }
         SaveSettings();
         return true;
     }
@@ -1172,7 +1179,7 @@ namespace rf
         dirty_ = true;
         dirtyAt_ = host_.Ticks();
         const bool video = mode_ == VideoMode;
-        const std::wstring ext = video ? (s_.video.format == 3 ? L".gif" : L".mp4") : (s_.music.format == 3 ? L".png" : L".mp4");
+        const std::wstring ext = video ? (s_.video.format == 3 ? L".gif" : L".mp4") : AudioExtension();
         const int n = int(q.size());
         int saved = 0;
         bool cancelled = false;

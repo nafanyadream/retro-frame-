@@ -3,10 +3,13 @@
 #include "../src/core/icons.h"
 #include "../src/core/mainview.h"
 #include "../src/core/music.h"
+#include "../src/core/voice_view.h"
 #include "test_host.h"
 
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 
 namespace
 {
@@ -204,6 +207,148 @@ int main(int argc, char** argv)
     Check(rf::ProbeMedia(host, host.saveAnswer, m, err) && m.width == 720 && m.height == 1280 && m.hasAudio && std::fabs(m.duration - 4.0) < 0.2,
           "save MP4 9:16 with sound from the recorder tab");
     Check(main.Settings().music.format == 0 && !main.Settings().music.square, "music tab settings untouched");
+
+    const std::string recDir = out + "/rec/";
+    const std::string tmpDir = out + "/tmp/";
+    std::filesystem::remove_all(recDir);
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(recDir);
+    std::filesystem::create_directories(tmpDir);
+    host.recordingsFolder = rf::FromUtf8(recDir);
+    host.tempFolder = rf::FromUtf8(tmpDir);
+    main.MutableSettings().recorder.square = false;
+    main.MutableSettings().recorder.format = 0;
+    main.Refresh();
+    const auto previewGreens = [&]() {
+        rf::Image img;
+        main.root.Paint(img);
+        int n = 0;
+        for (int y = 112; y < 408; ++y)
+        {
+            for (int x = 16; x < 316; ++x)
+            {
+                n += rf::Opaque(img.pixels[std::size_t(y * img.width + x)]) == rf::Rgb(0x00, 0xFF, 0x00);
+            }
+        }
+        return n;
+    };
+    const auto fileBits = [](const std::string& path) {
+        std::ifstream f(path, std::ios::binary);
+        unsigned char h[44] = {};
+        f.read(reinterpret_cast<char*>(h), 44);
+        return f ? int(h[34]) : -1;
+    };
+    click(386, 252);
+    Check(main.Recording() && host.micOpen == 1 && host.micRate == 22050 && host.micName.empty(), "record button opens the microphone (Windows 98 quality)");
+    settle(30);
+    shot("ui_recording");
+    Check(previewGreens() > 50, "live green wave while recording");
+    click(386, 252);
+    const std::string first = recDir + "Запись 1.wav";
+    Check(!main.Recording() && host.micOpen == 0 && std::filesystem::exists(first) && fileBits(first) == 8, "stop saves «Запись 1.wav», 8 bit");
+    Check(main.HasRecording() && main.RecordingIsVoice() && std::fabs(main.RecordingLength() - 1.2) < 0.15 && main.LevelsReady(),
+          "recording opens in the tab with its wave");
+    shot("ui_recorded");
+    const double plain = main.RecordingLength();
+
+    host.onModal = [&](rf::View& v) {
+        auto* fx = dynamic_cast<rf::VoiceView*>(&v);
+        if (fx == nullptr)
+        {
+            return 0;
+        }
+        rf::Image img;
+        fx->root.Paint(img);
+        rftest::WritePpm(out + "/ui_voice_dialog_empty.ppm", img);
+        fx->ApplyPreset(2);
+        const long long before = host.audioBytes;
+        fx->Listen();
+        for (int i = 1; i <= 5; ++i)
+        {
+            fx->OnTick(1000 + i * 40);
+        }
+        const bool heard = fx->Listening() && host.audioBytes > before && host.audioOpen == 1;
+        fx->Select(1);
+        fx->SetValue(0, 80);
+        fx->Move(1);
+        const bool moved = fx->Selected() == 2 && fx->Chain()[2].kind == rf::VoiceMetal && fx->Chain()[2].a == 80 && !fx->Listening();
+        std::printf("     heard %d moved %d presets %zu\n", int(heard), int(moved), fx->UserPresets().size());
+        fx->SavePreset(L"Мой голос");
+        fx->root.Paint(img);
+        rftest::WritePpm(out + "/ui_voice_dialog.ppm", img);
+        Check(heard && moved && fx->UserPresets().size() == 1, "effects dialog: preset, listen, slider, order, own preset");
+        return 1;
+    };
+    click(398, 282);
+    const std::wstring withFx = main.RecordingSound();
+    std::printf("     sound %s length %.3f plain %.3f summary %s\n", rf::ToUtf8(withFx).c_str(), main.RecordingLength(), plain,
+                rf::ToUtf8(rf::VoiceSummary(main.Settings().voice)).c_str());
+    Check(main.Settings().voice[0].kind == rf::VoicePitch && main.Settings().voice[0].on && main.Settings().voicePresets.size() == 1 &&
+              withFx.find(L"/tmp/voice") != std::wstring::npos && host.FileExists(withFx) && std::fabs(main.RecordingLength() - plain) < 0.01,
+          "effects applied: own sound file, same length");
+    shot("ui_recorded_fx");
+
+    host.onModal = [&](rf::View& v) {
+        if (auto* fx = dynamic_cast<rf::VoiceView*>(&v))
+        {
+            fx->ApplyPreset(9);
+            return 1;
+        }
+        return 0;
+    };
+    click(398, 282);
+    Check(main.RecordingLength() > plain + 0.3 && !host.FileExists(withFx) && host.FileExists(main.RecordingSound()), "cave preset: longer, old file removed");
+    const double cave = main.RecordingLength();
+
+    host.saveAnswer = dir + L"/voice_out.mp4";
+    click(240, 59);
+    settle(2);
+    rf::MediaInfo vm;
+    Check(rf::ProbeMedia(host, host.saveAnswer, vm, err) && vm.hasAudio && std::fabs(vm.duration - cave) < 0.2, "MP4 with the voice and effects");
+    main.MutableSettings().recorder.format = 4;
+    main.Refresh();
+    Check(main.ShownFormat() == 4, "WAV format in the list");
+    host.soundAnswer = dir + L"/voice_out.wav";
+    click(240, 59);
+    settle(2);
+    rf::MediaInfo wm;
+    Check(rf::ProbeAudio(host, host.soundAnswer, wm, err) && wm.hasAudio && !wm.hasVideo && std::fabs(wm.duration - cave) < 0.1 && fileBits(out + "/voice_out.wav") == 8,
+          "WAV only sound, 8 bit like Windows 98");
+    main.MutableSettings().recorder.format = 5;
+    main.Refresh();
+    host.soundAnswer = dir + L"/voice_out.mp3";
+    click(240, 59);
+    settle(2);
+    rf::MediaInfo mm;
+    Check(rf::ProbeAudio(host, host.soundAnswer, mm, err) && mm.hasAudio && std::fabs(mm.duration - cave) < 0.2, "MP3 only sound");
+    main.MutableSettings().recorder.format = 0;
+    main.Refresh();
+
+    host.onModal = [&](rf::View&) { return 0; };
+    main.MutableSettings().micQuality = 1;
+    host.micSilent = true;
+    const int modalsBefore = host.modalCalls;
+    click(386, 252);
+    Check(host.micRate == 44100, "normal quality records at 44 kHz");
+    settle(10);
+    click(386, 252);
+    Check(host.modalCalls == modalsBefore + 1 && fileBits(recDir + "Запись 2.wav") == 16, "silence warning, 16 bit file");
+    host.micSilent = false;
+    click(386, 252);
+    settle(10);
+    main.SetMode(rf::MusicMode);
+    Check(!main.Recording() && std::filesystem::exists(recDir + "Запись 3.wav") && main.ShownTab() == rf::MusicMode && main.Settings().mode == rf::MusicMode,
+          "switching tabs stops and keeps the recording");
+    main.SetMode(rf::RecorderMode);
+    Check(main.RecordingIsVoice() && main.HasTrack(), "recorder tab shows the new recording");
+    host.micWorks = false;
+    const int modalsMic = host.modalCalls;
+    click(386, 252);
+    Check(!main.Recording() && host.modalCalls == modalsMic + 1, "broken microphone: message, no recording");
+    host.micWorks = true;
+    main.OnDropFiles({song});
+    Check(main.HasRecording() && !main.RecordingIsVoice() && main.RecordingSound() == song, "songs from elsewhere get no voice effects");
+    shot("ui_recorder_song_no_fx");
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);
     return failures == 0 ? 0 : 2;
 }

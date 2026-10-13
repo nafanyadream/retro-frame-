@@ -209,4 +209,17 @@ namespace rf
     using FrameSource = std::function<const Image*(int index)>;
     ExportResult Encode(Host& host, const EncoderSpec& spec, int total, const FrameSource& frames, const ExportStep& step, std::wstring& error);
     ExportResult ExportVideo(Host& host, const ExportJob& job, const ExportStep& step, std::wstring& error);
+
+    struct SoundJob
+    {
+        std::wstring source;
+        std::wstring output;
+        double start = 0.0;
+        double duration = 0.0;
+        double fade = 0.0;
+        bool mp3 = false;
+        bool retro = false;
+    };
+
+    ExportResult ExportSound(Host& host, const SoundJob& job, const ExportStep& step, std::wstring& error);
 }

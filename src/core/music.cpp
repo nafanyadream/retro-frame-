@@ -192,7 +192,7 @@ namespace rf
             CentredText(p, lenBox, lenBox.Bottom() - 5 - th, RecorderSeconds(length, russian), f, ink);
             const Color black = Rgb(0, 0, 0);
             p.Sunken(wave, sh, &black);
-            DrawWave(p, wave.Inflate(-2), samples, m.absolute);
+            DrawWave(p, wave.Inflate(-2), samples, m.wave >= 0.0 ? m.wave : m.absolute);
             const Rect channel{10, 56, w - 20, 4};
             p.Sunken(channel, sh);
             const double pos = length > 0.0 ? std::clamp(m.absolute / length, 0.0, 1.0) : 0.0;
@@ -213,7 +213,13 @@ namespace rf
                 {
                     p.Raised(b, sh);
                 }
-                if (i == 0)
+                if (i < 2 && m.recording)
+                {
+                    const Glyph& g = i == 0 ? glyphs::BigRewind : glyphs::BigForward;
+                    Glyphed(p, b, g, sh.hilite, 1);
+                    Glyphed(p, b, g, sh.shadow, 0);
+                }
+                else if (i == 0)
                 {
                     Glyphed(p, b, glyphs::BigRewind, ink, 0);
                 }
@@ -239,9 +245,21 @@ namespace rf
                         for (int x = -5; x <= 5; ++x)
                         {
                             const double r = std::hypot(x, y);
+                            if (r <= 4.6 && m.recording)
+                            {
+                                p.Pixel(cx + x + 1, cy + y + 1, sh.hilite);
+                            }
+                        }
+                    }
+                    for (int y = -5; y <= 5; ++y)
+                    {
+                        for (int x = -5; x <= 5; ++x)
+                        {
+                            const double r = std::hypot(x, y);
                             if (r <= 4.6)
                             {
-                                p.Pixel(cx + x, cy + y, r > 3.8 ? Rgb(0x80, 0x00, 0x00) : Rgb(0xD0, 0x00, 0x00));
+                                const Color lit = r > 3.8 ? Rgb(0x80, 0x00, 0x00) : Rgb(0xD0, 0x00, 0x00);
+                                p.Pixel(cx + x, cy + y, m.recording ? sh.shadow : lit);
                             }
                         }
                     }

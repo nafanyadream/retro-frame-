@@ -67,7 +67,10 @@ namespace rf::win
         std::vector<std::wstring> AskOpenAudio(const std::wstring& folder) override;
         std::wstring AskOpenLyrics(const std::wstring& folder) override;
         std::unique_ptr<AudioOut> OpenAudio(int rate, int channels) override;
+        std::vector<std::wstring> Microphones() override;
+        std::unique_ptr<AudioIn> OpenMicrophone(const std::wstring& name, int rate) override;
         std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) override;
+        std::wstring AskSaveSound(const std::wstring& folder, const std::wstring& suggested, bool mp3) override;
         bool AskColor(Color initial, Color& result) override;
 
         bool ReadImage(const std::wstring& path, Image& out, std::wstring& error) override;
@@ -84,6 +87,8 @@ namespace rf::win
         std::wstring SettingsFolder() override;
         bool ReadText(const std::wstring& path, std::string& utf8) override;
         bool WriteText(const std::wstring& path, const std::string& utf8) override;
+        bool WriteBinary(const std::wstring& path, const std::vector<unsigned char>& data) override;
+        std::wstring RecordingsFolder() override;
         bool RemoveFile(const std::wstring& path) override;
         bool ListFolder(const std::wstring& path, std::vector<FolderItem>& out) override;
         std::unique_ptr<ByteSource> OpenFile(const std::wstring& path) override;

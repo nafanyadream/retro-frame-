@@ -61,6 +61,13 @@ namespace rf
         virtual bool Write(const void* data, std::size_t size) = 0;
     };
 
+    class AudioIn
+    {
+    public:
+        virtual ~AudioIn() = default;
+        virtual bool Read(std::vector<std::int16_t>& out) = 0;
+    };
+
     class Process
     {
     public:
@@ -89,7 +96,10 @@ namespace rf
         virtual std::vector<std::wstring> AskOpenAudio(const std::wstring& folder) = 0;
         virtual std::wstring AskOpenLyrics(const std::wstring& folder) = 0;
         virtual std::unique_ptr<AudioOut> OpenAudio(int rate, int channels) = 0;
+        virtual std::vector<std::wstring> Microphones() = 0;
+        virtual std::unique_ptr<AudioIn> OpenMicrophone(const std::wstring& name, int rate) = 0;
         virtual std::wstring AskSaveVideo(const std::wstring& folder, const std::wstring& suggested, bool gif) = 0;
+        virtual std::wstring AskSaveSound(const std::wstring& folder, const std::wstring& suggested, bool mp3) = 0;
         virtual bool AskColor(Color initial, Color& result) = 0;
 
         virtual bool ReadImage(const std::wstring& path, Image& out, std::wstring& error) = 0;
@@ -106,6 +116,8 @@ namespace rf
         virtual std::wstring SettingsFolder() = 0;
         virtual bool ReadText(const std::wstring& path, std::string& utf8) = 0;
         virtual bool WriteText(const std::wstring& path, const std::string& utf8) = 0;
+        virtual bool WriteBinary(const std::wstring& path, const std::vector<unsigned char>& data) = 0;
+        virtual std::wstring RecordingsFolder() = 0;
         virtual bool RemoveFile(const std::wstring& path) = 0;
         virtual bool ListFolder(const std::wstring& path, std::vector<FolderItem>& out) = 0;
         virtual std::unique_ptr<ByteSource> OpenFile(const std::wstring& path) = 0;

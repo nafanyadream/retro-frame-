@@ -38,6 +38,8 @@ namespace rf
         double now = 0.0;
         double length = 0.0;
         double absolute = 0.0;
+        double wave = -1.0;
+        bool recording = false;
         double angle = 0.0;
         float level = 0.0f;
         bool equalizer = false;

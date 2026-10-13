@@ -35,6 +35,11 @@ namespace rf
             return m && m->levelsReady;
         }
         int ShownFormat() const;
+        int ShownTab() const { return tabs_->index; }
+        bool Recording() const { return mic_ != nullptr; }
+        bool RecordingIsVoice() const { return recording_ && recording_->voice; }
+        std::wstring RecordingSound() const { return recording_ ? SoundOf(*recording_) : std::wstring(); }
+        double RecordingLength() const { return recording_ ? recording_->info.duration : 0.0; }
 
         void OnTick(unsigned long long ms) override;
         bool OnCloseRequest() override;
@@ -103,7 +108,22 @@ namespace rf
             bool levelsReady = false;
             std::vector<LyricLine> lyrics;
             std::wstring lyricsName;
+            bool voice = false;
+            std::shared_ptr<const std::vector<std::int16_t>> raw;
+            int rawRate = 0;
+            std::wstring sound;
         };
+
+        static const std::wstring& SoundOf(const Media& m) { return m.sound.empty() ? m.path : m.sound; }
+        void RefreshMicrophones();
+        void StartRecording();
+        void StopRecording(bool open);
+        void PollRecording();
+        void ApplyVoice(Media& m);
+        void EditVoice();
+        bool IsRecordingFile(const std::wstring& path);
+        std::wstring NextRecordingPath();
+        std::wstring AudioExtension() const;
 
         Media* Cur();
         const Media* Cur() const;
@@ -250,6 +270,20 @@ namespace rf
         ui::ComboBox* recFade_ = nullptr;
         ui::Label* recInfo_ = nullptr;
         ui::Label* recLevels_ = nullptr;
+        ui::ComboBox* recMic_ = nullptr;
+        ui::ComboBox* recQuality_ = nullptr;
+        ui::Button* recButton_ = nullptr;
+        ui::Label* recState_ = nullptr;
+        ui::Button* recEffects_ = nullptr;
+        ui::Label* recEffectsInfo_ = nullptr;
+        std::vector<std::wstring> micNames_;
+        std::unique_ptr<AudioIn> mic_;
+        std::vector<std::int16_t> micSamples_;
+        std::shared_ptr<std::vector<std::int16_t>> micAnalysis_;
+        int micRate_ = 0;
+        std::wstring micPath_;
+        std::wstring voiceTemp_;
+        int voiceCounter_ = 0;
         ui::TextField* artistField_ = nullptr;
         ui::TextField* songField_ = nullptr;
         ui::Button* coverLoad_ = nullptr;

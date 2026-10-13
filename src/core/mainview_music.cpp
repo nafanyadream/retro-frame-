@@ -1,6 +1,9 @@
 #include "mainview.h"
 
 #include "utf.h"
+#include "voice_view.h"
+
+#include <cmath>
 
 namespace rf
 {
@@ -133,25 +136,116 @@ namespace rf
             s_.recorder.fade = FadeChoices[std::clamp(i, 0, int(std::size(FadeChoices)) - 1)];
             Changed();
         };
-        recInfo_ = AddLabel(r, 334, 192, 274, L"");
+        auto* l3 = AddLabel(r, 334, 190, 80, L"Микрофон:");
+        recMic_ = Place<ui::ComboBox>(r, 418, 186, 190, 21);
+        recMic_->onChange = [this](int i) {
+            s_.micName = i > 0 && i <= int(micNames_.size()) ? micNames_[std::size_t(i - 1)] : std::wstring();
+            dirty_ = true;
+            dirtyAt_ = host_.Ticks();
+        };
+        auto* l4 = AddLabel(r, 334, 216, 80, L"Качество:");
+        recQuality_ = Place<ui::ComboBox>(r, 418, 212, 190, 21);
+        recQuality_->items = {L"Windows 98, 8 бит", L"Обычное, 16 бит"};
+        recQuality_->onChange = [this](int i) {
+            s_.micQuality = std::clamp(i, 0, 1);
+            dirty_ = true;
+            dirtyAt_ = host_.Ticks();
+        };
+        recButton_ = Place<ui::Button>(r, 334, 240, 104, 24);
+        recButton_->onClick = [this]() {
+            if (mic_)
+            {
+                StopRecording(true);
+            }
+            else
+            {
+                StartRecording();
+            }
+        };
+        recState_ = AddLabel(r, 446, 246, 162, L"");
+        recEffects_ = Place<ui::Button>(r, 334, 270, 128, 24);
+        recEffects_->text = L"Эффекты записи...";
+        recEffects_->onClick = [this]() { EditVoice(); };
+        recEffectsInfo_ = AddLabel(r, 470, 276, 138, L"");
+        recInfo_ = AddLabel(r, 334, 304, 274, L"");
         recInfo_->rect.h = 28;
-        auto* hint = AddLabel(r, 334, 232, 274,
-                              L"Окно как «Звукозапись» из Windows 98 и ME.\nЗелёная волна — настоящий звук песни,\nпозиция и ползунок идут вместе с ней.\nЗатухание работает, когда выбран фрагмент.\n\nС микрофона программа не записывает:\nкнопки в окне нарисованы как в оригинале,\nа звук берётся из открытой песни.");
-        hint->rect.h = 120;
+        auto* hint = AddLabel(r, 334, 338, 274,
+                              L"Записи сохраняются в «Документы» →\n«Ретро-рамка» → «Записи». Эффекты\nнакладываются только на эти записи.");
+        hint->rect.h = 42;
         hint->color = Rgb(0x40, 0x40, 0x40);
-        recLevels_ = AddLabel(r, 334, 390, 274, L"");
+        recLevels_ = AddLabel(r, 334, 386, 274, L"");
         recLevels_->color = Rgb(0x40, 0x40, 0x40);
-        recorderOnly_ = {group, l1, recLanguage_, l2, recFade_, recInfo_, hint, recLevels_};
+        recorderOnly_ = {group, l1, recLanguage_, l2, recFade_, l3, recMic_, l4, recQuality_, recButton_, recState_, recEffects_, recEffectsInfo_, recInfo_, hint,
+                         recLevels_};
+        RefreshMicrophones();
+    }
+
+    void MainView::RefreshMicrophones()
+    {
+        micNames_ = host_.Microphones();
+        recMic_->items = {L"По умолчанию"};
+        recMic_->index = 0;
+        for (std::size_t i = 0; i < micNames_.size(); ++i)
+        {
+            recMic_->items.push_back(micNames_[i]);
+            if (micNames_[i] == s_.micName)
+            {
+                recMic_->index = int(i) + 1;
+            }
+        }
     }
 
     void MainView::SyncRecorderControls()
     {
         const Media* m = recording_.get();
+        const bool live = mic_ != nullptr;
         recLanguage_->index = s_.recorder.russian ? 1 : 0;
         recFade_->index = FadeIndex(s_.recorder.fade);
-        recInfo_->text = m ? L"Файл: " + m->name + L"\nДлина: " + FormatClock(m->info.duration) + L" (" + RecorderSeconds(m->info.duration, true) + L")"
-                           : L"Откройте или перетащите готовую песню:\nона заиграет в окне «Звукозаписи».";
-        recLevels_->text = m && !m->levelsReady ? L"Слушаю песню для волны..." : L"";
+        recQuality_->index = std::clamp(s_.micQuality, 0, 1);
+        recMic_->enabled = !live;
+        recQuality_->enabled = !live;
+        static const Image dot = [] {
+            Image img(9, 9);
+            for (int y = 0; y < 9; ++y)
+            {
+                for (int x = 0; x < 9; ++x)
+                {
+                    const double r = std::hypot(x - 4.0, y - 4.0);
+                    if (r <= 4.3)
+                    {
+                        img.pixels[std::size_t(y * 9 + x)] = r > 3.4 ? Rgb(0x80, 0x00, 0x00) : Rgb(0xE0, 0x00, 0x00);
+                    }
+                }
+            }
+            return img;
+        }();
+        static const Image square = [] {
+            Image img(9, 9);
+            for (int y = 1; y < 8; ++y)
+            {
+                for (int x = 1; x < 8; ++x)
+                {
+                    img.pixels[std::size_t(y * 9 + x)] = Rgb(0, 0, 0);
+                }
+            }
+            return img;
+        }();
+        recButton_->icon = live ? square : dot;
+        recButton_->text = live ? L"Стоп" : L"Записать";
+        recState_->text = live ? L"Идёт запись: " + FormatPrecise(double(micSamples_.size()) / std::max(1, micRate_)) : std::wstring();
+        const bool voiceOk = live || !m || m->voice;
+        recEffects_->enabled = voiceOk && !live;
+        recEffectsInfo_->text = voiceOk ? VoiceSummary(s_.voice) : std::wstring(L"только для записи с микрофона");
+        if (live)
+        {
+            recInfo_->text = L"Файл: " + FileNameOf(micPath_) + L"\nГоворите: звук идёт в окно «Звукозаписи».";
+        }
+        else
+        {
+            recInfo_->text = m ? L"Файл: " + m->name + L"\nДлина: " + FormatClock(m->info.duration) + L" (" + RecorderSeconds(m->info.duration, true) + L")"
+                               : L"Нажмите «Записать» и говорите в микрофон\nили откройте готовую песню.";
+        }
+        recLevels_->text = m && !m->levelsReady && !live ? L"Слушаю песню для волны..." : L"";
     }
 
     void MainView::SyncMusicControls()
@@ -193,7 +287,7 @@ namespace rf
 
     FrameSettings MainView::MusicFrameSettings() const
     {
-        const std::wstring name = Song() ? Song()->name : std::wstring(L"песня.mp3");
+        const std::wstring name = Recorder() && mic_ ? FileNameOf(micPath_) : Song() ? Song()->name : std::wstring(L"песня.mp3");
         FrameSettings f = LookFrame(mode_, name);
         f.menuItems = s_.playerMenu;
         f.statusFields = {s_.playerStatus, s_.playerTime ? std::wstring(L"{время}") : std::wstring()};
@@ -308,7 +402,23 @@ namespace rf
         }
         MediaInfo info;
         std::wstring err;
-        if (!ProbeAudio(host_, path, info, err))
+        std::vector<std::int16_t> raw;
+        int rawRate = 0;
+        if (mode_ == RecorderMode && IsRecordingFile(path))
+        {
+            int bits = 0;
+            auto src = host_.OpenFile(path);
+            if (src && DecodeWav(*src, raw, rawRate, bits) && !raw.empty())
+            {
+                info.duration = double(raw.size()) / rawRate;
+                info.hasAudio = true;
+            }
+            else
+            {
+                raw.clear();
+            }
+        }
+        if (raw.empty() && !ProbeAudio(host_, path, info, err))
         {
             return Fail(failure, L"Не удалось открыть песню «" + FileNameOf(path) + L"»:\n" + err);
         }
@@ -325,13 +435,30 @@ namespace rf
         track->artist = info.artist;
         track->title = info.title.empty() ? StemOf(track->name) : info.title;
         Image cover;
-        if (ReadCover(host_, path, info, SquareSizes[0], cover))
+        if (raw.empty() && ReadCover(host_, path, info, SquareSizes[0], cover))
         {
             track->tagCover = cover;
             track->cover = std::move(cover);
         }
-        track->reader = std::make_unique<LevelReader>(host_, path);
+        track->voice = !raw.empty();
+        if (track->voice)
+        {
+            track->raw = std::make_shared<const std::vector<std::int16_t>>(std::move(raw));
+            track->rawRate = rawRate;
+        }
+        else
+        {
+            track->reader = std::make_unique<LevelReader>(host_, path);
+        }
+        if (SongSlot() && !SongSlot()->sound.empty())
+        {
+            host_.RemoveFile(SongSlot()->sound);
+        }
         SongSlot() = std::move(track);
+        if (Song()->voice)
+        {
+            ApplyVoice(*Song());
+        }
         for (const wchar_t* ext : {L".lrc", L".LRC", L".Lrc"})
         {
             const std::wstring lrc = JoinPath(DirectoryOf(path), StemOf(FileNameOf(path)) + ext);
@@ -358,7 +485,7 @@ namespace rf
         Media& m = *Song();
         if (!m.reader)
         {
-            m.reader = std::make_unique<LevelReader>(host_, m.path);
+            m.reader = std::make_unique<LevelReader>(host_, SoundOf(m));
         }
         m.reader->Wait();
         TakeLevels(m);
@@ -367,11 +494,13 @@ namespace rf
     void MainView::UpdateMusicPreview()
     {
         preview_->message.clear();
-        if (!Song())
+        const bool live = Recorder() && mic_ != nullptr;
+        if (!Song() && !live)
         {
             preview_->image = Image();
             preview_->message = host_.FfmpegPath().empty() ? L"Для музыки нужна\nпрограмма ffmpeg.\n\nПоложите ffmpeg.exe\nрядом с RetroFrame.exe."
-                                                           : L"Перетащите сюда песню\nили нажмите «Открыть...».\n\nПодходят MP3, FLAC, WAV,\nOGG и M4A.";
+                                : Recorder()                ? L"Нажмите «Записать»\nи говорите в микрофон.\n\nИли перетащите сюда песню:\nMP3, FLAC, WAV, OGG, M4A."
+                                                            : L"Перетащите сюда песню\nили нажмите «Открыть...».\n\nПодходят MP3, FLAC, WAV,\nOGG и M4A.";
             root.dirty = true;
             return;
         }
@@ -391,11 +520,28 @@ namespace rf
                 bgKey_ = key;
             }
         }
-        const FrameVars vars{Song()->name, 0, 0, L""};
-        MusicComposer composer(f, vars, plan, Image(), Song()->artist, Song()->title, Song()->cover);
-        SetupComposer(composer);
-        const MusicFrame mf = TrackFrame();
-        Image img = composer.Small(mf, plan.square ? bgPreview_ : Image());
+        MusicFrame mf;
+        Image img;
+        if (live)
+        {
+            const double length = double(micSamples_.size()) / std::max(1, micRate_);
+            MusicComposer composer(f, FrameVars{FileNameOf(micPath_), 0, 0, L""}, plan, Image(), L"", L"", Image());
+            composer.SetRecorder(s_.recorder.russian, length, micAnalysis_);
+            mf.now = length;
+            mf.length = length;
+            mf.absolute = length;
+            mf.wave = std::max(0.0, double(micAnalysis_ ? micAnalysis_->size() : 0) / AnalysisRate - RecorderWaveSeconds / 2.0);
+            mf.recording = true;
+            img = composer.Small(mf, plan.square ? bgPreview_ : Image());
+        }
+        else
+        {
+            const FrameVars vars{Song()->name, 0, 0, L""};
+            MusicComposer composer(f, vars, plan, Image(), Song()->artist, Song()->title, Song()->cover);
+            SetupComposer(composer);
+            mf = TrackFrame();
+            img = composer.Small(mf, plan.square ? bgPreview_ : Image());
+        }
         const int k = std::max(1, plan.scale);
         ApplyEffects(img, f, plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{0, 0, img.width, img.height}, 1, mf.now,
                      int(mf.now * 15.0));
@@ -407,9 +553,18 @@ namespace rf
 
     void MainView::UpdateMusicStatus(std::wstring& first, std::wstring& second, std::wstring& third)
     {
+        if (Recorder() && mic_)
+        {
+            first = L"Идёт запись: " + FileNameOf(micPath_) + L" — " + FormatPrecise(double(micSamples_.size()) / std::max(1, micRate_));
+            second = s_.micQuality == 0 ? L"8 бит, 22 кГц, моно" : L"16 бит, 44 кГц, моно";
+            third.clear();
+            return;
+        }
         if (!Song())
         {
-            first = host_.FfmpegPath().empty() ? L"Для музыки нужна программа ffmpeg" : L"Перетащите песню в окно или нажмите «Открыть...»";
+            first = host_.FfmpegPath().empty() ? L"Для музыки нужна программа ffmpeg"
+                    : Recorder()                ? L"Нажмите «Записать» или перетащите песню в окно"
+                                                : L"Перетащите песню в окно или нажмите «Открыть...»";
             second.clear();
             third.clear();
             scale_->items[0] = L"Авто";
@@ -418,6 +573,12 @@ namespace rf
         first = Song()->name + L" — " + FormatClock(Song()->info.duration) + (Song()->artist.empty() ? std::wstring() : L", " + Song()->artist);
         const FrameSettings f = MusicFrameSettings();
         const MusicPlan plan = MusicPlanFor(f);
+        if (Recorder() && Audio().format >= 4)
+        {
+            second = Audio().format == 5 ? L"Только звук, MP3" : Song()->voice && Song()->rawRate == 22050 ? L"Только звук, WAV 8 бит" : L"Только звук, WAV";
+            third = L"Фрагмент: " + FormatPrecise(TrimEnd() - TrimStart());
+            return;
+        }
         const std::wstring kind = Audio().format == 3 ? L"PNG " : plan.square ? L"" : L"Окно ";
         second = plan.square ? kind + std::to_wstring(plan.outW) + L"x" + std::to_wstring(plan.outH) + L", окно " + std::to_wstring(plan.scale) + L"x"
                              : kind + std::to_wstring(plan.outW) + L" x " + std::to_wstring(plan.outH) + L", " + std::to_wstring(plan.scale) + L"x";
@@ -452,13 +613,17 @@ namespace rf
         }
         StopPlay();
         const std::wstring stem = StemOf(Song()->name);
-        const bool png = Audio().format == 3;
+        const int format = Audio().format;
+        const bool png = format == 3;
         if (!png && host_.FfmpegPath().empty())
         {
             ShowMessage(host_, L"Ретро-рамка", FfmpegMissingText(), MessageKind::Warning);
             return;
         }
-        const std::wstring path = png ? host_.AskSavePath(s_.saveFolder, stem + L"_retro.png", ImageFormat::Png) : host_.AskSaveVideo(s_.saveFolder, stem + L"_retro.mp4", false);
+        const std::wstring suggested = stem + L"_retro" + AudioExtension();
+        const std::wstring path = png ? host_.AskSavePath(s_.saveFolder, suggested, ImageFormat::Png)
+                                  : format >= 4 ? host_.AskSaveSound(s_.saveFolder, suggested, format == 5)
+                                                : host_.AskSaveVideo(s_.saveFolder, suggested, false);
         if (path.empty())
         {
             return;
@@ -476,8 +641,20 @@ namespace rf
             MusicStill(img);
             return host_.WriteImage(path, img, ImageFormat::Png, 100, err) ? ExportResult::Done : ExportResult::Failed;
         }
+        if (Recorder() && Audio().format >= 4)
+        {
+            SoundJob sound;
+            sound.source = SoundOf(*Song());
+            sound.output = path;
+            sound.start = TrimStart();
+            sound.duration = TrimEnd() - TrimStart();
+            sound.fade = Song()->whole ? 0.0 : double(Audio().fade);
+            sound.mp3 = Audio().format == 5;
+            sound.retro = Song()->voice && Song()->rawRate == 22050;
+            return WithProgress(path, [&](const ExportStep& step) { return ExportSound(host_, sound, step, err); }, title);
+        }
         MusicJob job;
-        job.source = Song()->path;
+        job.source = SoundOf(*Song());
         job.output = path;
         job.quality = std::clamp(Audio().format, 0, 2);
         job.start = TrimStart();
@@ -567,5 +744,245 @@ namespace rf
         }
         Song()->cover = Song()->tagCover;
         UpdatePreview();
+    }
+
+    std::wstring MainView::AudioExtension() const
+    {
+        const int format = Audio().format;
+        return format == 3 ? L".png" : format == 4 && Recorder() ? L".wav" : format == 5 && Recorder() ? L".mp3" : L".mp4";
+    }
+
+    bool MainView::IsRecordingFile(const std::wstring& path)
+    {
+        const std::wstring folder = host_.RecordingsFolder();
+        if (folder.empty() || path.size() < 4)
+        {
+            return false;
+        }
+        const auto strip = [](std::wstring d) {
+            while (!d.empty() && (d.back() == L'\\' || d.back() == L'/'))
+            {
+                d.pop_back();
+            }
+            return ToLower(d);
+        };
+        return strip(DirectoryOf(path)) == strip(folder) && ToLower(path.substr(path.size() - 4)) == L".wav";
+    }
+
+    std::wstring MainView::NextRecordingPath()
+    {
+        const std::wstring folder = host_.RecordingsFolder();
+        std::wstring path;
+        for (int n = 1; n < 100000; ++n)
+        {
+            path = JoinPath(folder, L"Запись " + std::to_wstring(n) + L".wav");
+            if (!host_.FileExists(path))
+            {
+                break;
+            }
+        }
+        return path;
+    }
+
+    void MainView::StartRecording()
+    {
+        if (mic_ || !Recorder())
+        {
+            return;
+        }
+        StopPlay();
+        if (host_.RecordingsFolder().empty())
+        {
+            Warn(L"Не удалось создать папку для записей\n«Документы\\Ретро-рамка\\Записи».");
+            return;
+        }
+        RefreshMicrophones();
+        if (micNames_.empty())
+        {
+            Warn(L"Микрофон не найден.\n\nПодключите микрофон и нажмите «Записать» ещё раз.");
+            return;
+        }
+        micRate_ = s_.micQuality == 0 ? 22050 : 44100;
+        mic_ = host_.OpenMicrophone(s_.micName, micRate_);
+        if (!mic_)
+        {
+            Warn(L"Не удалось включить микрофон.\n\nПроверьте, что он подключён, и что в Windows разрешён\nдоступ к микрофону: Параметры → Конфиденциальность → Микрофон.");
+            return;
+        }
+        micPath_ = NextRecordingPath();
+        micSamples_.clear();
+        micAnalysis_ = std::make_shared<std::vector<std::int16_t>>();
+        SyncControls();
+        UpdatePreview();
+        UpdateStatus();
+    }
+
+    void MainView::PollRecording()
+    {
+        if (!mic_)
+        {
+            return;
+        }
+        const bool ok = mic_->Read(micSamples_);
+        const std::size_t limit = std::size_t(micRate_) * 600;
+        const bool full = micSamples_.size() >= limit;
+        if (full)
+        {
+            micSamples_.resize(limit);
+        }
+        const double k = double(micRate_) / AnalysisRate;
+        for (;;)
+        {
+            const double pos = double(micAnalysis_->size()) * k;
+            const std::size_t i = std::size_t(pos);
+            if (i + 1 >= micSamples_.size())
+            {
+                break;
+            }
+            const double a = micSamples_[i];
+            const double b = micSamples_[i + 1];
+            micAnalysis_->push_back(std::int16_t(std::lround(a + (b - a) * (pos - double(i)))));
+        }
+        if (!ok)
+        {
+            StopRecording(true);
+            Warn(L"Микрофон перестал отвечать. То, что успело записаться, сохранено.");
+            return;
+        }
+        if (full)
+        {
+            StopRecording(true);
+            Warn(L"Запись остановлена: одна запись может длиться до 10 минут.");
+            return;
+        }
+        SyncRecorderControls();
+        UpdatePreview();
+        UpdateStatus();
+    }
+
+    void MainView::StopRecording(bool open)
+    {
+        if (!mic_)
+        {
+            return;
+        }
+        mic_->Read(micSamples_);
+        mic_.reset();
+        const std::vector<std::int16_t> samples = std::move(micSamples_);
+        micSamples_.clear();
+        micAnalysis_.reset();
+        const std::wstring path = micPath_;
+        const int rate = micRate_;
+        SyncControls();
+        UpdatePreview();
+        UpdateStatus();
+        if (samples.size() < std::size_t(rate / 5))
+        {
+            if (open)
+            {
+                Warn(L"Запись получилась слишком короткой. Нажмите «Записать» и говорите.");
+            }
+            return;
+        }
+        if (!host_.WriteBinary(path, EncodeWav(samples, rate, rate == 22050 ? 8 : 16)))
+        {
+            Warn(L"Не удалось сохранить запись «" + FileNameOf(path) + L"».");
+            return;
+        }
+        if (!open)
+        {
+            return;
+        }
+        int peak = 0;
+        for (std::int16_t v : samples)
+        {
+            peak = std::max(peak, std::abs(int(v)));
+        }
+        OpenMedia(RecorderMode, {path});
+        if (peak < 200)
+        {
+            Warn(L"Микрофон записал тишину.\n\nПроверьте, что выбран нужный микрофон и что в Windows разрешён\nдоступ к нему: Параметры → Конфиденциальность → Микрофон.");
+            return;
+        }
+        flash_ = L"Запись сохранена: Документы\\Ретро-рамка\\Записи\\" + FileNameOf(path);
+        flashUntil_ = host_.Ticks() + 5000;
+        UpdateStatus();
+    }
+
+    void MainView::ApplyVoice(Media& m)
+    {
+        if (!m.voice || !m.raw)
+        {
+            return;
+        }
+        const double before = m.info.duration;
+        std::vector<std::int16_t> out = ProcessVoice(*m.raw, m.rawRate, s_.voice);
+        std::wstring sound;
+        if (VoiceEffectCount(s_.voice) > 0)
+        {
+            if (voiceTemp_.empty())
+            {
+                voiceTemp_ = host_.NewTempFolder();
+            }
+            if (!voiceTemp_.empty())
+            {
+                sound = JoinPath(voiceTemp_, L"voice" + std::to_wstring(++voiceCounter_) + L".wav");
+                if (!host_.WriteBinary(sound, EncodeWav(out, m.rawRate, 16)))
+                {
+                    sound.clear();
+                }
+            }
+            if (sound.empty())
+            {
+                Warn(L"Не удалось подготовить звук с эффектами: временная папка недоступна.");
+                out = *m.raw;
+            }
+        }
+        if (!m.sound.empty())
+        {
+            host_.RemoveFile(m.sound);
+        }
+        m.sound = sound;
+        m.info.duration = std::max(0.05, double(out.size()) / m.rawRate);
+        if (std::fabs(m.info.duration - before) > 0.01)
+        {
+            m.whole = true;
+            m.start = 0.0;
+            m.end = m.info.duration;
+        }
+        m.position = std::clamp(m.position, 0.0, std::max(0.0, m.info.duration - 0.05));
+        std::vector<std::int16_t> analysis = ResampleVoice(out, m.rawRate, AnalysisRate);
+        m.levels = LevelsFromSamples(analysis, AnalysisRate);
+        m.spectrum.clear();
+        m.samples = std::make_shared<const std::vector<std::int16_t>>(std::move(analysis));
+        m.levelsReady = true;
+        m.reader.reset();
+    }
+
+    void MainView::EditVoice()
+    {
+        if (mic_)
+        {
+            return;
+        }
+        StopPlay();
+        Media* m = recording_.get();
+        const bool voice = m && m->voice;
+        VoiceView view(host_, s_.voice, s_.voicePresets, voice ? m->raw : nullptr, voice ? m->rawRate : 0);
+        const bool ok = host_.RunModal(view) == 1;
+        s_.voicePresets = view.UserPresets();
+        if (ok)
+        {
+            s_.voice = view.Chain();
+            if (voice)
+            {
+                ApplyVoice(*recording_);
+            }
+        }
+        dirty_ = true;
+        dirtyAt_ = host_.Ticks();
+        SyncControls();
+        UpdatePreview();
+        UpdateStatus();
     }
 }

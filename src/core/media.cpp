@@ -1457,6 +1457,65 @@ namespace rf
         return ExportResult::Done;
     }
 
+    ExportResult ExportSound(Host& host, const SoundJob& job, const ExportStep& step, std::wstring& error)
+    {
+        const std::wstring ffmpeg = host.FfmpegPath();
+        if (ffmpeg.empty())
+        {
+            error = FfmpegMissingText();
+            return ExportResult::Failed;
+        }
+        std::vector<std::wstring> args = {L"-v", L"error", L"-nostdin", L"-y"};
+        if (job.start > 0.0)
+        {
+            args.insert(args.end(), {L"-ss", Number(job.start)});
+        }
+        args.insert(args.end(), {L"-t", Number(job.duration), L"-i", job.source, L"-vn", L"-sn"});
+        if (job.fade > 0.0 && job.duration > 0.2)
+        {
+            const double f = std::min(job.fade, job.duration / 3.0);
+            args.insert(args.end(), {L"-af", L"afade=t=in:st=0:d=" + Number(f) + L",afade=t=out:st=" + Number(job.duration - f) + L":d=" + Number(f)});
+        }
+        if (job.mp3)
+        {
+            args.insert(args.end(), {L"-c:a", L"libmp3lame", L"-q:a", L"2", L"-f", L"mp3"});
+        }
+        else if (job.retro)
+        {
+            args.insert(args.end(), {L"-ac", L"1", L"-ar", L"22050", L"-c:a", L"pcm_u8", L"-f", L"wav"});
+        }
+        else
+        {
+            args.insert(args.end(), {L"-c:a", L"pcm_s16le", L"-f", L"wav"});
+        }
+        args.push_back(job.output);
+        auto proc = host.StartProcess(ffmpeg, args, false, false);
+        if (!proc)
+        {
+            error = L"не удалось запустить ffmpeg";
+            return ExportResult::Failed;
+        }
+        int code = 0;
+        if (!proc->Finish(code, [&]() { return step(1, 1); }))
+        {
+            proc->Kill();
+            proc->Finish(code, []() { return true; });
+            host.RemoveFile(job.output);
+            return ExportResult::Cancelled;
+        }
+        if (code != 0)
+        {
+            error = FromUtf8(LastLines(proc->Log(), 3));
+            if (error.empty())
+            {
+                error = L"ffmpeg завершился с ошибкой " + std::to_wstring(code);
+            }
+            host.RemoveFile(job.output);
+            return ExportResult::Failed;
+        }
+        return ExportResult::Done;
+    }
+
     ExportResult ExportVideo(Host& host, const ExportJob& job, const ExportStep& step, std::wstring& error)
     {
         if (host.FfmpegPath().empty())
