@@ -369,8 +369,10 @@ namespace rf
             p.Raised(Rect{tx, y + 2, tw, 18}, sh);
             const int by = y + 26;
             const Glyph* glyphsRow[] = {&glyphs::Play, &glyphs::Pause, &glyphs::Stop, nullptr, &glyphs::Previous, &glyphs::Rewind, &glyphs::FastForward, &glyphs::Next};
+            const int room = right - left - 12;
+            const std::size_t count = room >= 7 * 24 + 9 ? 8 : room >= 3 * 24 ? 3 : room >= 2 * 24 ? 2 : 1;
             int bx = left + 6;
-            for (std::size_t i = 0; i < 8; ++i)
+            for (std::size_t i = 0; i < count; ++i)
             {
                 if (glyphsRow[i] == nullptr)
                 {
@@ -529,12 +531,18 @@ namespace rf
         return AutoScale(contentWidth, contentHeight);
     }
 
-    Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale)
+    Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale, Rect* area)
     {
         const int k = std::max(1, scale);
         if (content.Empty())
         {
-            return ScaleNearest(RenderFrame(settings, 64, 48, vars, nullptr), k);
+            Rect client;
+            Image empty = ScaleNearest(RenderFrame(settings, 64, 48, vars, &client), k);
+            if (area != nullptr)
+            {
+                *area = Rect{client.x * k, client.y * k, client.w * k, client.h * k};
+            }
+            return empty;
         }
         const int cw = (content.width + k - 1) / k;
         const int ch = (content.height + k - 1) / k;
@@ -543,6 +551,10 @@ namespace rf
         Image out = ScaleNearest(frame, k);
         const int ox = client.x * k;
         const int oy = client.y * k;
+        if (area != nullptr)
+        {
+            *area = Rect{ox, oy, cw * k, ch * k};
+        }
         const Color back = Opaque(settings.colors.window);
         for (int y = 0; y < ch * k; ++y)
         {

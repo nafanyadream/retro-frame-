@@ -82,7 +82,7 @@ namespace
         const rf::FrameSettings f = Window(rf::Style::Win98);
         const int k = 2;
         const rf::Image framed = rf::ComposeFramed(rf::Image(300, 200, rf::Rgb(0xFF, 0xFF, 0xFF)), f, rf::FrameVars{L"a.jpg", 600, 400, L""}, k);
-        const rf::Stage stage{rf::Rect{0, 0, framed.width, framed.height}, k};
+        const rf::Stage stage{rf::Rect{0, 0, framed.width, framed.height}, k, rf::Rect{}};
         rf::EffectSettings e;
         e.cursor = 1;
         rf::Image img = framed;
@@ -119,7 +119,7 @@ namespace
         Check(changed > img.width * img.height / 4, "cascade drawn over the window");
         rftest::WritePpm(out + "/fx_cascade.ppm", img);
         const int pw = rf::RenderPopup(e, f, true, nullptr).width * k;
-        const rf::EffectsLayer narrow(e, f, rf::Stage{rf::Rect{0, 0, pw + 40, 900}, k});
+        const rf::EffectsLayer narrow(e, f, rf::Stage{rf::Rect{0, 0, pw + 40, 900}, k, rf::Rect{}});
         const std::vector<rf::Rect> rects = narrow.PopupRects(pw + 40, 900);
         bool inside = rects.size() == std::size_t(rf::CascadeCount);
         for (const auto& r : rects)
@@ -151,10 +151,49 @@ namespace
         rf::ApplyScreen(crt, 1, 0, k);
         rftest::WritePpm(out + "/fx_crt.ppm", crt);
 
+        rf::EffectSettings tv;
+        tv.screen = 1;
+        rf::Image only = framed;
+        const rf::Rect inner{40, 50, 120, 80};
+        rf::EffectsLayer(tv, f, rf::Stage{rf::Rect{0, 0, framed.width, framed.height}, k, inner}).Apply(only, 0.0, 0, false);
+        bool outsideSame = true;
+        bool insideChanged = false;
+        for (int y = 0; y < framed.height; ++y)
+        {
+            for (int x = 0; x < framed.width; ++x)
+            {
+                const bool in = x >= inner.x && y >= inner.y && x < inner.x + inner.w && y < inner.y + inner.h;
+                const bool same = only.Get(x, y) == framed.Get(x, y);
+                outsideSame = outsideSame && (in || same);
+                insideChanged = insideChanged || (in && !same);
+            }
+        }
+        Check(outsideSame && insideChanged, "crt only inside the picture, title and frame stay clean");
+        rf::FrameSettings pf = Window(rf::Style::Win98);
+        pf.player = true;
+        const rf::VideoPlan pp = rf::PlanVideo(pf, 320, 240, rf::VideoTarget{});
+        const rf::Image clipFrame(pp.videoW, pp.videoH, rf::Rgb(120, 120, 120));
+        rf::PlayerComposer clean(pf, rf::FrameVars{L"a.mp4", 320, 240, L""}, pp, rf::Image());
+        rf::PlayerComposer tube(pf, rf::FrameVars{L"a.mp4", 320, 240, L""}, pp, rf::Image());
+        tube.SetEffects(tv);
+        const rf::Image plainFrame = clean.Compose(clipFrame, 0.5, L"00:01");
+        const rf::Image tubeFrame = tube.Compose(clipFrame, 0.5, L"00:01");
+        const rf::Rect vc = rf::MeasureFrame(pf, pp.clientW, pp.clientH).client;
+        const int midX = (vc.x + vc.w / 2) * pp.scale;
+        const int midY = (vc.y + vc.h / 2) * pp.scale;
+        bool titleSame = true;
+        for (int x = 0; x < plainFrame.width; ++x)
+        {
+            titleSame = titleSame && plainFrame.Get(x, 10 * pp.scale) == tubeFrame.Get(x, 10 * pp.scale) &&
+                        plainFrame.Get(x, plainFrame.height - 3) == tubeFrame.Get(x, plainFrame.height - 3);
+        }
+        const bool videoChanged = plainFrame.Get(midX, midY) != tubeFrame.Get(midX, midY) || plainFrame.Get(midX, midY + 1) != tubeFrame.Get(midX, midY + 1);
+        Check(titleSame && videoChanged, "video export: crt on the video, title bar and controls clean");
+
         rf::EffectSettings intro;
         intro.intro = true;
         const rf::Image bg(400, 400, rf::Rgb(0x20, 0x40, 0x80));
-        const rf::Stage centre{rf::Rect{50, 60, 300, 260}, 1};
+        const rf::Stage centre{rf::Rect{50, 60, 300, 260}, 1, rf::Rect{}};
         rf::Image first(400, 400);
         rf::EffectsLayer(intro, Window(rf::Style::Win95), centre).DrawIntro(first, bg, 0.0);
         rf::Image late(400, 400);

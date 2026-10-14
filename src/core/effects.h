@@ -29,6 +29,7 @@ namespace rf
     {
         Rect window;
         int scale = 1;
+        Rect content;
     };
 
     bool HasOverlays(const EffectSettings& e);

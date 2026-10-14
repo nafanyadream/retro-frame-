@@ -782,30 +782,34 @@ namespace rf
             Image square = bgPreview_;
             Rect client;
             Image window = RenderFrame(f, plan.clientW, plan.clientH, vars, &client);
-            if (!clip_->frame.Empty())
-            {
-                DrawCentered(window, ResizeSmooth(clip_->frame, std::max(2, plan.videoW / k), std::max(2, plan.videoH / k)), client);
-            }
-            Painter(square).DrawOpaque(window, plan.windowX / k, plan.windowY / k);
-            ApplyEffects(square, f, Rect{plan.windowX / k, plan.windowY / k, window.width, window.height}, 1, rel, int(rel * 15.0));
-            preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;
-        }
-        else
-        {
-            const FrameGeometry g = MeasureFrame(f, 100, 100);
-            const int maxW = std::max(PlayerMinWidth, availW - (g.width - 100));
-            const int maxH = std::max(40, availH - (g.height - 100));
-            int vw = 0;
-            int vh = 0;
-            Fit(info.width, info.height, maxW, maxH, vw, vh);
-            Rect client;
-            Image window = RenderFrame(f, std::max(vw, PlayerMinWidth), vh, vars, &client);
+            const int vw = std::max(2, plan.videoW / k);
+            const int vh = std::max(2, plan.videoH / k);
             if (!clip_->frame.Empty())
             {
                 DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), client);
             }
-            ApplyEffects(window, f, Rect{0, 0, window.width, window.height}, 1, rel, int(rel * 15.0));
-            preview_->image = std::move(window);
+            const int wx = plan.windowX / k;
+            const int wy = plan.windowY / k;
+            Painter(square).DrawOpaque(window, wx, wy);
+            const Rect video{wx + client.x + (client.w - vw) / 2, wy + client.y + (client.h - vh) / 2, vw, vh};
+            ApplyEffects(square, f, Rect{wx, wy, window.width, window.height}, video, 1, rel, int(rel * 15.0));
+            preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;
+        }
+        else
+        {
+            const VideoPlan plan = PlanVideo(f, info.width, info.height, Target());
+            const int k = plan.scale;
+            Rect client;
+            Image window = RenderFrame(f, plan.clientW, plan.clientH, vars, &client);
+            const int vw = std::max(2, plan.videoW / k);
+            const int vh = std::max(2, plan.videoH / k);
+            if (!clip_->frame.Empty())
+            {
+                DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), client);
+            }
+            const Rect video{client.x + (client.w - vw) / 2, client.y + (client.h - vh) / 2, vw, vh};
+            ApplyEffects(window, f, Rect{0, 0, window.width, window.height}, video, 1, rel, int(rel * 15.0));
+            preview_->image = window.width > availW || window.height > availH ? FitInside(window, availW, availH, false) : std::move(window);
         }
         root.dirty = true;
     }

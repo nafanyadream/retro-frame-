@@ -125,6 +125,14 @@ namespace rf
         ShowSource(std::clamp(startSource, 0, count - 1));
         list_->EnsureVisible(current_);
         root.SetFocus(grid_);
+        root.charHook = [this](wchar_t ch) {
+            if (ch < 32 || !search_->enabled)
+            {
+                return false;
+            }
+            root.SetFocus(search_);
+            return search_->OnChar(ch);
+        };
     }
 
     std::wstring LibraryView::Where(const LibraryIcon& item) const

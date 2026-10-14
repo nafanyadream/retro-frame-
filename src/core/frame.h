@@ -49,7 +49,8 @@ namespace rf
     };
 
     constexpr int PlayerPanelHeight = 52;
-    constexpr int PlayerMinWidth = 280;
+    constexpr int PlayerMinWidth = 120;
+    constexpr int PlayerComfortWidth = 200;
 
     struct FrameGeometry
     {
@@ -64,5 +65,5 @@ namespace rf
     int AutoScale(int contentWidth, int contentHeight);
     Rect CloseButtonRect(const FrameSettings& settings, int frameWidth);
     int EffectiveScale(const FrameSettings& settings, int contentWidth, int contentHeight);
-    Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale);
+    Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale, Rect* area = nullptr);
 }

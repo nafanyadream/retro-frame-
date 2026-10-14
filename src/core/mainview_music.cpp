@@ -522,6 +522,7 @@ namespace rf
         }
         MusicFrame mf;
         Image img;
+        Rect inside;
         if (live)
         {
             const double length = double(micSamples_.size()) / std::max(1, micRate_);
@@ -532,7 +533,7 @@ namespace rf
             mf.absolute = length;
             mf.wave = std::max(0.0, double(micAnalysis_ ? micAnalysis_->size() : 0) / AnalysisRate - RecorderWaveSeconds / 2.0);
             mf.recording = true;
-            img = composer.Small(mf, plan.square ? bgPreview_ : Image());
+            img = composer.Small(mf, plan.square ? bgPreview_ : Image(), &inside);
         }
         else
         {
@@ -540,11 +541,11 @@ namespace rf
             MusicComposer composer(f, vars, plan, Image(), Song()->artist, Song()->title, Song()->cover);
             SetupComposer(composer);
             mf = TrackFrame();
-            img = composer.Small(mf, plan.square ? bgPreview_ : Image());
+            img = composer.Small(mf, plan.square ? bgPreview_ : Image(), &inside);
         }
         const int k = std::max(1, plan.scale);
-        ApplyEffects(img, f, plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{0, 0, img.width, img.height}, 1, mf.now,
-                     int(mf.now * 15.0));
+        ApplyEffects(img, f, plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{0, 0, img.width, img.height}, inside, 1,
+                     mf.now, int(mf.now * 15.0));
         const int availW = preview_->rect.w - 4 - 12;
         const int availH = preview_->rect.h - 4 - 12;
         preview_->image = img.width > availW || img.height > availH ? FitInside(img, availW, availH, false) : std::move(img);

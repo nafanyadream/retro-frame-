@@ -1165,6 +1165,30 @@ namespace rf
         const int sh = std::max(2, sourceH);
         const double aspect = double(sw) / double(sh);
         const int fixed = frame.scale >= 1 && frame.scale <= 4 ? frame.scale : 0;
+        const auto fit = [aspect](int maxW, int maxH, int& cw, int& ch) {
+            cw = std::max(2, maxW);
+            ch = std::max(2, int(std::lround(cw / aspect)));
+            if (ch > maxH)
+            {
+                ch = std::max(2, maxH);
+                cw = std::max(2, int(std::lround(ch * aspect)));
+            }
+        };
+        const auto fill = [&p, aspect]() {
+            const int k = p.scale;
+            const int boxW = p.clientW * k;
+            const int boxH = p.clientH * k;
+            int vw = boxW;
+            int vh = int(std::lround(vw / aspect));
+            if (vh > boxH)
+            {
+                vh = boxH;
+                vw = int(std::lround(vh * aspect));
+            }
+            const int slack = 2 * k + 2;
+            p.videoW = std::max(2, boxW - vw <= slack ? boxW : vw);
+            p.videoH = std::max(2, boxH - vh <= slack ? boxH : vh);
+        };
         if (target.square)
         {
             int outW = std::max(2, target.canvasW);
@@ -1182,75 +1206,57 @@ namespace rf
             const int roomW = outW * 92 / 100;
             const int roomH = outH * 92 / 100;
             int k = fixed;
-            if (k == 0)
+            const int tallEnough[] = {chromeH * 3 / 2, 40};
+            const int wideEnough[] = {PlayerComfortWidth, PlayerMinWidth};
+            for (int tier = 0; tier < 2; ++tier)
             {
-                k = 1;
-                for (int cand = 4; cand >= 1; --cand)
+                for (int cand = 4; cand >= 1 && k == 0; --cand)
                 {
-                    if (roomW / cand - chromeW >= PlayerMinWidth && roomH / cand - chromeH >= 90)
+                    int cw = 0;
+                    int ch = 0;
+                    fit(roomW / cand - chromeW, roomH / cand - chromeH, cw, ch);
+                    if (cw >= wideEnough[tier] && ch >= tallEnough[tier])
                     {
                         k = cand;
-                        break;
                     }
                 }
             }
+            k = std::max(1, k);
             p.scale = k;
-            const int maxW = std::max(PlayerMinWidth, roomW / k - chromeW);
-            const int maxH = std::max(40, roomH / k - chromeH);
-            int cw = maxW;
-            int ch = int(std::lround(cw / aspect));
-            if (ch > maxH)
+            int cw = 0;
+            int ch = 0;
+            fit(roomW / k - chromeW, roomH / k - chromeH, cw, ch);
+            if (cw < PlayerMinWidth)
             {
-                ch = maxH;
-                cw = std::max(2, int(std::lround(ch * aspect)));
+                cw = PlayerMinWidth;
+                ch = std::min(std::max(2, int(std::lround(cw / aspect))), std::max(2, outH / k - chromeH));
             }
-            p.clientW = std::max(cw, std::min(maxW, PlayerMinWidth));
+            p.clientW = cw;
             p.clientH = ch;
-            int vw = p.clientW * k;
-            int vh = int(std::lround(vw / aspect));
-            if (vh > p.clientH * k)
-            {
-                vh = p.clientH * k;
-                vw = int(std::lround(vh * aspect));
-            }
-            p.videoW = std::max(2, vw);
-            p.videoH = std::max(2, vh);
+            fill();
             p.windowW = (p.clientW + chromeW) * k;
             p.windowH = (p.clientH + chromeH) * k;
             p.windowX = std::max(0, (outW - p.windowW) / 2);
             p.windowY = std::max(0, (outH - p.windowH) / 2);
             return p;
         }
-        int vw = sw;
-        int vh = sh;
         int k = fixed;
+        int vw = sw;
         if (target.width > 0)
         {
             if (k == 0)
             {
                 k = AutoScale(std::min(sw, target.width), std::min(sh, target.width));
             }
-            const int limit = target.width / k - chromeW;
-            if (limit * k < vw)
-            {
-                vw = std::max(PlayerMinWidth, limit) * k;
-                vh = int(std::lround(vw / aspect));
-                if (vw > limit * k)
-                {
-                    vw = limit * k;
-                    vh = int(std::lround(vw / aspect));
-                }
-            }
+            vw = std::min(vw, std::max(PlayerMinWidth, target.width / k - chromeW) * k);
         }
         else if (k == 0)
         {
             k = AutoScale(sw, sh);
         }
         p.scale = k;
-        p.videoW = std::max(2, vw);
-        p.videoH = std::max(2, vh);
-        p.clientW = std::max((p.videoW + k - 1) / k, PlayerMinWidth);
-        p.clientH = (p.videoH + k - 1) / k;
+        p.clientW = std::max(PlayerMinWidth, int(std::lround(double(vw) / k)));
+        p.clientH = std::max(2, int(std::lround(p.clientW / aspect)));
         if (((p.clientW + chromeW) * k) % 2 != 0)
         {
             ++p.clientW;
@@ -1259,6 +1265,7 @@ namespace rf
         {
             ++p.clientH;
         }
+        fill();
         p.windowW = (p.clientW + chromeW) * k;
         p.windowH = (p.clientH + chromeH) * k;
         p.outW = p.windowW;
@@ -1298,7 +1305,11 @@ namespace rf
     {
         effects_ = effects;
         const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
-        fx_ = EffectsLayer(effects, frame_, Stage{window, plan_.scale});
+        const int k = plan_.scale;
+        const Rect client = MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
+        const Rect video{window.x + client.x * k + (plan_.clientW * k - plan_.videoW) / 2, window.y + client.y * k + (plan_.clientH * k - plan_.videoH) / 2,
+                         plan_.videoW, plan_.videoH};
+        fx_ = EffectsLayer(effects, frame_, Stage{window, k, video});
         fxOn_ = HasOverlays(effects);
     }
 
@@ -1306,7 +1317,6 @@ namespace rf
     {
         out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         fx_.DrawIntro(out_, plan_.square ? background_ : Image(), t);
-        ApplyScreen(out_, effects_.screen, seed, plan_.scale);
         return out_;
     }
 

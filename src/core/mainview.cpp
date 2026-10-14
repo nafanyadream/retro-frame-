@@ -5,6 +5,7 @@
 #include "library_view.h"
 #include "utf.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace rf
@@ -15,6 +16,7 @@ namespace rf
         constexpr int WindowH = 640;
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
+        constexpr int PreviewLimit = 2400;
         const wchar_t* const AppVersion = L"0.6.0";
 
         template <class T>
@@ -659,13 +661,13 @@ namespace rf
         return f;
     }
 
-    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, int scale, double t, int seed) const
+    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, const Rect& content, int scale, double t, int seed) const
     {
         if (!HasOverlays(s_.effects))
         {
             return;
         }
-        EffectsLayer(s_.effects, frame, Stage{window, scale}).Apply(img, t, seed, false);
+        EffectsLayer(s_.effects, frame, Stage{window, scale, content}).Apply(img, t, seed, false);
     }
 
     std::vector<ui::ListItem> MainView::PresetItems() const
@@ -815,18 +817,23 @@ namespace rf
         }
         const Photo& ph = photos_[std::size_t(current_)];
         const FrameSettings fs = FrameFor(ph);
-        const FrameGeometry g = MeasureFrame(fs, 100, 100);
-        const int overW = g.width - 100;
-        const int overH = g.height - 100;
-        const int availW = preview_->rect.w - 4 - 16 - overW;
-        const int availH = preview_->rect.h - 4 - 16 - overH;
-        Image content = FitInside(ph.preview, std::max(16, availW), std::max(16, availH), false);
+        const int k = EffectiveScale(fs, ph.width, ph.height);
+        int cw = std::max(1, (ph.width + k - 1) / k);
+        int ch = std::max(1, (ph.height + k - 1) / k);
+        const int longest = std::max(cw, ch);
+        if (longest > PreviewLimit)
+        {
+            cw = std::max(1, int(std::lround(double(cw) * PreviewLimit / longest)));
+            ch = std::max(1, int(std::lround(double(ch) * PreviewLimit / longest)));
+        }
         Rect client;
-        Image frame = RenderFrame(fs, content.width, content.height, VarsFor(ph), &client);
+        Image frame = RenderFrame(fs, cw, ch, VarsFor(ph), &client);
         Painter p(frame);
-        p.Draw(content, client.x, client.y);
-        ApplyEffects(frame, fs, Rect{0, 0, frame.width, frame.height}, 1, 0.0, 0);
-        preview_->image = std::move(frame);
+        p.Draw(ph.preview.width == cw && ph.preview.height == ch ? ph.preview : ResizeSmooth(ph.preview, cw, ch), client.x, client.y);
+        ApplyEffects(frame, fs, Rect{0, 0, frame.width, frame.height}, Rect{client.x, client.y, cw, ch}, 1, 0.0, 0);
+        const int availW = preview_->rect.w - 4 - 16;
+        const int availH = preview_->rect.h - 4 - 16;
+        preview_->image = frame.width > availW || frame.height > availH ? FitInside(frame, availW, availH, false) : std::move(frame);
         preview_->message.clear();
         root.dirty = true;
     }
@@ -956,8 +963,9 @@ namespace rf
         }
         const FrameSettings fs = FrameFor(photo);
         const int k = EffectiveScale(fs, full.width, full.height);
-        out = ComposeFramed(full, fs, VarsFor(photo), k);
-        ApplyEffects(out, fs, Rect{0, 0, out.width, out.height}, k, 0.0, 0);
+        Rect area;
+        out = ComposeFramed(full, fs, VarsFor(photo), k, &area);
+        ApplyEffects(out, fs, Rect{0, 0, out.width, out.height}, Rect{area.x, area.y, full.width, full.height}, k, 0.0, 0);
         return true;
     }
 

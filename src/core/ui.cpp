@@ -338,9 +338,13 @@ namespace rf::ui
 
     void Root::Char(wchar_t ch)
     {
-        if (overlays_.empty() && focus != nullptr)
+        if (overlays_.empty())
         {
-            focus->OnChar(ch);
+            const bool used = focus != nullptr && focus->OnChar(ch);
+            if (!used && charHook)
+            {
+                charHook(ch);
+            }
         }
         Flush();
     }

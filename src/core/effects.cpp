@@ -500,6 +500,24 @@ namespace rf
     void EffectsLayer::Apply(Image& out, double t, int seed, bool animate) const
     {
         const int k = stage_.scale;
+        if (e_.screen > 0)
+        {
+            const Rect& c = stage_.content;
+            const int x0 = std::clamp(c.x, 0, out.width);
+            const int y0 = std::clamp(c.y, 0, out.height);
+            const int x1 = std::clamp(c.x + c.w, 0, out.width);
+            const int y1 = std::clamp(c.y + c.h, 0, out.height);
+            if (c.w <= 0 || c.h <= 0)
+            {
+                ApplyScreen(out, e_.screen, seed, k);
+            }
+            else if (x1 > x0 && y1 > y0)
+            {
+                Image part = Crop(out, Rect{x0, y0, x1 - x0, y1 - y0});
+                ApplyScreen(part, e_.screen, seed, k);
+                Painter(out).DrawOpaque(part, x0, y0);
+            }
+        }
         const int shown = VisiblePopups(t, animate);
         const std::vector<Rect> rects = PopupRects(out.width, out.height);
         Rect button;
@@ -547,10 +565,6 @@ namespace rf
                     DrawBitmap(out, SmallBusy, px + 12 * k, py + 10 * k, k);
                 }
             }
-        }
-        if (e_.screen > 0)
-        {
-            ApplyScreen(out, e_.screen, seed, k);
         }
     }
 }

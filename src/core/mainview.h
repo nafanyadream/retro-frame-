@@ -194,7 +194,7 @@ namespace rf
         bool SavePreset(const std::wstring& name);
         void DeletePreset(int index);
         std::vector<ui::ListItem> PresetItems() const;
-        void ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, int scale, double t, int seed) const;
+        void ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, const Rect& content, int scale, double t, int seed) const;
         void ResetSettings();
         void About();
         void Exit();

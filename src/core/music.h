@@ -61,7 +61,7 @@ namespace rf
         void SetRecorder(bool russian, double songLength, std::shared_ptr<const std::vector<std::int16_t>> samples);
         const Image& Compose(const MusicFrame& f, int seed = 0, bool animate = false);
         const Image& Intro(double t, int seed);
-        Image Small(const MusicFrame& f, const Image& background);
+        Image Small(const MusicFrame& f, const Image& background, Rect* content = nullptr);
 
     private:
         Image Window(const MusicFrame& f, Rect& client) const;

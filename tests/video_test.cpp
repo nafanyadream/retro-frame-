@@ -107,7 +107,20 @@ namespace
         sq.canvasW = 1080;
         sq.canvasH = 1080;
         const rf::VideoPlan e = rf::PlanVideo(f, 1080, 1920, sq);
-        Check(e.clientW >= rf::PlayerMinWidth && e.videoW < e.clientW * e.scale && e.windowH <= 1080, "plan: portrait video letterboxed in square");
+        Check(e.clientW >= rf::PlayerComfortWidth && e.videoW == e.clientW * e.scale && e.videoH == e.clientH * e.scale && e.windowH <= 1080,
+              "plan: portrait video in square, window fits the video, no bars");
+        const rf::VideoPlan phone = rf::PlanVideo(f, 1080, 1920, window);
+        Check(phone.videoW == phone.clientW * phone.scale && phone.videoH == phone.clientH * phone.scale && phone.videoW >= 1080 &&
+                  std::abs(phone.videoW * 1920 - phone.videoH * 1080) < 1920 * (phone.scale + 1) && phone.outW % 2 == 0 && phone.outH % 2 == 0,
+              "plan: phone video in a window, no bars, same shape");
+        for (int scale = 1; scale <= 4; ++scale)
+        {
+            rf::FrameSettings forced = f;
+            forced.scale = scale;
+            const rf::VideoPlan narrow = rf::PlanVideo(forced, 720, 1280, window);
+            Check(narrow.scale == scale && narrow.videoW == narrow.clientW * scale && narrow.videoH == narrow.clientH * scale,
+                  "plan: every scale fills the window with the video");
+        }
         rf::VideoTarget gif;
         gif.width = 480;
         const rf::VideoPlan g = rf::PlanVideo(f, 1920, 1080, gif);
@@ -125,7 +138,9 @@ namespace
                   v1.windowY + v1.windowH <= 1920 && std::abs(v1.windowY - (1920 - v1.windowH) / 2) <= 1,
               "plan: 9:16 frame, wide video in the middle");
         const rf::VideoPlan v2 = rf::PlanVideo(f, 1080, 1920, tall);
-        Check(v2.windowH <= 1920 * 92 / 100 && v2.windowW <= 1080 && v2.videoH > v2.videoW && v2.windowH > 1200, "plan: 9:16 frame, phone video fills height");
+        Check(v2.windowH <= 1920 * 92 / 100 && v2.windowW <= 1080 && v2.videoH > v2.videoW && v2.windowH > 1200 && v2.videoW == v2.clientW * v2.scale &&
+                  v2.videoH == v2.clientH * v2.scale,
+              "plan: 9:16 frame, phone video fills height without bars");
         rf::VideoTarget insta = tall;
         insta.canvasH = 1350;
         const rf::VideoPlan v3 = rf::PlanVideo(f, 1920, 1080, insta);

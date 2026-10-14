@@ -367,6 +367,10 @@ namespace rf::win
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK:
         {
+            if (GetFocus() != hwnd_)
+            {
+                SetFocus(hwnd_);
+            }
             SetCapture(hwnd_);
             const POINT p = Logical(lParam);
             root.MouseDown(p.x, p.y, (wParam & MK_SHIFT) != 0, (wParam & MK_CONTROL) != 0, msg == WM_LBUTTONDBLCLK ? 2 : 1);
@@ -413,6 +417,22 @@ namespace rf::win
             Sync();
             return 0;
         }
+        case WM_SYSKEYDOWN:
+            if ((lParam & (1 << 29)) != 0)
+            {
+                break;
+            }
+            root.Key(MapKey(wParam));
+            Sync();
+            return 0;
+        case WM_SYSCHAR:
+            if ((lParam & (1 << 29)) != 0)
+            {
+                break;
+            }
+            root.Char(wchar_t(wParam));
+            Sync();
+            return 0;
         case WM_KEYDOWN:
             root.Key(MapKey(wParam));
             Sync();
@@ -431,6 +451,10 @@ namespace rf::win
         }
         case WM_ACTIVATE:
             root.SetActive(LOWORD(wParam) != WA_INACTIVE);
+            if (LOWORD(wParam) != WA_INACTIVE && HIWORD(wParam) == 0)
+            {
+                SetFocus(hwnd_);
+            }
             Sync();
             return 0;
         case WM_SETCURSOR:

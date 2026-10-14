@@ -498,7 +498,9 @@ namespace rf
     {
         effects_ = effects;
         const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
-        fx_ = EffectsLayer(effects, frame_, Stage{window, plan_.scale});
+        const int k = plan_.scale;
+        const Rect client = MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
+        fx_ = EffectsLayer(effects, frame_, Stage{window, k, Rect{window.x + client.x * k, window.y + client.y * k, plan_.clientW * k, plan_.clientH * k}});
         fxOn_ = HasOverlays(effects);
     }
 
@@ -506,7 +508,6 @@ namespace rf
     {
         out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         fx_.DrawIntro(out_, plan_.square ? background_ : Image(), t);
-        ApplyScreen(out_, effects_.screen, seed, plan_.scale);
         return out_;
     }
 
@@ -540,10 +541,14 @@ namespace rf
         return out_;
     }
 
-    Image MusicComposer::Small(const MusicFrame& f, const Image& background)
+    Image MusicComposer::Small(const MusicFrame& f, const Image& background, Rect* content)
     {
         Rect client;
         Image window = Window(f, client);
+        if (content != nullptr)
+        {
+            *content = plan_.square ? client.Offset(plan_.windowX / plan_.scale, plan_.windowY / plan_.scale) : client;
+        }
         if (!cover_.Empty() && !recorder_)
         {
             if (coverSmall_.Empty())

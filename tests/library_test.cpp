@@ -169,6 +169,19 @@ int main(int argc, char** argv)
             view.root.Char(ch);
         }
         Shot(view, out + "/lib_search.ppm");
+        rf::LibraryView typed(host, sources, last, 2);
+        for (wchar_t ch : std::wstring(L"sun"))
+        {
+            typed.root.Char(ch);
+        }
+        rf::Image a;
+        rf::Image b;
+        view.root.Paint(a);
+        typed.root.Paint(b);
+        rf::LibraryView idle(host, sources, last, 2);
+        rf::Image c;
+        idle.root.Paint(c);
+        Check(a.pixels == b.pixels && b.pixels != c.pixels, "typing in the library goes to the search field");
     }
     {
         std::vector<rf::LibrarySource> none;

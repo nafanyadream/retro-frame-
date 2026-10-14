@@ -106,6 +106,7 @@ namespace rf::ui
         bool dirty = true;
         unsigned long long now = 0;
         std::function<bool(const KeyEvent&)> keyHook;
+        std::function<bool(wchar_t)> charHook;
 
         template <class T, class... Args>
         T* Add(Args&&... args)
