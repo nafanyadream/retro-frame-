@@ -223,18 +223,24 @@ namespace rf
             return out;
         }
 
-        void Robot(Wave& x, int hz, int strength, int rate)
+        struct Run
+        {
+            long long offset = 0;
+            bool tails = true;
+        };
+
+        void Robot(Wave& x, int hz, int strength, int rate, const Run& run)
         {
             const double m = strength / 100.0;
             const double gain = 1.0 + 0.4 * m;
             for (std::size_t n = 0; n < x.size(); ++n)
             {
-                const double ring = std::sin(2.0 * Pi * hz * double(n) / rate);
+                const double ring = std::sin(2.0 * Pi * hz * double(n + run.offset) / rate);
                 x[n] = float(x[n] * ((1.0 - m) + m * ring) * gain);
             }
         }
 
-        void Metal(Wave& x, int ring, int strength, int rate)
+        void Metal(Wave& x, int ring, int strength, int rate, const Run& run)
         {
             const double g = 0.3 + 0.65 * ring / 100.0;
             const double mix = strength / 100.0;
@@ -244,7 +250,7 @@ namespace rf
             Wave y(x.size(), 0.0f);
             for (std::size_t n = 0; n < x.size(); ++n)
             {
-                const double d = base + swing * std::sin(2.0 * Pi * 0.3 * double(n) / rate);
+                const double d = base + swing * std::sin(2.0 * Pi * 0.3 * double(n + run.offset) / rate);
                 const double back = double(n) - d;
                 y[n] = float(x[n] + g * At(y, back));
             }
@@ -339,19 +345,19 @@ namespace rf
             }
         }
 
-        void Wobble(Wave& x, int hz, int strength, int rate)
+        void Wobble(Wave& x, int hz, int strength, int rate, const Run& run)
         {
             const double depth = strength / 100.0 * 0.006 * rate;
             const double base = 0.001 * rate + depth;
             const Wave src = x;
             for (std::size_t n = 0; n < x.size(); ++n)
             {
-                const double d = base + depth * std::sin(2.0 * Pi * hz * double(n) / rate);
+                const double d = base + depth * std::sin(2.0 * Pi * hz * double(n + run.offset) / rate);
                 x[n] = At(src, double(n) - d);
             }
         }
 
-        void Chorus(Wave& x, int voices, int spread, int rate)
+        void Chorus(Wave& x, int voices, int spread, int rate, const Run& run)
         {
             const double s = spread / 100.0;
             const Wave src = x;
@@ -363,19 +369,19 @@ namespace rf
                 {
                     const double base = (0.010 + 0.007 * j) * rate;
                     const double depth = (0.002 + 0.004 * s) * rate;
-                    const double lfo = 0.5 + 0.5 * std::sin(2.0 * Pi * (0.25 + 0.21 * j) * double(n) / rate + 1.7 * j);
+                    const double lfo = 0.5 + 0.5 * std::sin(2.0 * Pi * (0.25 + 0.21 * j) * double(n + run.offset) / rate + 1.7 * j);
                     sum += At(src, double(n) - base - depth * lfo);
                 }
                 x[n] = float(sum / norm);
             }
         }
 
-        void Echo(Wave& x, int delayMs, int repeats, int rate)
+        void Echo(Wave& x, int delayMs, int repeats, int rate, const Run& run)
         {
             const std::size_t d = std::size_t(std::max(1, delayMs * rate / 1000));
             const double g = std::max(0.05, repeats / 100.0);
             const double count = std::ceil(std::log(0.01) / std::log(g));
-            const std::size_t tail = std::min(std::size_t(double(d) * count), std::size_t(6 * rate));
+            const std::size_t tail = run.tails ? std::min(std::size_t(double(d) * count), std::size_t(6 * rate)) : 0;
             const std::size_t n = x.size();
             x.resize(n + tail, 0.0f);
             for (std::size_t i = d; i < x.size(); ++i)
@@ -384,7 +390,7 @@ namespace rf
             }
         }
 
-        void Hall(Wave& x, int size, int strength, int rate)
+        void Hall(Wave& x, int size, int strength, int rate, const Run& run)
         {
             const double room = size / 100.0;
             const double wet = strength / 100.0;
@@ -407,7 +413,7 @@ namespace rf
             std::vector<std::size_t> combPos(combs.size(), 0);
             std::vector<std::size_t> passPos(passes.size(), 0);
             const std::size_t n = x.size();
-            const std::size_t tail = std::size_t((0.4 + 2.6 * room) * rate);
+            const std::size_t tail = run.tails ? std::size_t((0.4 + 2.6 * room) * rate) : 0;
             x.resize(n + tail, 0.0f);
             for (std::size_t i = 0; i < x.size(); ++i)
             {
@@ -435,7 +441,7 @@ namespace rf
             }
         }
 
-        void Apply(Wave& x, const VoiceStep& s, int rate)
+        void Apply(Wave& x, const VoiceStep& s, int rate, const Run& run)
         {
             switch (s.kind)
             {
@@ -446,10 +452,10 @@ namespace rf
                 x = Respeed(std::move(x), s.a / 100.0, rate);
                 break;
             case VoiceRobot:
-                Robot(x, s.a, s.b, rate);
+                Robot(x, s.a, s.b, rate, run);
                 break;
             case VoiceMetal:
-                Metal(x, s.a, s.b, rate);
+                Metal(x, s.a, s.b, rate, run);
                 break;
             case VoiceDistortion:
                 Distort(x, s.a);
@@ -464,16 +470,16 @@ namespace rf
                 Glitch(x, s.a, s.b, rate);
                 break;
             case VoiceWobble:
-                Wobble(x, s.a, s.b, rate);
+                Wobble(x, s.a, s.b, rate, run);
                 break;
             case VoiceChorus:
-                Chorus(x, s.a, s.b, rate);
+                Chorus(x, s.a, s.b, rate, run);
                 break;
             case VoiceEcho:
-                Echo(x, s.a, s.b, rate);
+                Echo(x, s.a, s.b, rate, run);
                 break;
             case VoiceHall:
-                Hall(x, s.a, s.b, rate);
+                Hall(x, s.a, s.b, rate, run);
                 break;
             case VoiceReverse:
                 std::reverse(x.begin(), x.end());
@@ -671,7 +677,7 @@ namespace rf
         };
     }
 
-    std::vector<std::int16_t> ProcessVoice(const std::vector<std::int16_t>& samples, int rate, const VoiceChain& chain)
+    std::vector<std::int16_t> ProcessVoice(const std::vector<std::int16_t>& samples, int rate, const VoiceChain& chain, long long offset, bool tails)
     {
         if (VoiceEffectCount(chain) == 0 || samples.empty() || rate <= 0)
         {
@@ -682,11 +688,14 @@ namespace rf
         {
             x[i] = samples[i] / 32768.0f;
         }
+        Run run;
+        run.offset = offset;
+        run.tails = tails;
         for (const VoiceStep& s : chain)
         {
             if (s.on)
             {
-                Apply(x, s, rate);
+                Apply(x, s, rate, run);
             }
         }
         std::vector<std::int16_t> out(x.size());
@@ -827,5 +836,67 @@ namespace rf
             pos = body + len + (len & 1);
         }
         return false;
+    }
+
+    VoiceMonitor::VoiceMonitor(const VoiceChain& chain, int rate) : chain_(chain), rate_(std::max(8000, rate))
+    {
+        for (VoiceStep& s : chain_)
+        {
+            if (s.kind == VoiceSpeed || s.kind == VoiceReverse)
+            {
+                s.on = false;
+            }
+        }
+        chunk_ = std::size_t(rate_) * 12 / 100;
+        context_ = std::size_t(rate_) * 8 / 10;
+        fade_ = std::size_t(rate_) / 100;
+    }
+
+    void VoiceMonitor::Push(const std::int16_t* data, std::size_t count)
+    {
+        history_.insert(history_.end(), data, data + count);
+    }
+
+    std::vector<std::int16_t> VoiceMonitor::Take()
+    {
+        std::vector<std::int16_t> out;
+        while (base_ + history_.size() >= done_ + chunk_)
+        {
+            const std::size_t end = done_ + chunk_;
+            const std::size_t from = done_ > context_ + fade_ ? done_ - context_ - fade_ : 0;
+            const std::size_t start = std::max(from, base_);
+            const std::vector<std::int16_t> segment(history_.begin() + std::ptrdiff_t(start - base_), history_.begin() + std::ptrdiff_t(end - base_));
+            const std::vector<std::int16_t> wet = ProcessVoice(segment, rate_, chain_, (long long)start, false);
+            const auto at = [&](std::size_t absolute) -> float {
+                const std::size_t i = absolute - start;
+                return i < wet.size() ? float(wet[i]) : 0.0f;
+            };
+            const std::size_t playFrom = done_ >= fade_ ? done_ - fade_ : 0;
+            const std::size_t playTo = end - fade_;
+            for (std::size_t a = playFrom; a < playTo; ++a)
+            {
+                float v = at(a);
+                const std::size_t k = a - playFrom;
+                if (k < tail_.size())
+                {
+                    const float t = float(k + 1) / float(tail_.size() + 1);
+                    v = tail_[k] * (1.0f - t) + v * t;
+                }
+                out.push_back(std::int16_t(std::lround(std::clamp(v, -32768.0f, 32767.0f))));
+            }
+            tail_.clear();
+            for (std::size_t a = playTo; a < end; ++a)
+            {
+                tail_.push_back(at(a));
+            }
+            done_ = end;
+            const std::size_t keep = done_ > context_ + fade_ ? done_ - context_ - fade_ : 0;
+            if (keep > base_)
+            {
+                history_.erase(history_.begin(), history_.begin() + std::ptrdiff_t(keep - base_));
+                base_ = keep;
+            }
+        }
+        return out;
     }
 }

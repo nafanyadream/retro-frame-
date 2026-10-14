@@ -251,6 +251,53 @@ int main()
     const auto small = rf::ResampleVoice(voice, rate, 16000);
     Check(std::abs(int(small.size()) - int(voice.size() * 16000 / rate)) <= 1 && std::fabs(Fundamental(small, 16000) - 160.0) < 6.0, "resample keeps pitch");
 
+    {
+        const auto feed = [&](const rf::VoiceChain& chain) {
+            rf::VoiceMonitor monitor(chain, rate);
+            std::vector<std::int16_t> heard;
+            std::size_t pos = 0;
+            std::size_t step = 300;
+            while (pos < voice.size())
+            {
+                const std::size_t n = std::min(step, voice.size() - pos);
+                monitor.Push(voice.data() + pos, n);
+                pos += n;
+                step = 300 + (step * 7) % 900;
+                const auto part = monitor.Take();
+                heard.insert(heard.end(), part.begin(), part.end());
+            }
+            return heard;
+        };
+        rf::VoiceChain crush = Only(rf::VoiceDistortion, 40, 0);
+        const auto offline = rf::ProcessVoice(voice, rate, crush);
+        const auto live = feed(crush);
+        bool same = live.size() > voice.size() * 8 / 10 && live.size() < voice.size();
+        for (std::size_t i = 0; same && i < live.size(); ++i)
+        {
+            same = std::abs(int(live[i]) - int(offline[i])) <= 1;
+        }
+        Check(same, "hear yourself: live chunks sound like the saved recording");
+        const auto pitched = feed(Only(rf::VoicePitch, 7, 0));
+        int jump = 0;
+        int peak = 0;
+        for (std::size_t i = 1; i < pitched.size(); ++i)
+        {
+            jump = std::max(jump, std::abs(int(pitched[i]) - int(pitched[i - 1])));
+            peak = std::max(peak, std::abs(int(pitched[i])));
+        }
+        const double f = Fundamental(std::vector<std::int16_t>(pitched.begin() + rate / 2, pitched.end()), rate);
+        std::printf("     live pitch %.1f Hz, biggest step %d of %d\n", f, jump, peak);
+        Check(std::fabs(f - 160.0 * std::pow(2.0, 7.0 / 12.0)) < 12.0 && jump < peak * 6 / 10, "hear yourself: pitch works live without clicks");
+        const auto fast = feed(Only(rf::VoiceSpeed, 200, 0));
+        const auto echo = feed(Only(rf::VoiceEcho, 200, 50));
+        Check(fast.size() == live.size() && std::fabs(Fundamental(std::vector<std::int16_t>(fast.begin(), fast.end()), rate) - 160.0) < 8.0 && echo.size() == live.size(),
+              "hear yourself: speed and reverse are skipped, echo keeps time");
+        const auto started = std::chrono::steady_clock::now();
+        feed(rf::BuiltinVoicePresets()[2].chain);
+        const double spent = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+        std::printf("     live JX1DX1 on 2 s: %.2f s\n", spent);
+        Check(spent < 1.5, "hear yourself: fast enough for live sound");
+    }
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);
     return failures == 0 ? 0 : 2;
 }

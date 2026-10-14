@@ -320,6 +320,7 @@ namespace rf
         o << "voice=" << SerializeVoiceChain(s.voice) << "\n";
         o << "micName=" << Escape(s.micName) << "\n";
         o << "micQuality=" << s.micQuality << "\n";
+        o << "micMonitor=" << (s.micMonitor ? 1 : 0) << "\n";
         o << "voicePresets=" << s.voicePresets.size() << "\n";
         for (std::size_t i = 0; i < s.voicePresets.size(); ++i)
         {
@@ -566,6 +567,7 @@ namespace rf
         }
         getText("micName", s.micName);
         getInt("micQuality", s.micQuality, 0, 1);
+        getBool("micMonitor", s.micMonitor);
         if (get("voicePresets") != nullptr)
         {
             int count = 0;

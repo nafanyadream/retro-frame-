@@ -5,6 +5,7 @@
 #include "media.h"
 #include "music.h"
 #include "settings.h"
+#include "voice.h"
 
 #include <array>
 #include <memory>
@@ -138,6 +139,8 @@ namespace rf
         void UpdateMusicStatus(std::wstring& first, std::wstring& second, std::wstring& third);
         FrameSettings MusicFrameSettings() const;
         bool& MusicOption(int i);
+        void SetMonitor(bool on);
+        void FeedMonitor();
         PlayerSkin Skin() const;
         SkinOptions Skins() const;
         MusicPlan MusicPlanFor(const FrameSettings& frame) const;
@@ -298,6 +301,10 @@ namespace rf
         ui::Button* coverLoad_ = nullptr;
         ui::Button* coverReset_ = nullptr;
         ui::ComboBox* playerCombo_ = nullptr;
+        ui::CheckBox* recMonitor_ = nullptr;
+        std::unique_ptr<VoiceMonitor> monitor_;
+        std::unique_ptr<AudioOut> monitorOut_;
+        std::size_t monitorFed_ = 0;
         ui::Label* musicHint_ = nullptr;
         ui::CheckBox* musicOption_[3] = {nullptr, nullptr, nullptr};
         ui::CheckBox* lyricsCheck_ = nullptr;

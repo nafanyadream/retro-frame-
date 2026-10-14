@@ -168,16 +168,23 @@ namespace rf
         recEffects_->text = L"Эффекты записи...";
         recEffects_->onClick = [this]() { EditVoice(); };
         recEffectsInfo_ = AddLabel(r, 470, 276, 138, L"");
-        recInfo_ = AddLabel(r, 334, 304, 274, L"");
+        recMonitor_ = AddCheck(r, 334, 300, 274, L"Слышать себя с эффектами (в наушниках)");
+        recMonitor_->onChange = [this](bool v) {
+            s_.micMonitor = v;
+            dirty_ = true;
+            dirtyAt_ = host_.Ticks();
+            SetMonitor(v && mic_ != nullptr);
+        };
+        recInfo_ = AddLabel(r, 334, 320, 274, L"");
         recInfo_->rect.h = 28;
-        auto* hint = AddLabel(r, 334, 338, 274,
+        auto* hint = AddLabel(r, 334, 350, 274,
                               L"Записи сохраняются в «Документы» →\n«Ретро-рамка» → «Записи». Эффекты\nнакладываются только на эти записи.");
         hint->rect.h = 42;
         hint->color = Rgb(0x40, 0x40, 0x40);
-        recLevels_ = AddLabel(r, 334, 386, 274, L"");
+        recLevels_ = AddLabel(r, 334, 393, 274, L"");
         recLevels_->color = Rgb(0x40, 0x40, 0x40);
-        recorderOnly_ = {group, l1, recLanguage_, l2, recFade_, l3, recMic_, l4, recQuality_, recButton_, recState_, recEffects_, recEffectsInfo_, recInfo_, hint,
-                         recLevels_};
+        recorderOnly_ = {group, l1, recLanguage_, l2, recFade_, l3, recMic_, l4, recQuality_, recButton_, recState_, recEffects_, recEffectsInfo_, recMonitor_, recInfo_,
+                         hint, recLevels_};
         RefreshMicrophones();
     }
 
@@ -203,6 +210,7 @@ namespace rf
         recLanguage_->index = s_.recorder.russian ? 1 : 0;
         recFade_->index = FadeIndex(s_.recorder.fade);
         recQuality_->index = std::clamp(s_.micQuality, 0, 1);
+        recMonitor_->checked = s_.micMonitor;
         recMic_->enabled = !live;
         recQuality_->enabled = !live;
         static const Image dot = [] {
@@ -880,6 +888,7 @@ namespace rf
         micPath_ = NextRecordingPath();
         micSamples_.clear();
         micAnalysis_ = std::make_shared<std::vector<std::int16_t>>();
+        SetMonitor(s_.micMonitor);
         SyncControls();
         UpdatePreview();
         UpdateStatus();
@@ -898,6 +907,7 @@ namespace rf
         {
             micSamples_.resize(limit);
         }
+        FeedMonitor();
         const double k = double(micRate_) / AnalysisRate;
         for (;;)
         {
@@ -928,6 +938,46 @@ namespace rf
         UpdateStatus();
     }
 
+    void MainView::SetMonitor(bool on)
+    {
+        if (!on)
+        {
+            monitor_.reset();
+            monitorOut_.reset();
+            return;
+        }
+        if (monitor_ || !mic_)
+        {
+            return;
+        }
+        monitorOut_ = host_.OpenAudio(micRate_, 1);
+        if (!monitorOut_)
+        {
+            return;
+        }
+        monitor_ = std::make_unique<VoiceMonitor>(s_.voice, micRate_);
+        monitorFed_ = micSamples_.size();
+    }
+
+    void MainView::FeedMonitor()
+    {
+        if (!monitor_ || !monitorOut_)
+        {
+            return;
+        }
+        if (micSamples_.size() > monitorFed_)
+        {
+            monitor_->Push(micSamples_.data() + monitorFed_, micSamples_.size() - monitorFed_);
+        }
+        monitorFed_ = micSamples_.size();
+        const std::vector<std::int16_t> ready = monitor_->Take();
+        const std::size_t bytes = ready.size() * sizeof(std::int16_t);
+        if (bytes > 0 && monitorOut_->Space() >= bytes)
+        {
+            monitorOut_->Write(ready.data(), bytes);
+        }
+    }
+
     void MainView::StopRecording(bool open)
     {
         if (!mic_)
@@ -936,6 +986,7 @@ namespace rf
         }
         mic_->Read(micSamples_);
         mic_.reset();
+        SetMonitor(false);
         const std::vector<std::int16_t> samples = std::move(micSamples_);
         micSamples_.clear();
         micAnalysis_.reset();

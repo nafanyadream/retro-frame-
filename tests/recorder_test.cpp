@@ -341,6 +341,16 @@ int main(int argc, char** argv)
           "switching tabs stops and keeps the recording");
     main.SetMode(rf::RecorderMode);
     Check(main.RecordingIsVoice() && main.HasTrack(), "recorder tab shows the new recording");
+    click(340, 307);
+    const long long heardBefore = host.audioBytes;
+    click(386, 252);
+    settle(20);
+    const bool monitoring = host.audioOpen == 1 && host.audioBytes > heardBefore + 4000;
+    shot("ui_recording_monitor");
+    click(386, 252);
+    Check(main.Settings().micMonitor && monitoring && host.audioOpen == 0, "hear yourself while recording, sound stops with the recording");
+    click(340, 307);
+    Check(!main.Settings().micMonitor, "hear yourself is switchable");
     host.micWorks = false;
     const int modalsMic = host.modalCalls;
     click(386, 252);
