@@ -414,15 +414,39 @@ namespace rf
 
     MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics, bool recorder, int reserve)
     {
+        MusicShape shape;
+        shape.lyrics = lyrics;
+        shape.recorder = recorder;
+        shape.reserve = reserve;
+        return PlanMusic(frame, canvasW, canvasH, square, shape);
+    }
+
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, const MusicShape& shape)
+    {
+        const bool lyrics = shape.lyrics;
+        const bool recorder = shape.recorder;
+        const int reserve = shape.reserve;
+        const bool skinned = shape.skin != PlayerSkin::Classic && !recorder;
         MusicPlan p;
         p.square = square;
-        const int baseW = recorder ? RecorderClientW : MusicClientW;
-        const int baseH = recorder ? RecorderClientH : MusicClientH + (lyrics ? LyricsStripH : 0);
+        p.skin = recorder ? PlayerSkin::Classic : shape.skin;
+        p.skinOptions = shape.options;
+        int baseW = recorder ? RecorderClientW : MusicClientW;
+        int baseH = recorder ? RecorderClientH : MusicClientH + (lyrics ? LyricsStripH : 0);
+        if (skinned)
+        {
+            SkinSize(shape.skin, shape.options, &baseW, &baseH);
+        }
         p.clientW = baseW;
         p.clientH = baseH;
         const int outW = std::max(120, canvasW & ~1);
         const int outH = std::max(120, canvasH & ~1);
-        const FrameGeometry g = MeasureFrame(MusicWindow(frame), baseW, baseH);
+        FrameGeometry g = MeasureFrame(MusicWindow(frame), baseW, baseH);
+        if (skinned)
+        {
+            g.width = baseW;
+            g.height = baseH;
+        }
         const int roomW = square ? outW * 92 / 100 : outW;
         const int extra = square ? std::max(0, reserve) : 0;
         const auto roomH = [&](int k) { return square ? (outH - extra * k) * 92 / 100 : outH; };
@@ -448,6 +472,14 @@ namespace rf
             p.outH = outH;
             return p;
         }
+        if (skinned)
+        {
+            p.windowW = baseW * p.scale;
+            p.windowH = baseH * p.scale;
+            p.outW = p.windowW + p.windowW % 2;
+            p.outH = p.windowH + p.windowH % 2;
+            return p;
+        }
         if ((g.width * p.scale) % 2 != 0)
         {
             ++p.clientW;
@@ -465,6 +497,13 @@ namespace rf
 
     void MusicHotspots(const FrameSettings& frame, const MusicPlan& plan, bool recorder, Rect* play, Rect* seek)
     {
+        if (plan.skin != PlayerSkin::Classic && !recorder)
+        {
+            const SkinSpots spots = SkinHotspots(plan.skin, plan.skinOptions);
+            *play = spots.play;
+            *seek = spots.seek;
+            return;
+        }
         if (recorder)
         {
             const int bw = (plan.clientW - 20) / 5;
@@ -488,8 +527,35 @@ namespace rf
     {
     }
 
+    Rect MusicComposer::ClientRect() const
+    {
+        if (Skinned())
+        {
+            return Rect{0, 0, plan_.clientW, plan_.clientH};
+        }
+        return MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
+    }
+
+    Rect MusicComposer::CoverSlot() const
+    {
+        if (cover_.Empty() || recorder_)
+        {
+            return Rect{};
+        }
+        if (plan_.skin != PlayerSkin::Classic)
+        {
+            return SkinCoverRect(plan_.skin, plan_.skinOptions);
+        }
+        return Rect{CoverX + 2, CoverY + 2, CoverInner, CoverInner};
+    }
+
     Image MusicComposer::Window(const MusicFrame& f, Rect& client) const
     {
+        if (Skinned())
+        {
+            client = Rect{0, 0, plan_.clientW, plan_.clientH};
+            return DrawSkin(plan_.skin, plan_.skinOptions, f, artist_, title_, samples_.get(), !cover_.Empty());
+        }
         FrameVars v = vars_;
         v.time = FormatShort(f.now) + L" / " + FormatShort(f.length);
         Image img = RenderFrame(frame_, plan_.clientW, plan_.clientH, v, &client);
@@ -519,6 +585,11 @@ namespace rf
         }
     }
 
+    void MusicComposer::SetSamples(std::shared_ptr<const std::vector<std::int16_t>> samples)
+    {
+        samples_ = std::move(samples);
+    }
+
     void MusicComposer::SetEffects(const EffectSettings& effects, double duration)
     {
         effects_ = effects;
@@ -536,7 +607,7 @@ namespace rf
     {
         const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
         const int k = plan_.scale;
-        const Rect client = MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
+        const Rect client = ClientRect();
         Stage stage{window, k, Rect{window.x + client.x * k, window.y + client.y * k, plan_.clientW * k, plan_.clientH * k}, Rect{}, Rect{}, duration_};
         Rect play;
         Rect seek;
@@ -544,6 +615,11 @@ namespace rf
         stage.play = ScaleRect(play, k, window.x + client.x * k, window.y + client.y * k);
         stage.seek = ScaleRect(seek, k, window.x + client.x * k, window.y + client.y * k);
         fx_ = EffectsLayer(effects_, frame_, stage);
+        if (Skinned())
+        {
+            const SkinSpots spots = SkinHotspots(plan_.skin, plan_.skinOptions);
+            fx_.SetButtons(ScaleRect(spots.close, k, window.x, window.y), ScaleRect(spots.minimize, k, window.x, window.y));
+        }
         fxOn_ = HasOverlays(effects_);
     }
 
@@ -574,13 +650,14 @@ namespace rf
         const Image small = Window(f, client);
         const int k = plan_.scale;
         Image window = ScaleNearest(small, k);
-        if (coverBig_.Empty() && !cover_.Empty() && !recorder_)
+        const Rect slot = CoverSlot();
+        if (!slot.Empty())
         {
-            coverBig_ = SquareCrop(cover_, CoverInner * k);
-        }
-        if (!coverBig_.Empty())
-        {
-            Blit(window, coverBig_, (client.x + CoverX + 2) * k, (client.y + CoverY + 2) * k);
+            if (coverBig_.width != slot.w * k)
+            {
+                coverBig_ = SquareCrop(cover_, slot.w * k);
+            }
+            Blit(window, coverBig_, (client.x + slot.x) * k, (client.y + slot.y) * k);
         }
         if (plan_.square && background_.width == plan_.outW && background_.height == plan_.outH)
         {
@@ -596,6 +673,23 @@ namespace rf
             m = WindowMotion(effects_, f.now, seed, k, Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH}, Rect{0, 0, plan_.outW, plan_.outH - plan_.reserve});
         }
         Blit(out_, window, plan_.windowX + m.x, plan_.windowY + m.y);
+        if (!plan_.square)
+        {
+            for (int y = 0; y < out_.height; ++y)
+            {
+                for (int x = window.width; x < out_.width; ++x)
+                {
+                    out_.Set(x, y, out_.Get(window.width - 1, std::min(y, window.height - 1)));
+                }
+            }
+            for (int y = window.height; y < out_.height; ++y)
+            {
+                for (int x = 0; x < out_.width; ++x)
+                {
+                    out_.Set(x, y, out_.Get(x, window.height - 1));
+                }
+            }
+        }
         if (fxOn_)
         {
             const double progress = recorder_ ? (songLength_ > 0.0 ? std::clamp(f.absolute / songLength_, 0.0, 1.0) : 0.0) : f.position;
@@ -613,13 +707,14 @@ namespace rf
         {
             *content = plan_.square ? client.Offset(plan_.windowX / plan_.scale, plan_.windowY / plan_.scale) : client;
         }
-        if (!cover_.Empty() && !recorder_)
+        const Rect slot = CoverSlot();
+        if (!slot.Empty())
         {
-            if (coverSmall_.Empty())
+            if (coverSmall_.width != slot.w)
             {
-                coverSmall_ = SquareCrop(cover_, CoverInner);
+                coverSmall_ = SquareCrop(cover_, slot.w);
             }
-            Blit(window, coverSmall_, client.x + CoverX + 2, client.y + CoverY + 2);
+            Blit(window, coverSmall_, client.x + slot.x, client.y + slot.y);
         }
         if (!plan_.square)
         {
@@ -686,6 +781,10 @@ namespace rf
         if (job.recorder)
         {
             composer.SetRecorder(job.recorderRussian, job.songLength, job.samples);
+        }
+        else
+        {
+            composer.SetSamples(job.samples);
         }
         composer.SetEffects(job.effects, job.duration);
         composer.SetOutro(job.ending, job.taskTarget);

@@ -304,6 +304,13 @@ namespace rf
         o << "music.fps=" << s.music.fps << "\n";
         o << "music.equalizer=" << (s.music.equalizer ? 1 : 0) << "\n";
         o << "music.lyrics=" << (s.music.lyrics ? 1 : 0) << "\n";
+        o << "music.player=" << s.music.player << "\n";
+        o << "music.winampEq=" << (s.music.winampEq ? 1 : 0) << "\n";
+        o << "music.winampList=" << (s.music.winampList ? 1 : 0) << "\n";
+        o << "music.winampScope=" << (s.music.winampScope ? 1 : 0) << "\n";
+        o << "music.wmpTasks=" << (s.music.wmpTasks ? 1 : 0) << "\n";
+        o << "music.wmpList=" << (s.music.wmpList ? 1 : 0) << "\n";
+        o << "music.wmpCover=" << (s.music.wmpCover ? 1 : 0) << "\n";
         o << "recorder.format=" << s.recorder.format << "\n";
         o << "recorder.square=" << (s.recorder.square ? 1 : 0) << "\n";
         o << "recorder.canvas=" << s.recorder.canvas << "\n";
@@ -540,6 +547,13 @@ namespace rf
         getBool("music.meter", s.music.meter);
         getBool("music.equalizer", s.music.equalizer);
         getBool("music.lyrics", s.music.lyrics);
+        getInt("music.player", s.music.player, 0, 2);
+        getBool("music.winampEq", s.music.winampEq);
+        getBool("music.winampList", s.music.winampList);
+        getBool("music.winampScope", s.music.winampScope);
+        getBool("music.wmpTasks", s.music.wmpTasks);
+        getBool("music.wmpList", s.music.wmpList);
+        getBool("music.wmpCover", s.music.wmpCover);
         getInt("recorder.format", s.recorder.format, 0, 5);
         getBool("recorder.square", s.recorder.square);
         getInt("recorder.canvas", s.recorder.canvas, 0, CanvasCount - 1);

@@ -2,6 +2,7 @@
 
 #include "lyrics.h"
 #include "media.h"
+#include "players.h"
 
 namespace rf
 {
@@ -31,6 +32,17 @@ namespace rf
         int outW = 1080;
         int outH = 1080;
         int reserve = 0;
+        PlayerSkin skin = PlayerSkin::Classic;
+        SkinOptions skinOptions;
+    };
+
+    struct MusicShape
+    {
+        bool lyrics = false;
+        bool recorder = false;
+        int reserve = 0;
+        PlayerSkin skin = PlayerSkin::Classic;
+        SkinOptions options;
     };
 
     struct MusicFrame
@@ -52,6 +64,7 @@ namespace rf
     };
 
     MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics = false, bool recorder = false, int reserve = 0);
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, const MusicShape& shape);
     void MusicHotspots(const FrameSettings& frame, const MusicPlan& plan, bool recorder, Rect* play, Rect* seek);
 
     class MusicComposer
@@ -62,6 +75,7 @@ namespace rf
         void SetEffects(const EffectSettings& effects, double duration = 0.0);
         void SetRecorder(bool russian, double songLength, std::shared_ptr<const std::vector<std::int16_t>> samples);
         void SetOutro(const Image& ending, const Rect& taskTarget);
+        void SetSamples(std::shared_ptr<const std::vector<std::int16_t>> samples);
         const Image& Compose(const MusicFrame& f, int seed = 0, bool animate = false);
         const Image& Intro(double t, int seed);
         const Image& Outro(double u, int seed);
@@ -70,6 +84,9 @@ namespace rf
     private:
         Image Window(const MusicFrame& f, Rect& client) const;
         void BuildEffects();
+        bool Skinned() const { return plan_.skin != PlayerSkin::Classic && !recorder_; }
+        Rect ClientRect() const;
+        Rect CoverSlot() const;
 
         FrameSettings frame_;
         FrameVars vars_;

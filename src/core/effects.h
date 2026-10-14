@@ -66,6 +66,11 @@ namespace rf
         bool Intro() const { return e_.intro; }
         void DrawIntro(Image& out, const Image& background, double t) const;
         void DrawOutro(Image& out, const Image& background, double u, const Rect& taskTarget) const;
+        void SetButtons(const Rect& close, const Rect& minimize)
+        {
+            close_ = close;
+            minimize_ = minimize;
+        }
         void Shift(int dx, int dy)
         {
             dx_ = dx;

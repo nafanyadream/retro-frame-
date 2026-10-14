@@ -74,46 +74,47 @@ namespace rf
         coverReset_ = Place<ui::Button>(r, 514, 182, 94, 21);
         coverReset_->text = L"Из файла";
         coverReset_->onClick = [this]() { ResetCover(); };
-        spinCheck_ = AddCheck(r, 334, 214, 270, L"Диск крутится");
-        spinCheck_->onChange = [this](bool v) {
-            s_.music.spin = v;
+        auto* l5 = AddLabel(r, 334, 212, 82, L"Плеер:");
+        playerCombo_ = Place<ui::ComboBox>(r, 418, 208, 190, 21);
+        playerCombo_->items = {L"Как CD-плеер Windows", L"Winamp 2", L"Windows Media Player 7"};
+        playerCombo_->onChange = [this](int i) {
+            s_.music.player = std::clamp(i, 0, PlayerSkinCount - 1);
             Changed();
         };
-        meterCheck_ = AddCheck(r, 334, 234, 270, L"Шкала громкости прыгает под музыку");
-        meterCheck_->onChange = [this](bool v) {
-            s_.music.meter = v;
-            Changed();
-        };
-        equalizerCheck_ = AddCheck(r, 334, 254, 270, L"Эквалайзер вместо диска");
-        equalizerCheck_->onChange = [this](bool v) {
-            s_.music.equalizer = v;
-            Changed();
-        };
-        auto* l4 = AddLabel(r, 334, 284, 140, L"Затухание фрагмента:");
-        fade_ = Place<ui::ComboBox>(r, 476, 280, 132, 21);
+        for (int i = 0; i < 3; ++i)
+        {
+            musicOption_[i] = AddCheck(r, 334, 236 + i * 19, 270, L"");
+            musicOption_[i]->onChange = [this, i](bool v) {
+                MusicOption(i) = v;
+                Changed();
+            };
+        }
+        auto* l4 = AddLabel(r, 334, 300, 140, L"Затухание фрагмента:");
+        fade_ = Place<ui::ComboBox>(r, 476, 296, 132, 21);
         fade_->items = {L"выключено", L"1 секунда", L"2 секунды", L"3 секунды", L"5 секунд"};
         fade_->onChange = [this](int i) {
             s_.music.fade = FadeChoices[std::clamp(i, 0, int(std::size(FadeChoices)) - 1)];
             Changed();
         };
-        lyricsCheck_ = AddCheck(r, 334, 308, 170, L"Текст песни под плеером");
+        lyricsCheck_ = AddCheck(r, 334, 322, 178, L"Текст песни под плеером");
         lyricsCheck_->onChange = [this](bool v) {
             s_.music.lyrics = v;
             Changed();
         };
-        lyricsLoad_ = Place<ui::Button>(r, 514, 304, 94, 21);
+        lyricsLoad_ = Place<ui::Button>(r, 514, 318, 94, 21);
         lyricsLoad_->text = L"Файл .lrc...";
         lyricsLoad_->onClick = [this]() { PickLyrics(); };
-        lyricsLabel_ = AddLabel(r, 334, 330, 274, L"");
+        lyricsLabel_ = AddLabel(r, 334, 344, 274, L"");
         lyricsLabel_->color = Rgb(0x40, 0x40, 0x40);
-        auto* hint = AddLabel(r, 334, 352, 274, L"Затухание работает, когда выбран фрагмент.");
+        auto* hint = AddLabel(r, 334, 364, 274, L"Затухание работает, когда выбран фрагмент.");
         hint->color = Rgb(0x40, 0x40, 0x40);
-        levelsLabel_ = AddLabel(r, 334, 374, 274, L"");
+        musicHint_ = hint;
+        levelsLabel_ = AddLabel(r, 334, 393, 274, L"");
         levelsLabel_->color = Rgb(0x40, 0x40, 0x40);
         auto* resultHint = AddLabel(r, 324, 544, 284, L"MP4 — видео с песней.\nPNG — один кадр на выбранной секунде,\nтот же кадр копирует Ctrl+C.");
         resultHint->rect.h = 40;
         resultHint->color = Rgb(0x40, 0x40, 0x40);
-        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, spinCheck_, meterCheck_, equalizerCheck_, l4, fade_, lyricsCheck_, lyricsLoad_,
+        musicOnly_ = {group, l1, artistField_, l2, songField_, l3, coverLoad_, coverReset_, l5, playerCombo_, musicOption_[0], musicOption_[1], musicOption_[2], l4, fade_, lyricsCheck_, lyricsLoad_,
                       lyricsLabel_, hint, levelsLabel_, resultHint};
     }
 
@@ -264,9 +265,20 @@ namespace rf
         };
         fill(artistField_, has ? Song()->artist : std::wstring());
         fill(songField_, has ? Song()->title : std::wstring());
-        spinCheck_->checked = s_.music.spin;
-        meterCheck_->checked = s_.music.meter;
-        equalizerCheck_->checked = s_.music.equalizer;
+        const int player = std::clamp(s_.music.player, 0, PlayerSkinCount - 1);
+        playerCombo_->index = player;
+        static const wchar_t* const labels[PlayerSkinCount][4] = {
+            {L"Диск крутится", L"Шкала громкости прыгает под музыку", L"Эквалайзер вместо диска", L"Текст песни под плеером"},
+            {L"Окно эквалайзера", L"Окно плейлиста", L"Осциллограф вместо спектра", L"Текст бегущей строкой"},
+            {L"Панель слева (Now Playing...)", L"Список песен справа", L"Обложка вместо визуализации", L"Текст поверх картинки"}};
+        for (int i = 0; i < 3; ++i)
+        {
+            musicOption_[i]->text = labels[player][i];
+            musicOption_[i]->checked = MusicOption(i);
+        }
+        lyricsCheck_->text = labels[player][3];
+        musicHint_->text = player == 0 ? L"Затухание работает, когда выбран фрагмент." : L"Плеер рисуется как в оригинале: заголовок\nи цвета окна справа к нему не относятся.";
+        musicHint_->rect.h = player == 0 ? 13 : 28;
         lyricsCheck_->checked = s_.music.lyrics;
         lyricsLoad_->enabled = has;
         if (!has)
@@ -285,6 +297,30 @@ namespace rf
         levelsLabel_->text = has && !Song()->levelsReady ? L"Слушаю песню для шкалы и эквалайзера..." : L"";
     }
 
+    bool& MainView::MusicOption(int i)
+    {
+        MusicSettings& m = s_.music;
+        bool* options[PlayerSkinCount][3] = {{&m.spin, &m.meter, &m.equalizer}, {&m.winampEq, &m.winampList, &m.winampScope}, {&m.wmpTasks, &m.wmpList, &m.wmpCover}};
+        return *options[std::clamp(m.player, 0, PlayerSkinCount - 1)][std::clamp(i, 0, 2)];
+    }
+
+    PlayerSkin MainView::Skin() const
+    {
+        return mode_ == MusicMode ? PlayerSkin(std::clamp(s_.music.player, 0, PlayerSkinCount - 1)) : PlayerSkin::Classic;
+    }
+
+    SkinOptions MainView::Skins() const
+    {
+        SkinOptions o;
+        o.winampEq = s_.music.winampEq;
+        o.winampList = s_.music.winampList;
+        o.winampScope = s_.music.winampScope;
+        o.wmpTasks = s_.music.wmpTasks;
+        o.wmpList = s_.music.wmpList;
+        o.wmpCover = s_.music.wmpCover;
+        return o;
+    }
+
     FrameSettings MainView::MusicFrameSettings() const
     {
         const std::wstring name = Recorder() && mic_ ? FileNameOf(micPath_) : Song() ? Song()->name : std::wstring(L"песня.mp3");
@@ -298,6 +334,11 @@ namespace rf
             f.title = RecorderTitle(look.titleFromName ? StemOf(name) : look.customTitle, s_.recorder.russian);
             f.menuItems = RecorderMenu(s_.recorder.russian);
         }
+        else if (Skin() != PlayerSkin::Classic)
+        {
+            f.title = SkinTitle(Skin(), Song() ? Song()->artist : std::wstring(), Song() ? Song()->title : StemOf(name));
+            f.icon = SkinIcon(Skin());
+        }
         return f;
     }
 
@@ -306,6 +347,10 @@ namespace rf
         if (Recorder() && Song())
         {
             composer.SetRecorder(s_.recorder.russian, Song()->info.duration, Song()->samples);
+        }
+        else if (Song())
+        {
+            composer.SetSamples(Song()->samples);
         }
     }
 
@@ -323,8 +368,10 @@ namespace rf
         const double start = TrimStart();
         const double length = std::max(0.001, TrimEnd() - start);
         const bool player = !Recorder();
-        MusicFrame mf = MusicFrameAt(Song()->position - start, length, Song()->position, player && s_.music.spin, player && s_.music.meter, Song()->levels);
-        if (player && s_.music.equalizer)
+        const bool classic = Skin() == PlayerSkin::Classic;
+        MusicFrame mf = MusicFrameAt(Song()->position - start, length, Song()->position, player && classic && s_.music.spin, player && classic && s_.music.meter,
+                                     Song()->levels);
+        if (player && (!classic || s_.music.equalizer))
         {
             AddSpectrum(mf, Song()->spectrum, Song()->position);
         }
@@ -387,7 +434,13 @@ namespace rf
     MusicPlan MainView::MusicPlanFor(const FrameSettings& frame) const
     {
         const CanvasSize c = Audio().square ? CanvasAt(Audio().canvas) : CanvasSize{SquareSizes[0], SquareSizes[0]};
-        return PlanMusic(frame, c.width, c.height, Audio().square, ShowLyrics(), Recorder(), Reserve(frame, Audio().square));
+        MusicShape shape;
+        shape.lyrics = ShowLyrics();
+        shape.recorder = Recorder();
+        shape.reserve = Reserve(frame, Audio().square);
+        shape.skin = Skin();
+        shape.options = Skins();
+        return PlanMusic(frame, c.width, c.height, Audio().square, shape);
     }
 
     bool MainView::OpenTrack(const std::wstring& path, std::wstring* failure)
@@ -687,16 +740,17 @@ namespace rf
         job.title = Song()->title;
         job.cover = Song()->cover;
         const auto work = [&](const ExportStep& step) {
-            if ((Recorder() || s_.music.meter || s_.music.equalizer) && !Song()->levelsReady)
+            const bool classic = Skin() == PlayerSkin::Classic;
+            if ((Recorder() || !classic || s_.music.meter || s_.music.equalizer) && !Song()->levelsReady)
             {
                 step(-1, 0);
                 EnsureLevels();
             }
             job.levels = Song()->levels;
             job.spectrum = Song()->spectrum;
-            job.equalizer = !Recorder() && s_.music.equalizer;
-            job.spin = !Recorder() && s_.music.spin;
-            job.meter = !Recorder() && s_.music.meter;
+            job.equalizer = !Recorder() && (!classic || s_.music.equalizer);
+            job.spin = !Recorder() && classic && s_.music.spin;
+            job.meter = !Recorder() && classic && s_.music.meter;
             job.recorder = Recorder();
             job.recorderRussian = s_.recorder.russian;
             job.songLength = Song()->info.duration;

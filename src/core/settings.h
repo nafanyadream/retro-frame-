@@ -69,6 +69,13 @@ namespace rf
         bool lyrics = true;
         bool russian = false;
         int fps = 25;
+        int player = 0;
+        bool winampEq = true;
+        bool winampList = true;
+        bool winampScope = false;
+        bool wmpTasks = true;
+        bool wmpList = true;
+        bool wmpCover = false;
     };
 
     struct AppSettings

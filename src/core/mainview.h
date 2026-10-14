@@ -137,6 +137,9 @@ namespace rf
         void UpdateMusicPreview();
         void UpdateMusicStatus(std::wstring& first, std::wstring& second, std::wstring& third);
         FrameSettings MusicFrameSettings() const;
+        bool& MusicOption(int i);
+        PlayerSkin Skin() const;
+        SkinOptions Skins() const;
         MusicPlan MusicPlanFor(const FrameSettings& frame) const;
         bool MusicStill(Image& out);
         void SaveMusic();
@@ -294,9 +297,9 @@ namespace rf
         ui::TextField* songField_ = nullptr;
         ui::Button* coverLoad_ = nullptr;
         ui::Button* coverReset_ = nullptr;
-        ui::CheckBox* spinCheck_ = nullptr;
-        ui::CheckBox* meterCheck_ = nullptr;
-        ui::CheckBox* equalizerCheck_ = nullptr;
+        ui::ComboBox* playerCombo_ = nullptr;
+        ui::Label* musicHint_ = nullptr;
+        ui::CheckBox* musicOption_[3] = {nullptr, nullptr, nullptr};
         ui::CheckBox* lyricsCheck_ = nullptr;
         ui::Button* lyricsLoad_ = nullptr;
         ui::Label* lyricsLabel_ = nullptr;

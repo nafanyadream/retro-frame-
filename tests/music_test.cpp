@@ -138,6 +138,107 @@ int main(int argc, char** argv)
     const rf::MusicPlan insta = rf::PlanMusic(Song(0), 1080, 1350, true);
     Check(insta.outW == 1080 && insta.outH == 1350 && insta.scale == 3, "plan: 4:5 frame");
     {
+        rf::MusicShape winamp;
+        winamp.skin = rf::PlayerSkin::Winamp;
+        const rf::MusicPlan wa = rf::PlanMusic(Song(0), 1080, 1080, false, winamp);
+        Check(wa.skin == rf::PlayerSkin::Winamp && wa.clientW == rf::WinampWidth && wa.clientH == 3 * rf::WinampPart && wa.windowW == rf::WinampWidth * wa.scale &&
+                  wa.outW % 2 == 0 && wa.outH % 2 == 0 && wa.outW - wa.windowW <= 1 && wa.outH - wa.windowH <= 1,
+              "plan: winamp with equalizer and playlist, even video size");
+        rf::MusicShape mainOnly = winamp;
+        mainOnly.options.winampEq = false;
+        mainOnly.options.winampList = false;
+        const rf::MusicPlan wSmall = rf::PlanMusic(Song(0), 1080, 1080, true, mainOnly);
+        Check(wSmall.clientH == rf::WinampPart && wSmall.scale == 3 && wSmall.windowX == (1080 - 3 * rf::WinampWidth) / 2, "plan: winamp main window only, 3x");
+        rf::MusicShape wmp;
+        wmp.skin = rf::PlayerSkin::MediaPlayer;
+        const rf::MusicPlan mp = rf::PlanMusic(Song(0), 1080, 1080, true, wmp);
+        wmp.options.wmpTasks = false;
+        wmp.options.wmpList = false;
+        const rf::MusicPlan mpSmall = rf::PlanMusic(Song(0), 1080, 1080, true, wmp);
+        Check(mp.clientW > mpSmall.clientW + 200 && mp.clientH == mpSmall.clientH && mp.windowW <= 1080, "plan: media player panels change the width");
+        rf::MusicShape rec = winamp;
+        rec.recorder = true;
+        Check(rf::PlanMusic(Song(0), 1080, 1080, true, rec).skin == rf::PlayerSkin::Classic, "sound recorder ignores the player choice");
+
+        auto samples = std::make_shared<std::vector<std::int16_t>>(std::size_t(rf::AnalysisRate * 4));
+        for (std::size_t i = 0; i < samples->size(); ++i)
+        {
+            (*samples)[i] = std::int16_t(14000.0 * std::sin(double(i) * 0.09));
+        }
+        rf::MusicFrame mf = rf::MusicFrameAt(1.0, 4.0, 1.0, false, false, {});
+        for (int b = 0; b < rf::SpectrumBands; ++b)
+        {
+            mf.bars[b] = float(0.3 + 0.05 * b);
+            mf.peaks[b] = mf.bars[b] + 0.1f;
+        }
+        rf::MusicComposer wc(Song(0), rf::FrameVars{L"a.mp3", 0, 0, L""}, wa, rf::Image(), L"Кино", L"Группа крови", rf::Image());
+        wc.SetSamples(samples);
+        const rf::Image spectrum = wc.Compose(mf);
+        const int k = wa.scale;
+        bool padded = spectrum.width == wa.outW && spectrum.height == wa.outH;
+        for (int y = 0; padded && y < wa.windowH; ++y)
+        {
+            padded = spectrum.Get(spectrum.width - 1, y) == spectrum.Get(wa.windowW - 1, y);
+        }
+        Check(padded, "winamp video frame: odd width padded with the edge, not black");
+        rf::MusicShape scopeShape = winamp;
+        scopeShape.options.winampScope = true;
+        const rf::MusicPlan wsPlan = rf::PlanMusic(Song(0), 1080, 1080, false, scopeShape);
+        rf::MusicComposer sc(Song(0), rf::FrameVars{L"a.mp3", 0, 0, L""}, wsPlan, rf::Image(), L"Кино", L"Группа крови", rf::Image());
+        sc.SetSamples(samples);
+        const rf::Image scope = sc.Compose(mf);
+        int visDiff = 0;
+        int elsewhere = 0;
+        for (int y = 0; y < rf::WinampPart * k; ++y)
+        {
+            for (int x = 0; x < rf::WinampWidth * k; ++x)
+            {
+                const bool inVis = x >= 24 * k && x < 100 * k && y >= 43 * k && y < 59 * k;
+                const bool differs = scope.Get(x, y) != spectrum.Get(x, y);
+                visDiff += inVis && differs;
+                elsewhere += !inVis && differs;
+            }
+        }
+        Check(visDiff > 100 && elsewhere == 0, "winamp: oscilloscope instead of the spectrum");
+        rf::MusicFrame sung = mf;
+        sung.lyricsStrip = true;
+        sung.lyric = L"Огни ночного города";
+        const rf::Image lyric = wc.Compose(sung);
+        int marquee = 0;
+        for (int y = 22 * k; y < 37 * k; ++y)
+        {
+            for (int x = 109 * k; x < 266 * k; ++x)
+            {
+                marquee += lyric.Get(x, y) != spectrum.Get(x, y);
+            }
+        }
+        Check(marquee > 50, "winamp: lyrics run in the title line");
+        rf::Rect play;
+        rf::Rect seek;
+        rf::MusicHotspots(Song(0), wa, false, &play, &seek);
+        const rf::Rect closeSpot = rf::SkinHotspots(rf::PlayerSkin::Winamp, winamp.options).close;
+        Check(play.x == 39 && play.y == 88 && play.w == 23 && seek.y == 72 && closeSpot.x == 264, "winamp: play button and seek bar for the live cursor");
+        rftest::WritePpm(out + "/music_winamp.ppm", spectrum);
+        rftest::WritePpm(out + "/music_winamp_scope.ppm", scope);
+
+        rf::MusicShape art;
+        art.skin = rf::PlayerSkin::MediaPlayer;
+        art.options.wmpCover = true;
+        const rf::MusicPlan ap = rf::PlanMusic(Song(0), 1080, 1080, true, art);
+        const rf::Image cover(64, 64, rf::Rgb(0xE0, 0x30, 0x90));
+        const rf::Image bg = rf::CanvasBackground(rf::Image(), rf::Rgb(0x10, 0x60, 0x30), 1080, 1080);
+        rf::MusicComposer ac(Song(0), rf::FrameVars{L"a.mp3", 0, 0, L""}, ap, bg, L"Кино", L"Группа крови", cover);
+        const rf::Image withArt = ac.Compose(mf);
+        const rf::Rect slot = rf::SkinCoverRect(rf::PlayerSkin::MediaPlayer, art.options);
+        const int cx = ap.windowX + (slot.x + slot.w / 2) * ap.scale;
+        const int cy = ap.windowY + (slot.y + slot.h / 2) * ap.scale;
+        Check(!slot.Empty() && rf::Opaque(withArt.Get(cx, cy)) == rf::Rgb(0xE0, 0x30, 0x90) && rf::Opaque(withArt.Get(ap.windowX, ap.windowY)) == rf::Rgb(0x10, 0x60, 0x30),
+              "media player: album art in the picture, rounded corners show the background");
+        rftest::WritePpm(out + "/music_wmp.ppm", withArt);
+        Check(rf::SkinTitle(rf::PlayerSkin::Winamp, L"Кино", L"Группа крови") == L"1. Кино - Группа крови - Winamp" && rf::SkinIcon(rf::PlayerSkin::MediaPlayer).width == 16,
+              "taskbar text and icon for the players");
+    }
+    {
         bool even = true;
         for (int k = 1; k <= 4; ++k)
         {
@@ -407,10 +508,10 @@ int main(int argc, char** argv)
         settle(1);
         main.MutableSettings().music.format = 3;
         main.Refresh();
-        click(340, 221);
+        click(340, 243);
         settle(1);
         Check(main.ShownFormat() == 3 && !main.Settings().music.spin, "format list shows the music format after other changes");
-        click(340, 221);
+        click(340, 243);
         settle(1);
         host.saveAnswer = dir + L"/still_text.png";
         click(240, 59);
@@ -421,14 +522,14 @@ int main(int argc, char** argv)
         {
             lyricPixels += rf::Opaque(px) == rf::Rgb(0x40, 0xF0, 0x40);
         }
-        click(340, 315);
+        click(340, 329);
         settle(1);
         host.saveAnswer = dir + L"/still_notext.png";
         click(240, 59);
         settle(2);
         Check(lyricPixels > 50 && !main.Settings().music.lyrics && host.writtenImage.height < withLyrics.height, "lyrics under the player, switchable");
         rftest::WritePpm(out + "/ui_music_lyrics.ppm", withLyrics);
-        click(340, 315);
+        click(340, 329);
         settle(1);
         main.MutableSettings().music.square = true;
         main.Refresh();
@@ -436,7 +537,7 @@ int main(int argc, char** argv)
         click(240, 59);
         settle(2);
         const rf::Image disc = host.writtenImage;
-        click(340, 261);
+        click(340, 281);
         settle(1);
         Check(main.Settings().music.equalizer, "equalizer checkbox");
         shot("ui_music_equalizer");
@@ -455,7 +556,7 @@ int main(int argc, char** argv)
         }
         Check(green > 100 && greenDisc == 0, "equalizer bars in the saved frame");
         rftest::WritePpm(out + "/ui_music_eq_still.ppm", host.writtenImage);
-        click(340, 261);
+        click(340, 281);
         settle(1);
         main.MutableSettings().music.square = false;
         main.Refresh();
@@ -494,6 +595,24 @@ int main(int argc, char** argv)
         Check(desk.width == 1080 && barRow > 900 && windowMoved > 0, "desktop: taskbar at the bottom of the saved frame");
         rftest::WritePpm(out + "/ui_music_desktop_still.ppm", desk);
         main.MutableSettings().effects = rf::EffectSettings();
+        main.Refresh();
+        main.MutableSettings().music.player = 1;
+        main.Refresh();
+        shot("ui_music_winamp");
+        click(340, 243);
+        settle(1);
+        Check(main.Settings().music.player == 1 && !main.Settings().music.winampEq && main.Settings().music.spin, "first checkbox switches the winamp equalizer");
+        host.saveAnswer = dir + L"/still_winamp.png";
+        click(240, 59);
+        settle(2);
+        Check(host.writtenImage.width == 1080 && host.writtenImage.height == 1080 && host.writtenImage.pixels != plainStill.pixels, "save png frame with winamp");
+        rftest::WritePpm(out + "/ui_music_winamp_still.ppm", host.writtenImage);
+        click(340, 243);
+        settle(1);
+        main.MutableSettings().music.player = 2;
+        main.Refresh();
+        shot("ui_music_wmp");
+        main.MutableSettings().music.player = 0;
         main.Refresh();
         main.MutableSettings().music.canvas = 3;
         main.Refresh();
