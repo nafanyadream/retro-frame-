@@ -475,6 +475,26 @@ int main(int argc, char** argv)
         click(240, 59);
         settle(2);
         Check(host.written == host.saveAnswer && host.writtenImage.width == 1080 && host.writtenImage.height == 1080, "save png frame 1080");
+        const rf::Image plainStill = host.writtenImage;
+        main.MutableSettings().effects.desktop = true;
+        main.MutableSettings().effects.clock = L"9:41";
+        main.Refresh();
+        shot("ui_music_desktop");
+        host.saveAnswer = dir + L"/still_desktop.png";
+        click(240, 59);
+        settle(2);
+        const rf::Image desk = host.writtenImage;
+        int barRow = 0;
+        int windowMoved = 0;
+        for (int x = 0; x < 1080; ++x)
+        {
+            barRow += desk.Get(x, 1080 - 6) != plainStill.Get(x, 1080 - 6);
+            windowMoved += desk.Get(x, 540) != plainStill.Get(x, 540);
+        }
+        Check(desk.width == 1080 && barRow > 900 && windowMoved > 0, "desktop: taskbar at the bottom of the saved frame");
+        rftest::WritePpm(out + "/ui_music_desktop_still.ppm", desk);
+        main.MutableSettings().effects = rf::EffectSettings();
+        main.Refresh();
         main.MutableSettings().music.canvas = 3;
         main.Refresh();
         shot("ui_music_tall");

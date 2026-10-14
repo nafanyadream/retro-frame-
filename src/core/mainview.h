@@ -195,7 +195,12 @@ namespace rf
         bool SavePreset(const std::wstring& name);
         void DeletePreset(int index);
         std::vector<ui::ListItem> PresetItems() const;
-        void ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, const Rect& content, int scale, double t, int seed) const;
+        void ApplyEffects(Image& img, const FrameSettings& frame, const Stage& stage, double t, int seed, double progress = -1.0, Spot shift = Spot{}) const;
+        Spot PreviewMotion(const Rect& window, int outW, int outH, int reserve, double t, int seed) const;
+        Image Backdrop(int w, int h, int k, const FrameSettings& frame, const FrameVars& vars, int ending) const;
+        const Image& PreviewBackdrop(int w, int h, const FrameSettings& frame, const FrameVars& vars);
+        int Reserve(const FrameSettings& frame, bool square) const;
+        Rect TaskTargetFor(const FrameSettings& frame, int outW, int outH, int scale) const;
         void ResetSettings();
         void About();
         void Exit();

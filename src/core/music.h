@@ -30,6 +30,7 @@ namespace rf
         int windowY = 0;
         int outW = 1080;
         int outH = 1080;
+        int reserve = 0;
     };
 
     struct MusicFrame
@@ -50,26 +51,32 @@ namespace rf
         double lyricAge = 0.0;
     };
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics = false, bool recorder = false);
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics = false, bool recorder = false, int reserve = 0);
+    void MusicHotspots(const FrameSettings& frame, const MusicPlan& plan, bool recorder, Rect* play, Rect* seek);
 
     class MusicComposer
     {
     public:
         MusicComposer(const FrameSettings& frame, const FrameVars& vars, const MusicPlan& plan, const Image& background, const std::wstring& artist,
                       const std::wstring& title, const Image& cover);
-        void SetEffects(const EffectSettings& effects);
+        void SetEffects(const EffectSettings& effects, double duration = 0.0);
         void SetRecorder(bool russian, double songLength, std::shared_ptr<const std::vector<std::int16_t>> samples);
+        void SetOutro(const Image& ending, const Rect& taskTarget);
         const Image& Compose(const MusicFrame& f, int seed = 0, bool animate = false);
         const Image& Intro(double t, int seed);
-        Image Small(const MusicFrame& f, const Image& background, Rect* content = nullptr);
+        const Image& Outro(double u, int seed);
+        Image Small(const MusicFrame& f, const Image& background, Rect* content = nullptr, Spot shift = Spot{});
 
     private:
         Image Window(const MusicFrame& f, Rect& client) const;
+        void BuildEffects();
 
         FrameSettings frame_;
         FrameVars vars_;
         MusicPlan plan_;
         Image background_;
+        Image ending_;
+        Rect taskTarget_;
         std::wstring artist_;
         std::wstring title_;
         Image cover_;
@@ -79,6 +86,8 @@ namespace rf
         EffectSettings effects_;
         EffectsLayer fx_;
         bool fxOn_ = false;
+        bool fxSet_ = false;
+        double duration_ = 0.0;
         bool recorder_ = false;
         bool russian_ = false;
         double songLength_ = 0.0;
@@ -112,6 +121,8 @@ namespace rf
         double songLength = 0.0;
         std::shared_ptr<const std::vector<std::int16_t>> samples;
         EffectSettings effects;
+        Image ending;
+        Rect taskTarget;
     };
 
     MusicFrame MusicFrameAt(double now, double length, double absolute, bool spin, bool meter, const std::vector<float>& levels);

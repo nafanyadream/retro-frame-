@@ -1,5 +1,6 @@
 #include "test_support.h"
 
+#include "../src/core/desktop.h"
 #include "../src/core/dialogs.h"
 #include "../src/core/icons.h"
 #include "../src/core/mainview.h"
@@ -83,7 +84,7 @@ namespace
         const rf::FrameSettings f = Window(rf::Style::Win98);
         const int k = 2;
         const rf::Image framed = rf::ComposeFramed(rf::Image(300, 200, rf::Rgb(0xFF, 0xFF, 0xFF)), f, rf::FrameVars{L"a.jpg", 600, 400, L""}, k);
-        const rf::Stage stage{rf::Rect{0, 0, framed.width, framed.height}, k, rf::Rect{}};
+        const rf::Stage stage{rf::Rect{0, 0, framed.width, framed.height}, k, rf::Rect{}, rf::Rect{}, rf::Rect{}, 0.0};
         rf::EffectSettings e;
         e.cursor = 1;
         rf::Image img = framed;
@@ -120,7 +121,7 @@ namespace
         Check(changed > img.width * img.height / 4, "cascade drawn over the window");
         rftest::WritePpm(out + "/fx_cascade.ppm", img);
         const int pw = rf::RenderPopup(e, f, true, nullptr).width * k;
-        const rf::EffectsLayer narrow(e, f, rf::Stage{rf::Rect{0, 0, pw + 40, 900}, k, rf::Rect{}});
+        const rf::EffectsLayer narrow(e, f, rf::Stage{rf::Rect{0, 0, pw + 40, 900}, k, rf::Rect{}, rf::Rect{}, rf::Rect{}, 0.0});
         const std::vector<rf::Rect> rects = narrow.PopupRects(pw + 40, 900);
         bool inside = rects.size() == std::size_t(rf::CascadeCount);
         for (const auto& r : rects)
@@ -156,7 +157,7 @@ namespace
         tv.screen = 1;
         rf::Image only = framed;
         const rf::Rect inner{40, 50, 120, 80};
-        rf::EffectsLayer(tv, f, rf::Stage{rf::Rect{0, 0, framed.width, framed.height}, k, inner}).Apply(only, 0.0, 0, false);
+        rf::EffectsLayer(tv, f, rf::Stage{rf::Rect{0, 0, framed.width, framed.height}, k, inner, rf::Rect{}, rf::Rect{}, 0.0}).Apply(only, 0.0, 0, false);
         bool outsideSame = true;
         bool insideChanged = false;
         for (int y = 0; y < framed.height; ++y)
@@ -222,7 +223,7 @@ namespace
         rf::EffectSettings intro;
         intro.intro = true;
         const rf::Image bg(400, 400, rf::Rgb(0x20, 0x40, 0x80));
-        const rf::Stage centre{rf::Rect{50, 60, 300, 260}, 1, rf::Rect{}};
+        const rf::Stage centre{rf::Rect{50, 60, 300, 260}, 1, rf::Rect{}, rf::Rect{}, rf::Rect{}, 0.0};
         rf::Image first(400, 400);
         rf::EffectsLayer(intro, Window(rf::Style::Win95), centre).DrawIntro(first, bg, 0.0);
         rf::Image late(400, 400);
@@ -233,6 +234,164 @@ namespace
         rf::Image caption(400, 400);
         rf::EffectsLayer(intro, Window(rf::Style::Win2000), centre).DrawIntro(caption, bg, rf::IntroSeconds * 0.5);
         Check(Count(caption, rf::Rgb(0x20, 0x40, 0x80)) < 400 * 400 - 200, "intro: caption bar in Windows 2000 style");
+    }
+
+    int Differ(const rf::Image& a, const rf::Image& b, const rf::Rect& r)
+    {
+        int n = 0;
+        for (int y = std::max(0, r.y); y < std::min({a.height, b.height, r.Bottom()}); ++y)
+        {
+            for (int x = std::max(0, r.x); x < std::min({a.width, b.width, r.Right()}); ++x)
+            {
+                n += rf::Opaque(a.Get(x, y)) != rf::Opaque(b.Get(x, y));
+            }
+        }
+        return n;
+    }
+
+    void Desktop(const std::string& out)
+    {
+        const rf::Color teal = rf::Rgb(0x00, 0x80, 0x80);
+        for (rf::Style style : {rf::Style::Win98, rf::Style::WinXP})
+        {
+            rf::FrameSettings f = Window(style);
+            f.icon = rf::BuiltinIcon(rf::IconId::Folder);
+            rf::DesktopOptions d;
+            d.icons = true;
+            d.clock = L"12:34";
+            const int k = 2;
+            const rf::Image wall(800, 600, teal);
+            const rf::Image bg = rf::DesktopBackground(wall, f, d, 800, 600, k, L"Мои фото", f.icon);
+            const int bar = rf::TaskbarHeight(style) * k;
+            int barPixels = 0;
+            for (int x = 0; x < 800; ++x)
+            {
+                barPixels += rf::Opaque(bg.Get(x, 600 - 3)) != teal;
+            }
+            const rf::Rect task = rf::TaskTarget(f, 800, 600, k);
+            const rf::Image gone = rf::DesktopBackground(wall, f, d, 800, 600, k, L"Мои фото", f.icon, rf::TaskButton::None);
+            const rf::Image idle = rf::DesktopBackground(wall, f, d, 800, 600, k, L"Мои фото", f.icon, rf::TaskButton::Inactive);
+            Check(barPixels == 800 && task.y >= 600 - bar && task.Bottom() <= 600 && task.w > 100 && Differ(bg, gone, task) > task.w * task.h / 4 &&
+                      Differ(bg, idle, task) > 50 && Differ(bg, gone, rf::Rect{0, 0, 800, 600 - bar}) == 0,
+                  style == rf::Style::WinXP ? "desktop xp: taskbar, window button active, idle or gone" : "desktop 98: taskbar, window button active, idle or gone");
+            const rf::Rect iconArea{0, 0, 90 * k, 140 * k};
+            d.icons = false;
+            const rf::Image bare = rf::DesktopBackground(wall, f, d, 800, 600, k, L"Мои фото", f.icon);
+            d.taskbar = false;
+            d.icons = true;
+            const rf::Image iconsOnly = rf::DesktopBackground(wall, f, d, 800, 600, k, L"", rf::Image());
+            Check(Differ(bg, wall, iconArea) > 1000 && Differ(bare, wall, iconArea) == 0 && Differ(iconsOnly, wall, rf::Rect{100 * k, 600 - bar, 800 - 100 * k, bar}) == 0 &&
+                      Differ(iconsOnly, wall, iconArea) > 1000,
+                  "desktop: icons and taskbar switch separately");
+            rftest::WritePpm(out + (style == rf::Style::WinXP ? "/fx_desktop_xp.ppm" : "/fx_desktop_98.ppm"), bg);
+        }
+        Check(rf::ClockText(L"9:41") == L"9:41" && rf::ClockText(L"").find(L':') != std::wstring::npos, "desktop clock: own text or the time now");
+
+        rf::FrameSettings pf = Window(rf::Style::Win98);
+        pf.player = true;
+        rf::VideoTarget sq;
+        sq.square = true;
+        sq.canvasW = 1080;
+        sq.canvasH = 1080;
+        sq.reserve = rf::TaskbarHeight(rf::Style::Win98);
+        const rf::VideoPlan vp = rf::PlanVideo(pf, 1920, 1080, sq);
+        sq.reserve = 0;
+        const rf::VideoPlan free = rf::PlanVideo(pf, 1920, 1080, sq);
+        Check(vp.reserve == 28 * vp.scale && vp.windowY + vp.windowH <= 1080 - vp.reserve && free.reserve == 0 && vp.windowY <= free.windowY,
+              "video plan leaves room for the taskbar");
+        const rf::FrameSettings mfr = Window(rf::Style::WinXP);
+        const rf::MusicPlan mp = rf::PlanMusic(mfr, 1080, 1080, true, false, false, rf::TaskbarHeight(rf::Style::WinXP));
+        const rf::MusicPlan mw = rf::PlanMusic(mfr, 1080, 1080, false, false, false, 30);
+        Check(mp.reserve == 30 * mp.scale && mp.windowY + mp.windowH <= 1080 - mp.reserve && mw.reserve == 0, "music plan leaves room for the taskbar");
+    }
+
+    void Motion(const std::string& out)
+    {
+        rf::EffectSettings shake;
+        shake.motion = 1;
+        const rf::Rect window{100, 100, 200, 160};
+        const rf::Rect area{0, 0, 600, 500};
+        bool small = true;
+        bool varied = false;
+        const rf::Spot first = rf::WindowMotion(shake, 0.0, 0, 2, window, area);
+        for (int seed = 0; seed < 60; ++seed)
+        {
+            const rf::Spot s = rf::WindowMotion(shake, 0.0, seed, 2, window, area);
+            small = small && std::abs(s.x) <= 4 && std::abs(s.y) <= 4 && s.x % 2 == 0 && s.y % 2 == 0;
+            varied = varied || s.x != first.x || s.y != first.y;
+        }
+        Check(small && varied, "window shakes by a couple of pixels");
+        rf::EffectSettings drift;
+        drift.motion = 2;
+        bool inside = true;
+        int reach = 0;
+        for (int i = 0; i < 300; ++i)
+        {
+            const rf::Spot s = rf::WindowMotion(drift, i * 0.05, i, 1, window, area);
+            const rf::Rect r = window.Offset(s.x, s.y);
+            inside = inside && r.x >= 0 && r.y >= 0 && r.Right() <= 600 && r.Bottom() <= 500;
+            reach = std::max(reach, std::abs(s.x));
+        }
+        const rf::Spot still = rf::WindowMotion(rf::EffectSettings(), 3.0, 5, 1, window, area);
+        Check(inside && reach > 50 && still.x == 0 && still.y == 0, "window floats around but stays on the screen");
+
+        const rf::FrameSettings f = Window(rf::Style::Win98);
+        rf::EffectSettings live;
+        live.cursor = 1;
+        live.cursorPlace = rf::LiveCursor;
+        live.popups = 3;
+        live.outro = 2;
+        const rf::Rect win{100, 100, 400, 300};
+        const rf::Stage st{win, 1, rf::Rect{110, 130, 380, 200}, rf::Rect{120, 350, 30, 20}, rf::Rect{160, 340, 300, 10}, 10.0};
+        const rf::EffectsLayer layer(live, f, st);
+        int closed = -1;
+        const rf::Spot begin = layer.CursorAt(0.0, 0.0, 800, 600, &closed);
+        const rf::Spot play = layer.CursorAt(0.8, 0.08, 800, 600, nullptr);
+        Check(begin.y > win.Bottom() && closed == 0 && play.x == 135 && play.y == 360, "live cursor: comes in and clicks Play");
+        const std::vector<rf::Rect> rects = layer.PopupRects(800, 600);
+        const double c0 = 0.8 + 0.5 + (rf::CascadeCount - 1) * rf::PopupStep + 0.6;
+        const rf::Spot onOk = layer.CursorAt(c0 + 0.5, 0.4, 800, 600, &closed);
+        const bool hitsTop = rects.size() == std::size_t(rf::CascadeCount) && rects.back().Contains(onOk.x, onOk.y);
+        int later = 0;
+        layer.CursorAt(c0 + 0.6 * 2 + 0.01, 0.45, 800, 600, &later);
+        int all = 0;
+        layer.CursorAt(c0 + 0.6 * rf::CascadeCount + 0.1, 0.6, 800, 600, &all);
+        Check(hitsTop && closed == 0 && later == 2 && all == rf::CascadeCount, "live cursor: clicks OK on the error windows one by one");
+        const double tc = c0 + 0.6 * rf::CascadeCount;
+        const rf::Spot ride = layer.CursorAt(tc + 1.5, 0.5, 800, 600, nullptr);
+        Check(ride.x == 160 + 150 && ride.y == 345, "live cursor: drags the seek bar thumb");
+        const rf::Rect mini = rf::ScaleRect(rf::MinimizeButtonRect(f, 400), 1, 100, 100);
+        const rf::Spot end = layer.CursorAt(9.9, 0.99, 800, 600, nullptr);
+        Check(mini.Contains(end.x, end.y), "live cursor: goes to the minimize button at the end");
+        rf::Image busy(800, 600, rf::Rgb(0x30, 0x60, 0x90));
+        layer.Apply(busy, 2.9, 0, true, 0.29);
+        rf::Image calm(800, 600, rf::Rgb(0x30, 0x60, 0x90));
+        layer.Apply(calm, 7.0, 0, true, 0.7);
+        Check(Count(calm, rf::Rgb(0x30, 0x60, 0x90)) > 800 * 600 - 400 && Count(busy, rf::Rgb(0x30, 0x60, 0x90)) < 800 * 600 - 20000,
+              "live cursor: error windows go away after the clicks");
+        rftest::WritePpm(out + "/fx_live_popups.ppm", busy);
+
+        const rf::Color sky = rf::Rgb(0x20, 0x40, 0x80);
+        const rf::Image ending(400, 400, sky);
+        rf::EffectSettings bye;
+        bye.outro = 1;
+        bye.cursor = 1;
+        const rf::Stage centre{rf::Rect{50, 60, 300, 260}, 1, rf::Rect{}, rf::Rect{}, rf::Rect{}, 0.0};
+        const rf::EffectsLayer closing(bye, Window(rf::Style::Win95), centre);
+        rf::Image a(400, 400);
+        closing.DrawOutro(a, ending, 0.0, rf::Rect{});
+        rf::Image z(400, 400);
+        closing.DrawOutro(z, ending, rf::OutroAnim + 0.1, rf::Rect{});
+        Check(rf::Opaque(a.Get(50, 200)) != sky && rf::Opaque(a.Get(200, 200)) == sky && Count(z, sky) > 400 * 400 - 300, "outro: window closes, desktop stays");
+        bye.outro = 2;
+        const rf::EffectsLayer folding(bye, Window(rf::Style::Win98), centre);
+        rf::Image m(400, 400);
+        const rf::Rect target{10, 370, 100, 22};
+        folding.DrawOutro(m, ending, rf::OutroAnim * 0.98, target);
+        rf::Image m0(400, 400);
+        folding.DrawOutro(m0, ending, 0.0, target);
+        Check(rf::Opaque(m.Get(60, 380)) != sky && rf::Opaque(m.Get(200, 200)) == sky && rf::Opaque(m0.Get(200, 70)) != sky, "outro: window folds into the taskbar button");
+        rftest::WritePpm(out + "/fx_outro_min.ppm", m);
     }
 
     void Settings()
@@ -248,20 +407,29 @@ namespace
         s.effects.popupText = L"Строка один\nСтрока два";
         s.effects.screen = 2;
         s.effects.palette = 2;
+        s.effects.motion = 2;
+        s.effects.outro = 1;
+        s.effects.desktop = true;
+        s.effects.desktopIcons = true;
+        s.effects.clock = L"23:59";
+        s.effects.cursorPlace = rf::LiveCursor;
         rf::AppSettings back = rf::DefaultSettings();
         rf::ParseSettings(rf::SerializeSettings(s), back);
         const rf::EffectSettings& b = back.effects;
-        Check(b.intro && b.cursor == 3 && b.cursorPlace == 2 && b.popups == 2 && b.popupIcon == 3 && b.popupButtons == 2 && b.popupTitle == s.effects.popupTitle &&
+        Check(b.intro && b.cursor == 3 && b.cursorPlace == rf::LiveCursor && b.motion == 2 && b.outro == 1 && b.desktop && b.desktopIcons && b.clock == L"23:59" &&
+                  b.popups == 2 && b.popupIcon == 3 && b.popupButtons == 2 && b.popupTitle == s.effects.popupTitle &&
                   b.popupText == s.effects.popupText && b.screen == 2 && b.palette == 2,
               "effects settings round trip");
         const rf::EffectSettings d = rf::DefaultSettings().effects;
-        Check(!d.intro && d.cursor == 0 && d.popups == 0 && d.screen == 0 && !rf::HasOverlays(d), "effects are off by default");
+        Check(!d.intro && d.cursor == 0 && d.popups == 0 && d.screen == 0 && d.motion == 0 && d.outro == 0 && !d.desktop && !d.desktopIcons && !rf::HasOverlays(d),
+              "effects are off by default");
         rf::EffectsView view(s.effects);
         rf::Image dialog;
         view.root.Paint(dialog);
         rftest::WritePpm(Out() + "/ui_effects_dialog.ppm", dialog);
         const rf::EffectSettings r = view.Result();
-        Check(r.intro && r.cursor == 3 && r.popups == 2 && r.popupText == s.effects.popupText && r.popupTitle == s.effects.popupTitle && r.screen == 2,
+        Check(r.intro && r.cursor == 3 && r.popups == 2 && r.popupText == s.effects.popupText && r.popupTitle == s.effects.popupTitle && r.screen == 2 &&
+                  r.cursorPlace == rf::LiveCursor && r.motion == 2 && r.outro == 1 && r.desktop && r.desktopIcons && r.clock == L"23:59",
               "effects dialog keeps the values");
     }
 }
@@ -278,6 +446,8 @@ int main(int argc, char** argv)
     outDir = out;
     Popups(out);
     Layer(out);
+    Desktop(out);
+    Motion(out);
     Settings();
 
     rftest::TestHost host;
@@ -442,6 +612,58 @@ int main(int argc, char** argv)
         Check(rf::ExportVideo(host, video, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, video.output, v, err) &&
                   Near(v.duration, 1.0 + rf::IntroSeconds, 0.12) && v.hasAudio,
               "video with intro and effects");
+
+        rf::ExportJob bye = video;
+        bye.output = dir + L"/fx_clip_bye.mp4";
+        rf::VideoTarget sq;
+        sq.square = true;
+        sq.canvasW = 480;
+        sq.canvasH = 480;
+        sq.reserve = rf::TaskbarHeight(player.style);
+        bye.plan = rf::PlanVideo(player, 320, 240, sq);
+        rf::DesktopOptions d;
+        d.clock = L"10:00";
+        const rf::Image wall = rf::CanvasBackground(rf::Image(), rf::Rgb(0x00, 0x80, 0x80), 480, 480);
+        bye.background = rf::DesktopBackground(wall, player, d, 480, 480, bye.plan.scale, L"ролик", rf::Image());
+        bye.ending = rf::DesktopBackground(wall, player, d, 480, 480, bye.plan.scale, L"ролик", rf::Image(), rf::TaskButton::Inactive);
+        bye.taskTarget = rf::TaskTarget(player, 480, 480, bye.plan.scale);
+        bye.effects = rf::EffectSettings();
+        bye.effects.outro = 2;
+        bye.effects.motion = 2;
+        bye.effects.cursor = 1;
+        bye.effects.cursorPlace = rf::LiveCursor;
+        rf::MediaInfo bv;
+        Check(rf::ExportVideo(host, bye, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, bye.output, bv, err) &&
+                  Near(bv.duration, 1.0 + rf::OutroSeconds, 0.12) && bv.hasAudio,
+              "video with outro: longer by the animation, sound kept");
+        rf::Image last;
+        {
+            rf::FrameStream tail(host, bye.output, bv.duration - 0.15, 0.0, 0.0, 480, 480);
+            tail.Next(last);
+        }
+        const int cy = (480 - sq.reserve * bye.plan.scale) / 2;
+        Check(!last.Empty() && std::abs(int(rf::Green(last.Get(240, cy))) - 0x80) < 24 && int(rf::Red(last.Get(240, cy))) < 24,
+              "video with outro: the window is gone at the end");
+        rftest::WritePpm(out + "/fx_outro_last.ppm", last);
+        rf::ExportJob gifBye = bye;
+        gifBye.gif = true;
+        gifBye.output = dir + L"/fx_clip_bye.gif";
+        rf::MediaInfo gv;
+        Check(rf::ExportVideo(host, gifBye, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, gifBye.output, gv, err) &&
+                  gv.duration < 1.0 + rf::OutroSeconds / 2,
+              "gif keeps looping without the outro");
+
+        rf::MusicJob closing = job;
+        closing.output = dir + L"/fx_song_bye.mp4";
+        closing.effects = rf::EffectSettings();
+        closing.effects.outro = 1;
+        closing.effects.cursor = 1;
+        closing.effects.cursorPlace = rf::LiveCursor;
+        closing.effects.motion = 1;
+        rf::MediaInfo cm;
+        Check(rf::ExportMusic(host, closing, [](int, int) { return true; }, err) == rf::ExportResult::Done && rf::ProbeMedia(host, closing.output, cm, err) &&
+                  Near(cm.duration, 2.0 + rf::OutroSeconds, 0.12) && cm.hasAudio,
+              "music with outro: longer by the animation");
     }
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);
     return failures == 0 ? 0 : 2;

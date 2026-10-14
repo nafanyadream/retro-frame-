@@ -1215,7 +1215,7 @@ namespace rf
             p.outW = outW;
             p.outH = outH;
             const int roomW = outW * 92 / 100;
-            const int roomH = outH * 92 / 100;
+            const auto roomFor = [&](int cand) { return (outH - target.reserve * cand) * 92 / 100; };
             int k = fixed;
             const int tallEnough[] = {chromeH * 3 / 2, 40};
             const int wideEnough[] = {PlayerComfortWidth, PlayerMinWidth};
@@ -1225,7 +1225,7 @@ namespace rf
                 {
                     int cw = 0;
                     int ch = 0;
-                    fit(roomW / cand - chromeW, roomH / cand - chromeH, cw, ch);
+                    fit(roomW / cand - chromeW, roomFor(cand) / cand - chromeH, cw, ch);
                     if (cw >= wideEnough[tier] && ch >= tallEnough[tier])
                     {
                         k = cand;
@@ -1234,13 +1234,14 @@ namespace rf
             }
             k = std::max(1, k);
             p.scale = k;
+            p.reserve = target.reserve * k;
             int cw = 0;
             int ch = 0;
-            fit(roomW / k - chromeW, roomH / k - chromeH, cw, ch);
+            fit(roomW / k - chromeW, roomFor(k) / k - chromeH, cw, ch);
             if (cw < PlayerMinWidth)
             {
                 cw = PlayerMinWidth;
-                ch = std::min(std::max(2, int(std::lround(cw / aspect))), std::max(2, outH / k - chromeH));
+                ch = std::min(std::max(2, int(std::lround(cw / aspect))), std::max(2, (outH - p.reserve) / k - chromeH));
             }
             p.clientW = cw;
             p.clientH = ch;
@@ -1248,7 +1249,7 @@ namespace rf
             p.windowW = (p.clientW + chromeW) * k;
             p.windowH = (p.clientH + chromeH) * k;
             p.windowX = std::max(0, (outW - p.windowW) / 2);
-            p.windowY = std::max(0, (outH - p.windowH) / 2);
+            p.windowY = std::max(0, (outH - p.reserve - p.windowH) / 2);
             return p;
         }
         int k = fixed;
@@ -1312,16 +1313,34 @@ namespace rf
         frame_.player = true;
     }
 
-    void PlayerComposer::SetEffects(const EffectSettings& effects)
+    void PlayerComposer::SetEffects(const EffectSettings& effects, double duration)
     {
         effects_ = effects;
+        if (!plan_.square)
+        {
+            effects_.motion = 0;
+            effects_.outro = 0;
+        }
         const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
         const int k = plan_.scale;
         const Rect client = MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
         const Rect video{window.x + client.x * k + (plan_.clientW * k - plan_.videoW) / 2, window.y + client.y * k + (plan_.clientH * k - plan_.videoH) / 2,
                          plan_.videoW, plan_.videoH};
-        fx_ = EffectsLayer(effects, frame_, Stage{window, k, video});
-        fxOn_ = HasOverlays(effects);
+        Stage stage{window, k, video, Rect{}, Rect{}, 0.0};
+        Rect play;
+        Rect seek;
+        PlayerHotspots(frame_, plan_.clientW, plan_.clientH, &play, &seek);
+        stage.play = ScaleRect(play, k, window.x, window.y);
+        stage.seek = ScaleRect(seek, k, window.x, window.y);
+        stage.duration = duration;
+        fx_ = EffectsLayer(effects_, frame_, stage);
+        fxOn_ = HasOverlays(effects_);
+    }
+
+    void PlayerComposer::SetOutro(const Image& ending, const Rect& taskTarget)
+    {
+        ending_ = ending;
+        taskTarget_ = taskTarget;
     }
 
     const Image& PlayerComposer::Intro(double t, int seed)
@@ -1329,6 +1348,19 @@ namespace rf
         out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         fx_.DrawIntro(out_, plan_.square ? background_ : Image(), t);
         return out_;
+    }
+
+    const Image& PlayerComposer::Outro(double u, int seed)
+    {
+        out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
+        fx_.Shift(0, 0);
+        fx_.DrawOutro(out_, ending_.Empty() ? background_ : ending_, u, taskTarget_);
+        return out_;
+    }
+
+    int OutroFrames(const EffectSettings& effects, bool square, double fps)
+    {
+        return square && effects.outro > 0 ? int(std::ceil(OutroSeconds * std::clamp(fps, 1.0, 60.0) - 1e-6)) : 0;
     }
 
     const Image& PlayerComposer::Compose(const Image& video, double position, const std::wstring& time, double t, int seed, bool animate)
@@ -1348,7 +1380,7 @@ namespace rf
             Flatten(out_);
             if (fxOn_)
             {
-                fx_.Apply(out_, t, seed, animate);
+                fx_.Apply(out_, t, seed, animate, position);
             }
             return out_;
         }
@@ -1360,10 +1392,16 @@ namespace rf
         {
             out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         }
-        Blit(out_, window, plan_.windowX, plan_.windowY);
+        Spot m;
+        if (effects_.motion > 0)
+        {
+            m = WindowMotion(effects_, t, seed, k, Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH}, Rect{0, 0, plan_.outW, plan_.outH - plan_.reserve});
+        }
+        Blit(out_, window, plan_.windowX + m.x, plan_.windowY + m.y);
         if (fxOn_)
         {
-            fx_.Apply(out_, t, seed, animate);
+            fx_.Shift(m.x, m.y);
+            fx_.Apply(out_, t, seed, animate, position);
         }
         return out_;
     }
@@ -1401,6 +1439,10 @@ namespace rf
                 if (spec.delay > 0.0)
                 {
                     filters += (filters.empty() ? L"" : L",") + std::wstring(L"adelay=") + std::to_wstring(int(std::lround(spec.delay * 1000.0))) + L":all=1";
+                }
+                if (spec.tail > 0.0)
+                {
+                    filters += (filters.empty() ? L"" : L",") + std::wstring(L"apad=pad_dur=") + Number(spec.tail + 0.5);
                 }
                 if (!filters.empty())
                 {
@@ -1547,7 +1589,9 @@ namespace rf
         }
         const double fps = std::clamp(job.fps, 1.0, 60.0);
         const int intro = job.effects.intro ? int(std::ceil(IntroSeconds * fps - 1e-6)) : 0;
-        const int total = intro + std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        const int body = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        const int outro = job.gif ? 0 : OutroFrames(job.effects, job.plan.square, fps);
+        const int total = intro + body + outro;
         FrameStream reader(host, job.source, job.start, job.duration, fps, job.plan.videoW, job.plan.videoH);
         if (!reader.Started())
         {
@@ -1566,17 +1610,29 @@ namespace rf
         spec.start = job.start;
         spec.duration = job.duration;
         spec.delay = intro / fps;
+        spec.tail = outro / fps;
         PlayerComposer composer(job.frame, job.vars, job.plan, job.background);
-        composer.SetEffects(job.effects);
+        composer.SetEffects(job.effects, job.duration);
+        composer.SetOutro(job.ending, job.taskTarget);
         const std::wstring length = FormatClock(job.duration);
         Image frame;
+        int outroAt = -1;
         const ExportResult result = Encode(host, spec, total, [&](int i) -> const Image* {
             if (i < intro)
             {
                 return &composer.Intro(i / fps, i);
             }
-            if (!reader.Next(frame))
+            if (outroAt < 0 && i >= intro + body)
             {
+                outroAt = i;
+            }
+            if (outroAt < 0)
+            {
+                if (reader.Next(frame))
+                {
+                    const double t = (i - intro) / fps;
+                    return &composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length, t, i, true);
+                }
                 if (i == intro)
                 {
                     error = FromUtf8(LastLines(reader.Log(), 3));
@@ -1584,11 +1640,19 @@ namespace rf
                     {
                         error = L"не удалось прочитать кадры видео";
                     }
+                    return nullptr;
                 }
+                if (outro == 0)
+                {
+                    return nullptr;
+                }
+                outroAt = i;
+            }
+            if (i - outroAt >= outro)
+            {
                 return nullptr;
             }
-            const double t = (i - intro) / fps;
-            return &composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length, t, i, true);
+            return &composer.Outro((i - outroAt) / fps, i);
         }, step, error);
         reader.Stop();
         return result;

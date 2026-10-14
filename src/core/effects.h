@@ -19,9 +19,17 @@ namespace rf
         std::wstring popupText = L"Программа выполнила недопустимую операцию\nи будет закрыта.";
         int screen = 0;
         int palette = 0;
+        int motion = 0;
+        int outro = 0;
+        bool desktop = false;
+        bool desktopIcons = false;
+        std::wstring clock;
     };
 
     constexpr double IntroSeconds = 0.6;
+    constexpr double OutroSeconds = 1.0;
+    constexpr double OutroAnim = 0.5;
+    constexpr int LiveCursor = 4;
     constexpr int CascadeCount = 5;
     constexpr double PopupStart = 0.5;
     constexpr double PopupStep = 0.35;
@@ -31,9 +39,20 @@ namespace rf
         Rect window;
         int scale = 1;
         Rect content;
+        Rect play;
+        Rect seek;
+        double duration = 0.0;
+    };
+
+    struct Spot
+    {
+        int x = 0;
+        int y = 0;
     };
 
     bool HasOverlays(const EffectSettings& e);
+    Rect ScaleRect(const Rect& r, int scale, int ox, int oy);
+    Spot WindowMotion(const EffectSettings& e, double t, int seed, int scale, const Rect& window, const Rect& area);
     Image RenderPopup(const EffectSettings& e, const FrameSettings& frame, bool active, Rect* firstButton);
     void ApplyScreen(Image& img, int kind, int seed, int scale);
     void ApplyPalette(Image& img, int kind, int scale);
@@ -46,9 +65,16 @@ namespace rf
 
         bool Intro() const { return e_.intro; }
         void DrawIntro(Image& out, const Image& background, double t) const;
-        void Apply(Image& out, double t, int seed, bool animate) const;
+        void DrawOutro(Image& out, const Image& background, double u, const Rect& taskTarget) const;
+        void Shift(int dx, int dy)
+        {
+            dx_ = dx;
+            dy_ = dy;
+        }
+        void Apply(Image& out, double t, int seed, bool animate, double progress = -1.0) const;
         int VisiblePopups(double t, bool animate) const;
         std::vector<Rect> PopupRects(int width, int height) const;
+        Spot CursorAt(double t, double progress, int width, int height, int* closed) const;
 
     private:
         EffectSettings e_;
@@ -59,5 +85,12 @@ namespace rf
         int popupCount_ = 0;
         Rect popupButton_;
         Rect close_;
+        Rect minimize_;
+        int dx_ = 0;
+        int dy_ = 0;
+
+        int LiveShown(double t) const;
+        double LiveClosingStart() const;
+        void DrawCursor(Image& out, int px, int py) const;
     };
 }

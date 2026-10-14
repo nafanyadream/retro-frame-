@@ -387,7 +387,7 @@ namespace rf
     MusicPlan MainView::MusicPlanFor(const FrameSettings& frame) const
     {
         const CanvasSize c = Audio().square ? CanvasAt(Audio().canvas) : CanvasSize{SquareSizes[0], SquareSizes[0]};
-        return PlanMusic(frame, c.width, c.height, Audio().square, ShowLyrics(), Recorder());
+        return PlanMusic(frame, c.width, c.height, Audio().square, ShowLyrics(), Recorder(), Reserve(frame, Audio().square));
     }
 
     bool MainView::OpenTrack(const std::wstring& path, std::wstring* failure)
@@ -506,27 +506,23 @@ namespace rf
         }
         const FrameSettings f = MusicFrameSettings();
         const MusicPlan plan = MusicPlanFor(f);
+        const FrameVars vars{live ? FileNameOf(micPath_) : Song()->name, 0, 0, L""};
         if (plan.square)
         {
-            const int w = plan.outW / plan.scale;
-            const int h = plan.outH / plan.scale;
-            static const Image none;
-            const Image& picture = s_.backgroundPicture ? s_.backgroundImage : none;
-            const std::wstring key = std::to_wstring(w) + L"x" + std::to_wstring(h) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width) +
-                                     L"x" + std::to_wstring(picture.height);
-            if (key != bgKey_)
-            {
-                bgPreview_ = CanvasBackground(picture, s_.background, w, h);
-                bgKey_ = key;
-            }
+            PreviewBackdrop(plan.outW / plan.scale, plan.outH / plan.scale, f, vars);
         }
         MusicFrame mf;
         Image img;
         Rect inside;
+        double duration = 0.0;
+        double progress = -1.0;
+        const int k = std::max(1, plan.scale);
+        const Rect window = plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{};
+        Spot m;
         if (live)
         {
             const double length = double(micSamples_.size()) / std::max(1, micRate_);
-            MusicComposer composer(f, FrameVars{FileNameOf(micPath_), 0, 0, L""}, plan, Image(), L"", L"", Image());
+            MusicComposer composer(f, vars, plan, Image(), L"", L"", Image());
             composer.SetRecorder(s_.recorder.russian, length, micAnalysis_);
             mf.now = length;
             mf.length = length;
@@ -537,15 +533,22 @@ namespace rf
         }
         else
         {
-            const FrameVars vars{Song()->name, 0, 0, L""};
             MusicComposer composer(f, vars, plan, Image(), Song()->artist, Song()->title, Song()->cover);
             SetupComposer(composer);
             mf = TrackFrame();
-            img = composer.Small(mf, plan.square ? bgPreview_ : Image(), &inside);
+            duration = TrimEnd() - TrimStart();
+            progress = Recorder() ? (Song()->info.duration > 0.0 ? std::clamp(mf.absolute / Song()->info.duration, 0.0, 1.0) : 0.0) : mf.position;
+            if (plan.square)
+            {
+                m = PreviewMotion(window, plan.outW / k, plan.outH / k, plan.reserve / k, mf.now, int(mf.now * 15.0));
+            }
+            img = composer.Small(mf, plan.square ? bgPreview_ : Image(), &inside, m);
         }
-        const int k = std::max(1, plan.scale);
-        ApplyEffects(img, f, plan.square ? Rect{plan.windowX / k, plan.windowY / k, plan.windowW / k, plan.windowH / k} : Rect{0, 0, img.width, img.height}, inside, 1,
-                     mf.now, int(mf.now * 15.0));
+        Stage stage{plan.square ? window : Rect{0, 0, img.width, img.height}, 1, inside, Rect{}, Rect{}, duration};
+        MusicHotspots(f, plan, Recorder(), &stage.play, &stage.seek);
+        stage.play = stage.play.Offset(inside.x, inside.y);
+        stage.seek = stage.seek.Offset(inside.x, inside.y);
+        ApplyEffects(img, f, stage, mf.now, int(mf.now * 15.0), progress, m);
         const int availW = preview_->rect.w - 4 - 12;
         const int availH = preview_->rect.h - 4 - 12;
         preview_->image = img.width > availW || img.height > availH ? FitInside(img, availW, availH, false) : std::move(img);
@@ -597,11 +600,13 @@ namespace rf
         }
         const FrameSettings f = MusicFrameSettings();
         const MusicPlan plan = MusicPlanFor(f);
-        const Image background = plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, plan.outW, plan.outH) : Image();
-        MusicComposer composer(f, FrameVars{Song()->name, 0, 0, L""}, plan, background, Song()->artist, Song()->title, Song()->cover);
-        composer.SetEffects(s_.effects);
+        const FrameVars vars{Song()->name, 0, 0, L""};
+        const Image background = plan.square ? Backdrop(plan.outW, plan.outH, plan.scale, f, vars, 0) : Image();
+        MusicComposer composer(f, vars, plan, background, Song()->artist, Song()->title, Song()->cover);
         SetupComposer(composer);
-        out = composer.Compose(TrackFrame());
+        composer.SetEffects(s_.effects, TrimEnd() - TrimStart());
+        const MusicFrame mf = TrackFrame();
+        out = composer.Compose(mf, int(mf.now * 15.0));
         return true;
     }
 
@@ -668,8 +673,16 @@ namespace rf
         job.vars = FrameVars{Song()->name, 0, 0, L""};
         job.plan = MusicPlanFor(job.frame);
         job.effects = s_.effects;
-        job.background =
-            job.plan.square ? CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH) : Image();
+        if (job.plan.square)
+        {
+            const int k = job.plan.scale;
+            job.background = Backdrop(job.plan.outW, job.plan.outH, k, job.frame, job.vars, 0);
+            if (s_.effects.outro > 0)
+            {
+                job.ending = Backdrop(job.plan.outW, job.plan.outH, k, job.frame, job.vars, s_.effects.outro);
+                job.taskTarget = TaskTargetFor(job.frame, job.plan.outW, job.plan.outH, k);
+            }
+        }
         job.artist = Song()->artist;
         job.title = Song()->title;
         job.cover = Song()->cover;

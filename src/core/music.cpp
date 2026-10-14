@@ -412,7 +412,7 @@ namespace rf
         return {L"File", L"Edit", L"Effects", L"Help"};
     }
 
-    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics, bool recorder)
+    MusicPlan PlanMusic(const FrameSettings& frame, int canvasW, int canvasH, bool square, bool lyrics, bool recorder, int reserve)
     {
         MusicPlan p;
         p.square = square;
@@ -424,11 +424,12 @@ namespace rf
         const int outH = std::max(120, canvasH & ~1);
         const FrameGeometry g = MeasureFrame(MusicWindow(frame), baseW, baseH);
         const int roomW = square ? outW * 92 / 100 : outW;
-        const int roomH = square ? outH * 92 / 100 : outH;
+        const int extra = square ? std::max(0, reserve) : 0;
+        const auto roomH = [&](int k) { return square ? (outH - extra * k) * 92 / 100 : outH; };
         int fits = 1;
         for (int k = 4; k >= 1; --k)
         {
-            if (g.width * k <= roomW && g.height * k <= roomH)
+            if (g.width * k <= roomW && g.height * k <= roomH(k))
             {
                 fits = k;
                 break;
@@ -438,10 +439,11 @@ namespace rf
         p.scale = manual && (!square || frame.scale <= fits) ? frame.scale : fits;
         if (square)
         {
+            p.reserve = extra * p.scale;
             p.windowW = g.width * p.scale;
             p.windowH = g.height * p.scale;
             p.windowX = std::max(0, (outW - p.windowW) / 2);
-            p.windowY = std::max(0, (outH - p.windowH) / 2);
+            p.windowY = std::max(0, (outH - p.reserve - p.windowH) / 2);
             p.outW = outW;
             p.outH = outH;
             return p;
@@ -459,6 +461,25 @@ namespace rf
         p.outW = p.windowW;
         p.outH = p.windowH;
         return p;
+    }
+
+    void MusicHotspots(const FrameSettings& frame, const MusicPlan& plan, bool recorder, Rect* play, Rect* seek)
+    {
+        if (recorder)
+        {
+            const int bw = (plan.clientW - 20) / 5;
+            *play = Rect{6 + 2 * (bw + 2), 72, bw, 24};
+            *seek = Rect{15, 47, plan.clientW - 31, 21};
+            return;
+        }
+        const int left = CoverX + CoverSize + 10;
+        const int right = plan.clientW - 8;
+        const int width = right - left;
+        const int small = (width - 8) / 5;
+        *play = Rect{left, 74, width - 2 * (small + 2), 24};
+        const int tw = Text().Width(L"00:00", Font{FamilyFor(frame.style), false});
+        const Rect track{CoverX + tw + 6, 193, right - tw - 6 - (CoverX + tw + 6), 14};
+        *seek = Rect{track.x + 2, track.y, track.w - 4, track.h};
     }
 
     MusicComposer::MusicComposer(const FrameSettings& frame, const FrameVars& vars, const MusicPlan& plan, const Image& background, const std::wstring& artist,
@@ -492,16 +513,52 @@ namespace rf
         russian_ = russian;
         songLength_ = songLength;
         samples_ = std::move(samples);
+        if (fxSet_)
+        {
+            BuildEffects();
+        }
     }
 
-    void MusicComposer::SetEffects(const EffectSettings& effects)
+    void MusicComposer::SetEffects(const EffectSettings& effects, double duration)
     {
         effects_ = effects;
+        if (!plan_.square)
+        {
+            effects_.motion = 0;
+            effects_.outro = 0;
+        }
+        duration_ = duration;
+        fxSet_ = true;
+        BuildEffects();
+    }
+
+    void MusicComposer::BuildEffects()
+    {
         const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
         const int k = plan_.scale;
         const Rect client = MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
-        fx_ = EffectsLayer(effects, frame_, Stage{window, k, Rect{window.x + client.x * k, window.y + client.y * k, plan_.clientW * k, plan_.clientH * k}});
-        fxOn_ = HasOverlays(effects);
+        Stage stage{window, k, Rect{window.x + client.x * k, window.y + client.y * k, plan_.clientW * k, plan_.clientH * k}, Rect{}, Rect{}, duration_};
+        Rect play;
+        Rect seek;
+        MusicHotspots(frame_, plan_, recorder_, &play, &seek);
+        stage.play = ScaleRect(play, k, window.x + client.x * k, window.y + client.y * k);
+        stage.seek = ScaleRect(seek, k, window.x + client.x * k, window.y + client.y * k);
+        fx_ = EffectsLayer(effects_, frame_, stage);
+        fxOn_ = HasOverlays(effects_);
+    }
+
+    void MusicComposer::SetOutro(const Image& ending, const Rect& taskTarget)
+    {
+        ending_ = ending;
+        taskTarget_ = taskTarget;
+    }
+
+    const Image& MusicComposer::Outro(double u, int seed)
+    {
+        out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
+        fx_.Shift(0, 0);
+        fx_.DrawOutro(out_, ending_.Empty() ? background_ : ending_, u, taskTarget_);
+        return out_;
     }
 
     const Image& MusicComposer::Intro(double t, int seed)
@@ -533,15 +590,22 @@ namespace rf
         {
             out_ = Image(plan_.outW, plan_.outH, Rgb(0, 0, 0));
         }
-        Blit(out_, window, plan_.windowX, plan_.windowY);
+        Spot m;
+        if (plan_.square && effects_.motion > 0)
+        {
+            m = WindowMotion(effects_, f.now, seed, k, Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH}, Rect{0, 0, plan_.outW, plan_.outH - plan_.reserve});
+        }
+        Blit(out_, window, plan_.windowX + m.x, plan_.windowY + m.y);
         if (fxOn_)
         {
-            fx_.Apply(out_, f.now, seed, animate);
+            const double progress = recorder_ ? (songLength_ > 0.0 ? std::clamp(f.absolute / songLength_, 0.0, 1.0) : 0.0) : f.position;
+            fx_.Shift(m.x, m.y);
+            fx_.Apply(out_, f.now, seed, animate, progress);
         }
         return out_;
     }
 
-    Image MusicComposer::Small(const MusicFrame& f, const Image& background, Rect* content)
+    Image MusicComposer::Small(const MusicFrame& f, const Image& background, Rect* content, Spot shift)
     {
         Rect client;
         Image window = Window(f, client);
@@ -565,7 +629,7 @@ namespace rf
         const int w = plan_.outW / k;
         const int h = plan_.outH / k;
         Image out = background.width == w && background.height == h ? background : Image(w, h, Rgb(0, 0, 0));
-        Blit(out, window, plan_.windowX / k, plan_.windowY / k);
+        Blit(out, window, plan_.windowX / k + shift.x, plan_.windowY / k + shift.y);
         return out;
     }
 
@@ -602,7 +666,9 @@ namespace rf
     {
         const double fps = std::clamp(job.fps, 1.0, 60.0);
         const int intro = job.effects.intro ? int(std::ceil(IntroSeconds * fps - 1e-6)) : 0;
-        const int total = intro + std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        const int body = std::max(1, int(std::ceil(job.duration * fps - 1e-6)));
+        const int outro = OutroFrames(job.effects, job.plan.square, fps);
+        const int total = intro + body + outro;
         EncoderSpec spec;
         spec.output = job.output;
         spec.quality = job.quality;
@@ -615,16 +681,22 @@ namespace rf
         spec.duration = job.duration;
         spec.fade = job.fade;
         spec.delay = intro / fps;
+        spec.tail = outro / fps;
         MusicComposer composer(job.frame, job.vars, job.plan, job.background, job.artist, job.title, job.cover);
-        composer.SetEffects(job.effects);
         if (job.recorder)
         {
             composer.SetRecorder(job.recorderRussian, job.songLength, job.samples);
         }
+        composer.SetEffects(job.effects, job.duration);
+        composer.SetOutro(job.ending, job.taskTarget);
         return Encode(host, spec, total, [&](int i) -> const Image* {
             if (i < intro)
             {
                 return &composer.Intro(i / fps, i);
+            }
+            if (i >= intro + body)
+            {
+                return &composer.Outro((i - intro - body) / fps, i);
             }
             const double t = (i - intro) / fps;
             MusicFrame mf = MusicFrameAt(t, job.duration, job.start + t, job.spin, job.meter, job.levels);

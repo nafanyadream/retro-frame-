@@ -1,5 +1,6 @@
 #include "mainview.h"
 
+#include "desktop.h"
 #include "glyphs.h"
 #include "icons.h"
 #include "icon_editor.h"
@@ -662,13 +663,74 @@ namespace rf
         return f;
     }
 
-    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Rect& window, const Rect& content, int scale, double t, int seed) const
+    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Stage& stage, double t, int seed, double progress, Spot shift) const
     {
         if (!HasOverlays(s_.effects))
         {
             return;
         }
-        EffectsLayer(s_.effects, frame, Stage{window, scale, content}).Apply(img, t, seed, false);
+        EffectsLayer layer(s_.effects, frame, stage);
+        layer.Shift(shift.x, shift.y);
+        layer.Apply(img, t, seed, false, progress);
+    }
+
+    Spot MainView::PreviewMotion(const Rect& window, int outW, int outH, int reserve, double t, int seed) const
+    {
+        if (s_.effects.motion == 0)
+        {
+            return Spot{};
+        }
+        return WindowMotion(s_.effects, t, seed, 1, window, Rect{0, 0, outW, outH - reserve});
+    }
+
+    Image MainView::Backdrop(int w, int h, int k, const FrameSettings& frame, const FrameVars& vars, int ending) const
+    {
+        Image bg = CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, w, h);
+        if (!s_.effects.desktop && !s_.effects.desktopIcons)
+        {
+            return bg;
+        }
+        DesktopOptions d;
+        d.taskbar = s_.effects.desktop;
+        d.icons = s_.effects.desktopIcons;
+        d.clock = s_.effects.clock;
+        const TaskButton button = ending == 1 ? TaskButton::None : ending == 2 ? TaskButton::Inactive : TaskButton::Active;
+        return DesktopBackground(bg, frame, d, w, h, k, ExpandVars(frame.title, vars), frame.icon, button);
+    }
+
+    const Image& MainView::PreviewBackdrop(int w, int h, const FrameSettings& frame, const FrameVars& vars)
+    {
+        const Image& picture = s_.backgroundImage;
+        std::wstring key = std::to_wstring(w) + L"x" + std::to_wstring(h) + L"/" + std::to_wstring(s_.background) + L"/" +
+                           (s_.backgroundPicture ? std::to_wstring(picture.width) + L"x" + std::to_wstring(picture.height) : std::wstring(L"-"));
+        if (s_.effects.desktop || s_.effects.desktopIcons)
+        {
+            key += L"/" + std::to_wstring(int(s_.effects.desktop)) + std::to_wstring(int(s_.effects.desktopIcons)) + L"/" + std::to_wstring(int(frame.style)) + L"/" +
+                   std::to_wstring(frame.colors.face) + L"/" + ClockText(s_.effects.clock) + L"/" + ExpandVars(frame.title, vars) + L"/" +
+                   std::to_wstring(frame.icon.width);
+            std::uint32_t hash = 2166136261u;
+            for (const Color c : frame.icon.pixels)
+            {
+                hash = (hash ^ c) * 16777619u;
+            }
+            key += L"/" + std::to_wstring(hash);
+        }
+        if (key != bgKey_)
+        {
+            bgPreview_ = Backdrop(w, h, 1, frame, vars, 0);
+            bgKey_ = key;
+        }
+        return bgPreview_;
+    }
+
+    int MainView::Reserve(const FrameSettings& frame, bool square) const
+    {
+        return square && s_.effects.desktop ? TaskbarHeight(frame.style) : 0;
+    }
+
+    Rect MainView::TaskTargetFor(const FrameSettings& frame, int outW, int outH, int scale) const
+    {
+        return s_.effects.desktop ? TaskTarget(frame, outW, outH, scale) : Rect{};
     }
 
     std::vector<ui::ListItem> MainView::PresetItems() const
@@ -831,7 +893,7 @@ namespace rf
         Image frame = RenderFrame(fs, cw, ch, VarsFor(ph), &client);
         Painter p(frame);
         p.Draw(ph.preview.width == cw && ph.preview.height == ch ? ph.preview : ResizeSmooth(ph.preview, cw, ch), client.x, client.y);
-        ApplyEffects(frame, fs, Rect{0, 0, frame.width, frame.height}, Rect{client.x, client.y, cw, ch}, 1, 0.0, 0);
+        ApplyEffects(frame, fs, Stage{Rect{0, 0, frame.width, frame.height}, 1, Rect{client.x, client.y, cw, ch}, Rect{}, Rect{}, 0.0}, 0.0, 0);
         const int availW = preview_->rect.w - 4 - 16;
         const int availH = preview_->rect.h - 4 - 16;
         preview_->image = frame.width > availW || frame.height > availH ? FitInside(frame, availW, availH, false) : std::move(frame);
@@ -966,7 +1028,7 @@ namespace rf
         const int k = EffectiveScale(fs, full.width, full.height);
         Rect area;
         out = ComposeFramed(full, fs, VarsFor(photo), k, &area);
-        ApplyEffects(out, fs, Rect{0, 0, out.width, out.height}, Rect{area.x, area.y, full.width, full.height}, k, 0.0, 0);
+        ApplyEffects(out, fs, Stage{Rect{0, 0, out.width, out.height}, k, Rect{area.x, area.y, full.width, full.height}, Rect{}, Rect{}, 0.0}, 0.0, 0);
         return true;
     }
 

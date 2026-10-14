@@ -1,5 +1,6 @@
 #include "desktop.h"
 
+#include "effects.h"
 #include "glyphs.h"
 #include "icons.h"
 
@@ -87,8 +88,9 @@ namespace rf
             }
         }
 
-        void DrawClassicBar(Painter& p, const FrameSettings& frame, const Bar& b, const DesktopOptions& d, const std::wstring& task, const Image& taskIcon, bool active)
+        void DrawClassicBar(Painter& p, const FrameSettings& frame, const Bar& b, const DesktopOptions& d, const std::wstring& task, const Image& taskIcon, TaskButton button)
         {
+            const bool active = button == TaskButton::Active;
             const Shades sh = ShadesFor(frame.colors.face, frame.style);
             p.Fill(b.bar, sh.face);
             p.HLine(b.bar.x, b.bar.y, b.bar.w, sh.light);
@@ -98,7 +100,7 @@ namespace rf
             p.Raised(b.start, sh);
             p.Draw(BuiltinIcon(IconId::StartFlag), b.start.x + 3, b.start.y + 3);
             p.Text(b.start.x + 22, b.start.y + (b.start.h - Text().Height(bold)) / 2, StartText(frame.style), bold, frame.colors.text);
-            if (b.task.w > 30)
+            if (b.task.w > 30 && button != TaskButton::None)
             {
                 if (active)
                 {
@@ -125,8 +127,9 @@ namespace rf
             p.Text(b.tray.Right() - 6 - cw, b.tray.y + (b.tray.h - Text().Height(f)) / 2, clock, f, frame.colors.text);
         }
 
-        void DrawXpBar(Painter& p, const FrameSettings& frame, const Bar& b, const DesktopOptions& d, const std::wstring& task, const Image& taskIcon, bool active)
+        void DrawXpBar(Painter& p, const FrameSettings& frame, const Bar& b, const DesktopOptions& d, const std::wstring& task, const Image& taskIcon, TaskButton button)
         {
+            const bool active = button == TaskButton::Active;
             const Rect& r = b.bar;
             for (int row = 0; row < r.h; ++row)
             {
@@ -154,7 +157,7 @@ namespace rf
             const Font bold{FontFamily::Trebuchet, true};
             Shadowed(p, s.x + 30, s.y + (s.h - Text().Height(bold)) / 2, StartText(frame.style), bold, Rgb(0xFF, 0xFF, 0xFF), Rgb(0x1E, 0x5A, 0x1E));
             const Font f{FamilyFor(frame.style), false};
-            if (b.task.w > 30)
+            if (b.task.w > 30 && button != TaskButton::None)
             {
                 const Rect& t = b.task;
                 const Color top = active ? Rgb(0x1E, 0x4F, 0xB8) : Rgb(0x3C, 0x81, 0xF3);
@@ -215,7 +218,14 @@ namespace rf
         return Measure(frame, width, height).task;
     }
 
-    Image DesktopLayer(const FrameSettings& frame, const DesktopOptions& d, int width, int height, const std::wstring& task, const Image& taskIcon, bool taskActive)
+    Rect TaskTarget(const FrameSettings& frame, int outW, int outH, int scale)
+    {
+        const int k = std::max(1, scale);
+        const Rect r = TaskButtonRect(frame, (outW + k - 1) / k, outH / k);
+        return ScaleRect(r, k, 0, outH - (outH / k) * k);
+    }
+
+    Image DesktopLayer(const FrameSettings& frame, const DesktopOptions& d, int width, int height, const std::wstring& task, const Image& taskIcon, TaskButton button)
     {
         Image img(std::max(1, width), std::max(1, height));
         Painter p(img);
@@ -228,24 +238,24 @@ namespace rf
         {
             if (frame.style == Style::WinXP)
             {
-                DrawXpBar(p, frame, b, d, task, taskIcon, taskActive);
+                DrawXpBar(p, frame, b, d, task, taskIcon, button);
             }
             else
             {
-                DrawClassicBar(p, frame, b, d, task, taskIcon, taskActive);
+                DrawClassicBar(p, frame, b, d, task, taskIcon, button);
             }
         }
         return img;
     }
 
     Image DesktopBackground(const Image& wallpaper, const FrameSettings& frame, const DesktopOptions& d, int outW, int outH, int scale, const std::wstring& task,
-                            const Image& taskIcon, bool taskActive)
+                            const Image& taskIcon, TaskButton button)
     {
         const int k = std::max(1, scale);
         Image out = wallpaper.width == outW && wallpaper.height == outH ? wallpaper : Image(outW, outH, Rgb(0, 0x80, 0x80));
         const int w = (outW + k - 1) / k;
         const int h = outH / k;
-        const Image layer = ScaleNearest(DesktopLayer(frame, d, w, h, task, taskIcon, taskActive), k);
+        const Image layer = ScaleNearest(DesktopLayer(frame, d, w, h, task, taskIcon, button), k);
         Painter(out).Draw(layer, 0, outH - layer.height);
         return out;
     }

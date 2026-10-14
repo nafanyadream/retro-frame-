@@ -296,6 +296,39 @@ namespace rf
         }
     }
 
+    Rect ScaleRect(const Rect& r, int scale, int ox, int oy)
+    {
+        if (r.Empty())
+        {
+            return Rect{};
+        }
+        return Rect{ox + r.x * scale, oy + r.y * scale, r.w * scale, r.h * scale};
+    }
+
+    Spot WindowMotion(const EffectSettings& e, double t, int seed, int scale, const Rect& window, const Rect& area)
+    {
+        Spot s;
+        const int k = std::max(1, scale);
+        if (e.motion == 1)
+        {
+            std::uint32_t h = std::uint32_t(seed) * 2654435761u + 0x9E3779B9u;
+            h ^= h >> 15;
+            h *= 2246822519u;
+            h ^= h >> 13;
+            s.x = (int(h % 5u) - 2) * k;
+            s.y = (int((h >> 8) % 5u) - 2) * k;
+        }
+        else if (e.motion == 2)
+        {
+            const int ax = std::max(0, std::min(window.x - area.x, area.Right() - window.Right()));
+            const int ay = std::max(0, std::min(window.y - area.y, area.Bottom() - window.Bottom()));
+            const double pi = 3.14159265358979;
+            s.x = int(std::lround(ax * 0.85 * std::sin(2.0 * pi * t / 7.0)));
+            s.y = int(std::lround(ay * 0.85 * std::sin(2.0 * pi * t / 5.3 + 0.7)));
+        }
+        return s;
+    }
+
     bool HasOverlays(const EffectSettings& e)
     {
         return e.cursor > 0 || e.popups > 0 || e.screen > 0 || e.palette > 0;
@@ -461,6 +494,7 @@ namespace rf
         stage_.scale = k;
         const Rect cb = CloseButtonRect(frame, stage.window.w / k);
         close_ = Rect{stage.window.x + cb.x * k, stage.window.y + cb.y * k, cb.w * k, cb.h * k};
+        minimize_ = ScaleRect(MinimizeButtonRect(frame, stage.window.w / k), k, stage.window.x, stage.window.y);
         if (e.popups > 0)
         {
             Rect button;
@@ -560,12 +594,192 @@ namespace rf
                           HasGradient(frame_.style) ? (frame_.style == Style::WinXP ? c.active1 : c.active2) : c.active1);
     }
 
-    void EffectsLayer::Apply(Image& out, double t, int seed, bool animate) const
+    int EffectsLayer::LiveShown(double t) const
+    {
+        const int n = popupCount_;
+        const double start = std::min(0.8, stage_.duration * 0.2) + 0.5;
+        if (n == 0 || t < start)
+        {
+            return 0;
+        }
+        if (e_.popups != 3)
+        {
+            return n;
+        }
+        return std::min(n, 1 + int((t - start) / PopupStep));
+    }
+
+    double EffectsLayer::LiveClosingStart() const
+    {
+        const double start = std::min(0.8, stage_.duration * 0.2) + 0.5;
+        return start + (e_.popups == 3 ? (popupCount_ - 1) * PopupStep : 0.0) + 0.6;
+    }
+
+    Spot EffectsLayer::CursorAt(double t, double progress, int width, int height, int* closed) const
+    {
+        const int k = stage_.scale;
+        const auto centre = [](const Rect& r) { return Spot{r.x + r.w / 2, r.y + r.h / 2}; };
+        const auto ease = [](double q) {
+            q = std::clamp(q, 0.0, 1.0);
+            return q * q * (3.0 - 2.0 * q);
+        };
+        const auto lerp = [&](Spot a, Spot b, double q) {
+            const double e = ease(q);
+            return Spot{int(std::lround(a.x + (b.x - a.x) * e)), int(std::lround(a.y + (b.y - a.y) * e))};
+        };
+        const Rect w = stage_.window.Offset(dx_, dy_);
+        const Rect content = stage_.content.Empty() ? w : stage_.content.Offset(dx_, dy_);
+        const Rect play = stage_.play.Empty() ? Rect{} : stage_.play.Offset(dx_, dy_);
+        const Rect seek = stage_.seek.Empty() ? Rect{} : stage_.seek.Offset(dx_, dy_);
+        const double d = std::max(0.1, stage_.duration);
+        const double p = progress >= 0.0 ? progress : std::clamp(t / d, 0.0, 1.0);
+        const Spot start{std::clamp(w.x + w.w * 9 / 10, 0, std::max(0, width - 12 * k)), std::clamp(w.Bottom() + 20 * k, 0, std::max(0, height - 20 * k))};
+        const auto wander = [&](double at) {
+            const Spot c = centre(content);
+            return Spot{c.x + int(std::lround(content.w * 0.28 * std::sin(0.9 * at))), c.y + int(std::lround(content.h * 0.22 * std::sin(1.3 * at + 1.0)))};
+        };
+        const auto thumb = [&]() { return Spot{seek.x + int(std::lround(p * seek.w)), seek.y + seek.h / 2}; };
+        int done = 0;
+        const auto main = [&](double at) {
+            done = 0;
+            const double a1 = std::min(0.8, d * 0.2);
+            Spot cur = play.Empty() ? wander(a1) : centre(play);
+            if (at <= a1)
+            {
+                return lerp(start, cur, at / a1);
+            }
+            double tc = a1 + 0.25;
+            const int n = popupCount_;
+            if (n > 0)
+            {
+                const std::vector<Rect> rects = PopupRects(width, height);
+                const double c0 = LiveClosingStart();
+                for (int j = 0; j < n; ++j)
+                {
+                    const double s = c0 + j * 0.6;
+                    const Rect ok = popupButton_.Offset(rects[std::size_t(n - 1 - j)].x, rects[std::size_t(n - 1 - j)].y);
+                    const Spot target{ok.x + ok.w * 3 / 5, ok.y + ok.h * 3 / 5};
+                    if (at < s)
+                    {
+                        return cur;
+                    }
+                    if (at <= s + 0.45)
+                    {
+                        return lerp(cur, target, (at - s) / 0.45);
+                    }
+                    if (at < s + 0.6)
+                    {
+                        return target;
+                    }
+                    cur = target;
+                    done = j + 1;
+                }
+                tc = c0 + n * 0.6;
+            }
+            if (!seek.Empty())
+            {
+                if (at < tc)
+                {
+                    return cur;
+                }
+                if (at <= tc + 0.6)
+                {
+                    return lerp(cur, thumb(), (at - tc) / 0.6);
+                }
+                if (at <= tc + 2.2)
+                {
+                    return thumb();
+                }
+                cur = thumb();
+                tc += 2.2;
+            }
+            if (at <= tc + 0.8)
+            {
+                return lerp(cur, wander(tc + 0.8), (at - tc) / 0.8);
+            }
+            return wander(at);
+        };
+        Spot pos = main(t);
+        if (e_.outro > 0)
+        {
+            const double tf = d - 1.0;
+            if (t >= tf)
+            {
+                const Rect b = (e_.outro == 2 ? minimize_ : close_).Offset(dx_, dy_);
+                const Spot from = main(std::max(0.0, tf));
+                const int keep = done;
+                pos = lerp(from, Spot{b.x + b.w * 3 / 5, b.y + b.h * 3 / 5}, (t - tf) / 0.7);
+                done = keep;
+            }
+        }
+        if (closed != nullptr)
+        {
+            *closed = done;
+        }
+        return pos;
+    }
+
+    void EffectsLayer::DrawCursor(Image& out, int px, int py) const
+    {
+        const int k = stage_.scale;
+        if (e_.cursor == 2)
+        {
+            DrawBitmap(out, BusyCursor, px - 6 * k, py - 10 * k, k);
+            return;
+        }
+        DrawBitmap(out, ArrowCursor, px, py, k);
+        if (e_.cursor == 3)
+        {
+            DrawBitmap(out, SmallBusy, px + 12 * k, py + 10 * k, k);
+        }
+    }
+
+    void EffectsLayer::DrawOutro(Image& out, const Image& background, double u, const Rect& taskTarget) const
+    {
+        const int k = stage_.scale;
+        const double q = std::clamp(u / OutroAnim, 0.0, 1.0);
+        const Rect& w = stage_.window;
+        if (background.width == out.width && background.height == out.height)
+        {
+            out.pixels = background.pixels;
+        }
+        else
+        {
+            std::fill(out.pixels.begin(), out.pixels.end(), Rgb(0, 0, 0));
+        }
+        if (q < 1.0)
+        {
+            if (e_.outro == 1)
+            {
+                const Image copy = out;
+                DrawIntro(out, copy, (1.0 - q) * IntroSeconds);
+            }
+            else
+            {
+                const Rect from{w.x, w.y, w.w, TitleHeight(frame_.style) * k};
+                const Rect to = taskTarget.Empty() ? Rect{w.x, out.height - from.h - 4 * k, std::min(w.w, 160 * k), from.h} : taskTarget;
+                const double e = 1.0 - (1.0 - q) * (1.0 - q);
+                const auto lerp = [e](int a, int b) { return int(std::lround(a + (b - a) * e)); };
+                const Rect r{lerp(from.x, to.x), lerp(from.y, to.y), std::max(k, lerp(from.w, to.w)), std::max(k, lerp(from.h, to.h))};
+                const FrameColors& c = frame_.colors;
+                Painter painter(out);
+                painter.GradientH(r.x, r.y, r.w, r.h, frame_.style == Style::WinXP ? c.active2 : c.active1, HasGradient(frame_.style) ? (frame_.style == Style::WinXP ? c.active1 : c.active2) : c.active1);
+                Outline(out, r, k, Rgb(0x80, 0x80, 0x80));
+            }
+        }
+        if (e_.cursor > 0)
+        {
+            const Rect b = e_.outro == 2 ? minimize_ : close_;
+            DrawCursor(out, b.x + b.w * 3 / 5, b.y + b.h * 3 / 5);
+        }
+    }
+
+    void EffectsLayer::Apply(Image& out, double t, int seed, bool animate, double progress) const
     {
         const int k = stage_.scale;
         if (e_.screen > 0 || e_.palette > 0)
         {
-            const Rect& c = stage_.content;
+            const Rect c = stage_.content.Empty() ? Rect{} : stage_.content.Offset(dx_, dy_);
             const int x0 = std::clamp(c.x, 0, out.width);
             const int y0 = std::clamp(c.y, 0, out.height);
             const int x1 = std::clamp(c.x + c.w, 0, out.width);
@@ -583,7 +797,14 @@ namespace rf
                 Painter(out).DrawOpaque(part, x0, y0);
             }
         }
-        const int shown = VisiblePopups(t, animate);
+        const bool live = e_.cursorPlace == LiveCursor && e_.cursor > 0 && stage_.duration > 0.0;
+        int closed = 0;
+        Spot liveSpot;
+        if (live)
+        {
+            liveSpot = CursorAt(t, progress, out.width, out.height, &closed);
+        }
+        const int shown = live ? std::max(0, LiveShown(t) - closed) : VisiblePopups(t, animate);
         const std::vector<Rect> rects = PopupRects(out.width, out.height);
         Rect button;
         bool haveButton = false;
@@ -600,10 +821,16 @@ namespace rf
         }
         if (e_.cursor > 0 && t >= 0.0)
         {
-            const Rect& w = stage_.window;
-            int px = close_.x + close_.w * 3 / 5;
-            int py = close_.y + close_.h * 3 / 5;
-            if (e_.cursorPlace == 1)
+            const Rect w = stage_.window.Offset(dx_, dy_);
+            const Rect close = close_.Offset(dx_, dy_);
+            int px = close.x + close.w * 3 / 5;
+            int py = close.y + close.h * 3 / 5;
+            if (live)
+            {
+                px = liveSpot.x;
+                py = liveSpot.y;
+            }
+            else if (e_.cursorPlace == 1)
             {
                 px = w.x + w.w / 2;
                 py = w.y + w.h / 2;
@@ -618,18 +845,7 @@ namespace rf
                 px = button.x + button.w * 3 / 5;
                 py = button.y + button.h * 3 / 5;
             }
-            if (e_.cursor == 2)
-            {
-                DrawBitmap(out, BusyCursor, px - 6 * k, py - 10 * k, k);
-            }
-            else
-            {
-                DrawBitmap(out, ArrowCursor, px, py, k);
-                if (e_.cursor == 3)
-                {
-                    DrawBitmap(out, SmallBusy, px + 12 * k, py + 10 * k, k);
-                }
-            }
+            DrawCursor(out, px, py);
         }
     }
 }

@@ -21,7 +21,7 @@ int main(int argc, char** argv)
         return 1;
     }
     const std::string out = argv[2];
-    const rf::FrameVars vars{L"закат.jpg", photo.width, photo.height};
+    const rf::FrameVars vars{L"закат.jpg", photo.width, photo.height, L""};
 
     struct Case
     {

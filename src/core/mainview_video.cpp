@@ -394,6 +394,7 @@ namespace rf
         t.canvasW = c.width;
         t.canvasH = c.height;
         t.width = s_.video.format == 3 ? s_.video.gifWidth : 0;
+        t.reserve = Reserve(VideoFrame(), t.square);
         return t;
     }
 
@@ -770,16 +771,7 @@ namespace rf
             const int k = plan.scale;
             const int w = plan.outW / k;
             const int h = plan.outH / k;
-            static const Image none;
-            const Image& picture = s_.backgroundPicture ? s_.backgroundImage : none;
-            const std::wstring key = std::to_wstring(w) + L"x" + std::to_wstring(h) + L"/" + std::to_wstring(s_.background) + L"/" + std::to_wstring(picture.width) +
-                                     L"x" + std::to_wstring(picture.height);
-            if (key != bgKey_)
-            {
-                bgPreview_ = CanvasBackground(picture, s_.background, w, h);
-                bgKey_ = key;
-            }
-            Image square = bgPreview_;
+            Image square = PreviewBackdrop(w, h, f, FrameVars{clip_->name, info.width, info.height, L""});
             Rect client;
             Image window = RenderFrame(f, plan.clientW, plan.clientH, vars, &client);
             const int vw = std::max(2, plan.videoW / k);
@@ -790,9 +782,15 @@ namespace rf
             }
             const int wx = plan.windowX / k;
             const int wy = plan.windowY / k;
-            Painter(square).Draw(window, wx, wy);
+            const int seed = int(rel * 15.0);
+            const Spot m = PreviewMotion(Rect{wx, wy, window.width, window.height}, w, h, plan.reserve / k, rel, seed);
+            Painter(square).Draw(window, wx + m.x, wy + m.y);
             const Rect video{wx + client.x + (client.w - vw) / 2, wy + client.y + (client.h - vh) / 2, vw, vh};
-            ApplyEffects(square, f, Rect{wx, wy, window.width, window.height}, video, 1, rel, int(rel * 15.0));
+            Stage stage{Rect{wx, wy, window.width, window.height}, 1, video, Rect{}, Rect{}, length};
+            PlayerHotspots(f, plan.clientW, plan.clientH, &stage.play, &stage.seek);
+            stage.play = stage.play.Offset(wx, wy);
+            stage.seek = stage.seek.Offset(wx, wy);
+            ApplyEffects(square, f, stage, rel, seed, rel / length, m);
             preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;
         }
         else
@@ -808,7 +806,9 @@ namespace rf
                 DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), client);
             }
             const Rect video{client.x + (client.w - vw) / 2, client.y + (client.h - vh) / 2, vw, vh};
-            ApplyEffects(window, f, Rect{0, 0, window.width, window.height}, video, 1, rel, int(rel * 15.0));
+            Stage stage{Rect{0, 0, window.width, window.height}, 1, video, Rect{}, Rect{}, length};
+            PlayerHotspots(f, plan.clientW, plan.clientH, &stage.play, &stage.seek);
+            ApplyEffects(window, f, stage, rel, int(rel * 15.0), rel / length);
             preview_->image = window.width > availW || window.height > availH ? FitInside(window, availW, availH, false) : std::move(window);
         }
         root.dirty = true;
@@ -880,7 +880,13 @@ namespace rf
         job.effects = s_.effects;
         if (job.plan.square)
         {
-            job.background = CanvasBackground(s_.backgroundPicture ? s_.backgroundImage : Image(), s_.background, job.plan.outW, job.plan.outH);
+            const int k = job.plan.scale;
+            job.background = Backdrop(job.plan.outW, job.plan.outH, k, job.frame, job.vars, 0);
+            if (s_.effects.outro > 0 && !gif)
+            {
+                job.ending = Backdrop(job.plan.outW, job.plan.outH, k, job.frame, job.vars, s_.effects.outro);
+                job.taskTarget = TaskTargetFor(job.frame, job.plan.outW, job.plan.outH, k);
+            }
         }
         return WithProgress(path, [&](const ExportStep& step) { return ExportVideo(host_, job, step, err); }, title);
     }

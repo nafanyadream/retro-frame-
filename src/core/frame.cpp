@@ -723,6 +723,42 @@ namespace rf
         return Rect{frameWidth - border - 2 - 16, border + 2, 16, 14};
     }
 
+    Rect MinimizeButtonRect(const FrameSettings& settings, int frameWidth)
+    {
+        const Rect close = CloseButtonRect(settings, frameWidth);
+        if (settings.kind != WindowKind::Normal)
+        {
+            return close;
+        }
+        return settings.style == Style::WinXP ? close.Offset(-2 * (XpButton + 2), 0) : close.Offset(-34, 0);
+    }
+
+    void PlayerHotspots(const FrameSettings& settings, int cw, int ch, Rect* play, Rect* seek)
+    {
+        FrameSettings s = settings;
+        s.player = true;
+        bool hasStatus = false;
+        if (s.status)
+        {
+            for (const auto& f : s.statusFields)
+            {
+                hasStatus = hasStatus || !f.empty();
+            }
+        }
+        const Layout L = Compute(s, cw, ch, hasStatus);
+        const int left = L.border;
+        const int right = L.width - L.border;
+        const int w = std::max(20, right - left - 16);
+        if (play != nullptr)
+        {
+            *play = Rect{left + 6, L.playerY + 26, 23, 22};
+        }
+        if (seek != nullptr)
+        {
+            *seek = Rect{left + 8 + 5, L.playerY + 2, std::max(1, w - 11), 18};
+        }
+    }
+
     int AutoScale(int contentWidth, int contentHeight)
     {
         const int side = std::max(contentWidth, contentHeight);

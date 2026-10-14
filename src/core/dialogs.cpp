@@ -245,21 +245,23 @@ namespace rf
     }
 
     EffectsView::EffectsView(const EffectSettings& e)
-        : View(440, 424), base_(e)
+        : View(760, 352), base_(e)
     {
         AddDialogChrome(*this, L"Эффекты");
-        const int left = 18;
-        const int fieldX = 104;
-        const int fieldW = root.width - fieldX - 18;
-        const auto group = [&](int y, int h, const std::wstring& text) {
+        const int colW = 368;
+        const int leftX = 8;
+        const int rightX = leftX + colW + 8;
+        const int labelW = 84;
+        const auto group = [&](int x, int y, int h, const std::wstring& text) {
             auto* g = root.Add<ui::GroupBox>();
-            g->rect = Rect{8, y, root.width - 16, h};
+            g->rect = Rect{x, y, colW, h};
             g->text = text;
         };
         const auto label = [&](int x, int y, int w, const std::wstring& text) {
             auto* l = root.Add<ui::Label>();
             l->rect = Rect{x, y + 4, w, 13};
             l->text = text;
+            return l;
         };
         const auto combo = [&](int x, int y, int w, std::vector<std::wstring> items, int index) {
             auto* c = root.Add<ui::ComboBox>();
@@ -268,31 +270,52 @@ namespace rf
             c->index = std::clamp(index, 0, int(c->items.size()) - 1);
             return c;
         };
-        const auto field = [&](int y, const std::wstring& text) {
+        const auto field = [&](int x, int y, int w, const std::wstring& text) {
             auto* f = root.Add<ui::TextField>();
-            f->rect = Rect{fieldX, y, fieldW, 21};
+            f->rect = Rect{x, y, w, 21};
             f->SetText(text);
             return f;
         };
-        group(28, 44, L"Видео и музыка");
-        intro_ = root.Add<ui::CheckBox>();
-        intro_->rect = Rect{left, 46, root.width - 2 * left, 16};
-        intro_->text = L"Анимация открытия окна в начале ролика";
-        intro_->checked = e.intro;
-        group(78, 74, L"Курсор мыши");
-        label(left, 96, 80, L"Вид:");
-        cursor_ = combo(fieldX, 96, fieldW, {L"нет", L"стрелка", L"песочные часы", L"стрелка с часиками"}, e.cursor);
-        label(left, 122, 80, L"Где:");
-        place_ = combo(fieldX, 122, fieldW, {L"у крестика", L"в центре окна", L"справа внизу", L"на кнопке окна-ошибки"}, e.cursorPlace);
-        group(158, 164, L"Окна-ошибки поверх окна");
-        label(left, 176, 80, L"Показывать:");
-        popups_ = combo(fieldX, 176, fieldW, {L"нет", L"одно окно", L"каскад из 5 окон", L"каскад, по очереди в видео"}, e.popups);
-        label(left, 202, 80, L"Значок:");
-        icon_ = combo(fieldX, 202, 128, {L"ошибка", L"предупреждение", L"информация", L"вопрос"}, e.popupIcon);
-        label(fieldX + 136, 202, 50, L"Кнопки:");
-        buttons_ = combo(fieldX + 186, 202, fieldW - 186, {L"OK", L"OK и Отмена", L"Да и Нет"}, e.popupButtons);
-        label(left, 228, 80, L"Заголовок:");
-        title_ = field(228, e.popupTitle);
+        const auto check = [&](int x, int y, const std::wstring& text, bool on) {
+            auto* c = root.Add<ui::CheckBox>();
+            c->rect = Rect{x, y, colW - 20, 16};
+            c->text = text;
+            c->checked = on;
+            return c;
+        };
+        const int lx = leftX + 10;
+        const int lf = leftX + 10 + labelW;
+        const int lw = colW - 20 - labelW;
+        group(leftX, 28, 120, L"Окно в видео и музыке");
+        intro_ = check(lx, 46, L"Анимация открытия окна в начале", e.intro);
+        label(lx, 68, labelW, L"В конце:");
+        outro_ = combo(lf, 68, lw, {L"ничего", L"окно закрывается", L"окно сворачивается"}, e.outro);
+        label(lx, 94, labelW, L"Во время:");
+        motion_ = combo(lf, 94, lw, {L"стоит на месте", L"дрожит", L"плавает по экрану"}, e.motion);
+        label(lx, 120, colW - 20, L"Конец и движение видны в режиме «На фоне».");
+        group(leftX, 154, 74, L"Курсор мыши");
+        label(lx, 172, labelW, L"Вид:");
+        cursor_ = combo(lf, 172, lw, {L"нет", L"стрелка", L"песочные часы", L"стрелка с часиками"}, e.cursor);
+        label(lx, 198, labelW, L"Где:");
+        place_ = combo(lf, 198, lw, {L"у крестика", L"в центре окна", L"справа внизу", L"на кнопке окна-ошибки", L"ездит сам и жмёт кнопки"}, e.cursorPlace);
+        group(leftX, 234, 74, L"Экран (только картинка внутри окна)");
+        label(lx, 252, labelW, L"Вид:");
+        screen_ = combo(lf, 252, lw, {L"обычный", L"ЭЛТ-монитор", L"VHS-кассета"}, e.screen);
+        label(lx, 278, labelW, L"Цвета:");
+        palette_ = combo(lf, 278, lw, {L"все", L"256 цветов", L"16 цветов"}, e.palette);
+
+        const int rx = rightX + 10;
+        const int rf = rightX + 10 + labelW;
+        const int rw = colW - 20 - labelW;
+        group(rightX, 28, 164, L"Окна-ошибки поверх окна");
+        label(rx, 46, labelW, L"Показывать:");
+        popups_ = combo(rf, 46, rw, {L"нет", L"одно окно", L"каскад из 5 окон", L"каскад, по очереди в видео"}, e.popups);
+        label(rx, 72, labelW, L"Значок:");
+        icon_ = combo(rf, 72, 120, {L"ошибка", L"предупреждение", L"информация", L"вопрос"}, e.popupIcon);
+        label(rf + 128, 72, 50, L"Кнопки:");
+        buttons_ = combo(rf + 178, 72, rw - 178, {L"OK", L"OK и Отмена", L"Да и Нет"}, e.popupButtons);
+        label(rx, 98, labelW, L"Заголовок:");
+        title_ = field(rf, 98, rw, e.popupTitle);
         std::wstring first = e.popupText;
         std::wstring second;
         const std::size_t nl = first.find(L'\n');
@@ -302,14 +325,15 @@ namespace rf
             first.resize(nl);
             std::replace(second.begin(), second.end(), L'\n', L' ');
         }
-        label(left, 254, 80, L"Текст:");
-        line1_ = field(254, first);
-        line2_ = field(280, second);
-        group(328, 48, L"Экран (только картинка внутри окна)");
-        label(left, 346, 80, L"Вид:");
-        screen_ = combo(fieldX, 346, 120, {L"обычный", L"ЭЛТ-монитор", L"VHS-кассета"}, e.screen);
-        label(fieldX + 128, 346, 46, L"Цвета:");
-        palette_ = combo(fieldX + 174, 346, fieldW - 174, {L"все", L"256 цветов", L"16 цветов"}, e.palette);
+        label(rx, 124, labelW, L"Текст:");
+        line1_ = field(rf, 124, rw, first);
+        line2_ = field(rf, 150, rw, second);
+        group(rightX, 198, 110, L"Рабочий стол (в режиме «На фоне»)");
+        taskbar_ = check(rx, 216, L"Панель задач: «Пуск», кнопка окна и часы", e.desktop);
+        desktopIcons_ = check(rx, 238, L"Значки: «Мой компьютер», «Корзина»...", e.desktopIcons);
+        label(rx, 260, labelW, L"Часы:");
+        clock_ = field(rf, 260, 70, e.clock);
+        label(rf + 78, 260, rw - 78, L"пусто — время сейчас");
         auto* ok = root.Add<ui::Button>();
         ok->rect = Rect{root.width - 14 - 75 - 6 - 75, root.height - 3 - 10 - 23, 75, 23};
         ok->text = L"OK";
@@ -327,6 +351,8 @@ namespace rf
     {
         EffectSettings e = base_;
         e.intro = intro_->checked;
+        e.outro = outro_->index;
+        e.motion = motion_->index;
         e.cursor = cursor_->index;
         e.cursorPlace = place_->index;
         e.popups = popups_->index;
@@ -336,6 +362,9 @@ namespace rf
         e.popupText = line2_->text.empty() ? line1_->text : line1_->text + L"\n" + line2_->text;
         e.screen = screen_->index;
         e.palette = palette_->index;
+        e.desktop = taskbar_->checked;
+        e.desktopIcons = desktopIcons_->checked;
+        e.clock = clock_->text;
         return e;
     }
 

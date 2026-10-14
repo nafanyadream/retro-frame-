@@ -330,6 +330,11 @@ namespace rf
         o << "fx.popupText=" << Escape(s.effects.popupText) << "\n";
         o << "fx.screen=" << s.effects.screen << "\n";
         o << "fx.palette=" << s.effects.palette << "\n";
+        o << "fx.motion=" << s.effects.motion << "\n";
+        o << "fx.outro=" << s.effects.outro << "\n";
+        o << "fx.desktop=" << (s.effects.desktop ? 1 : 0) << "\n";
+        o << "fx.desktopIcons=" << (s.effects.desktopIcons ? 1 : 0) << "\n";
+        o << "fx.clock=" << Escape(s.effects.clock) << "\n";
         o << "background=" << Hex(s.background) << "\n";
         o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
         o << "previewSound=" << (s.previewSound ? 1 : 0) << "\n";
@@ -591,7 +596,7 @@ namespace rf
         }
         getBool("fx.intro", s.effects.intro);
         getInt("fx.cursor", s.effects.cursor, 0, 3);
-        getInt("fx.cursorPlace", s.effects.cursorPlace, 0, 3);
+        getInt("fx.cursorPlace", s.effects.cursorPlace, 0, 4);
         getInt("fx.popups", s.effects.popups, 0, 3);
         getInt("fx.popupIcon", s.effects.popupIcon, 0, 3);
         getInt("fx.popupButtons", s.effects.popupButtons, 0, 2);
@@ -599,6 +604,11 @@ namespace rf
         getText("fx.popupText", s.effects.popupText);
         getInt("fx.screen", s.effects.screen, 0, 2);
         getInt("fx.palette", s.effects.palette, 0, 2);
+        getInt("fx.motion", s.effects.motion, 0, 2);
+        getInt("fx.outro", s.effects.outro, 0, 2);
+        getBool("fx.desktop", s.effects.desktop);
+        getBool("fx.desktopIcons", s.effects.desktopIcons);
+        getText("fx.clock", s.effects.clock);
         getColor("background", s.background);
         getBool("backgroundPicture", s.backgroundPicture);
         getBool("previewSound", s.previewSound);

@@ -124,6 +124,7 @@ namespace rf
         int canvasW = 1080;
         int canvasH = 1080;
         int width = 0;
+        int reserve = 0;
     };
 
     struct VideoPlan
@@ -140,6 +141,7 @@ namespace rf
         int windowY = 0;
         int outW = 0;
         int outH = 0;
+        int reserve = 0;
     };
 
     VideoPlan PlanVideo(const FrameSettings& frame, int sourceW, int sourceH, const VideoTarget& target);
@@ -149,15 +151,19 @@ namespace rf
     {
     public:
         PlayerComposer(const FrameSettings& frame, const FrameVars& vars, const VideoPlan& plan, const Image& background);
-        void SetEffects(const EffectSettings& effects);
+        void SetEffects(const EffectSettings& effects, double duration = 0.0);
+        void SetOutro(const Image& ending, const Rect& taskTarget);
         const Image& Compose(const Image& video, double position, const std::wstring& time, double t = 0.0, int seed = 0, bool animate = false);
         const Image& Intro(double t, int seed);
+        const Image& Outro(double u, int seed);
 
     private:
         FrameSettings frame_;
         FrameVars vars_;
         VideoPlan plan_;
         Image background_;
+        Image ending_;
+        Rect taskTarget_;
         Image out_;
         EffectSettings effects_;
         EffectsLayer fx_;
@@ -178,6 +184,8 @@ namespace rf
         FrameVars vars;
         VideoPlan plan;
         Image background;
+        Image ending;
+        Rect taskTarget;
         EffectSettings effects;
     };
 
@@ -204,7 +212,10 @@ namespace rf
         double duration = 0.0;
         double fade = 0.0;
         double delay = 0.0;
+        double tail = 0.0;
     };
+
+    int OutroFrames(const EffectSettings& effects, bool square, double fps);
 
     using FrameSource = std::function<const Image*(int index)>;
     ExportResult Encode(Host& host, const EncoderSpec& spec, int total, const FrameSource& frames, const ExportStep& step, std::wstring& error);

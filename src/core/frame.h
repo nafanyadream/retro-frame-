@@ -64,6 +64,8 @@ namespace rf
     Image RenderFrame(const FrameSettings& settings, int contentWidth, int contentHeight, const FrameVars& vars, Rect* client);
     int AutoScale(int contentWidth, int contentHeight);
     Rect CloseButtonRect(const FrameSettings& settings, int frameWidth);
+    Rect MinimizeButtonRect(const FrameSettings& settings, int frameWidth);
+    void PlayerHotspots(const FrameSettings& settings, int contentWidth, int contentHeight, Rect* play, Rect* seek);
     int EffectiveScale(const FrameSettings& settings, int contentWidth, int contentHeight);
     Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale, Rect* area = nullptr);
     void DrawPushButton(Painter& p, const Rect& r, const FrameSettings& settings, const Shades& sh, bool isDefault);

@@ -64,6 +64,11 @@ namespace rf
         ui::TextField* line2_ = nullptr;
         ui::ComboBox* screen_ = nullptr;
         ui::ComboBox* palette_ = nullptr;
+        ui::ComboBox* outro_ = nullptr;
+        ui::ComboBox* motion_ = nullptr;
+        ui::CheckBox* taskbar_ = nullptr;
+        ui::CheckBox* desktopIcons_ = nullptr;
+        ui::TextField* clock_ = nullptr;
     };
 
     class PresetsView : public View
