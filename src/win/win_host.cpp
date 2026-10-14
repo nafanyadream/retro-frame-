@@ -795,6 +795,12 @@ namespace rf::win
         return r.empty() ? std::wstring() : r.front();
     }
 
+    std::wstring WinHost::AskOpenText(const std::wstring& folder)
+    {
+        const auto r = RunOpen(Owner(), folder, L"Открыть текст", {{L"Текстовые файлы", L"*.txt"}, {L"Все файлы", L"*.*"}}, false, false);
+        return r.empty() ? std::wstring() : r.front();
+    }
+
     std::vector<std::wstring> WinHost::AskOpenVideo(const std::wstring& folder)
     {
         return RunOpen(Owner(), folder, L"Открыть видео",

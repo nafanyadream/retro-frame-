@@ -66,6 +66,7 @@ namespace rf::win
         std::vector<std::wstring> AskOpenVideo(const std::wstring& folder) override;
         std::vector<std::wstring> AskOpenAudio(const std::wstring& folder) override;
         std::wstring AskOpenLyrics(const std::wstring& folder) override;
+        std::wstring AskOpenText(const std::wstring& folder) override;
         std::unique_ptr<AudioOut> OpenAudio(int rate, int channels) override;
         std::vector<std::wstring> Microphones() override;
         std::unique_ptr<AudioIn> OpenMicrophone(const std::wstring& name, int rate) override;

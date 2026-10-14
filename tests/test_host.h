@@ -338,6 +338,7 @@ namespace rftest
         std::wstring videoAnswer;
         std::vector<std::wstring> mediaAnswers;
         std::wstring lyricsAnswer;
+        std::wstring textAnswer;
         std::wstring saveAnswer;
         std::wstring ffmpeg;
         std::wstring written;
@@ -363,6 +364,7 @@ namespace rftest
             return videoAnswer.empty() ? std::vector<std::wstring>() : std::vector<std::wstring>{videoAnswer};
         }
         std::wstring AskOpenLyrics(const std::wstring&) override { return lyricsAnswer; }
+        std::wstring AskOpenText(const std::wstring&) override { return textAnswer; }
         std::unique_ptr<rf::AudioOut> OpenAudio(int, int) override
         {
             if (!audioDevice)

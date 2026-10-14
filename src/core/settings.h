@@ -15,10 +15,12 @@ namespace rf
         PhotoMode = 0,
         VideoMode = 1,
         MusicMode = 2,
-        RecorderMode = 3
+        RecorderMode = 3,
+        NotepadMode = 4,
+        SetupMode = 5
     };
 
-    constexpr int ModeCount = 4;
+    constexpr int ModeCount = 6;
 
     struct ModeLook
     {
@@ -78,6 +80,43 @@ namespace rf
         bool wmpCover = false;
     };
 
+    struct SceneOutput
+    {
+        int format = 0;
+        bool square = false;
+        int canvas = 0;
+        int fps = 25;
+    };
+
+    struct NotepadSettings
+    {
+        SceneOutput out;
+        std::wstring text = L"Привет!\nЭто я печатаю в Блокноте Windows.\n\nКак дела? :)";
+        std::wstring file;
+        bool russian = true;
+        int font = 0;
+        int speed = 1;
+        bool typos = true;
+        bool caret = true;
+        bool sound = true;
+        int size = 1;
+        int hold = 2;
+    };
+
+    struct SetupSettings
+    {
+        SceneOutput out;
+        int kind = 0;
+        std::wstring from = L"C:\\Мои документы";
+        std::wstring to = L"A:\\";
+        std::wstring program = L"Ретро-рамка 1.0";
+        std::wstring files = L"реферат.doc\nфото с дачи.jpg\nпесня.mp3\nигра.exe";
+        int seconds = 10;
+        int pace = 1;
+        int ending = 0;
+        bool sound = true;
+    };
+
     struct AppSettings
     {
         FrameSettings frame;
@@ -91,6 +130,8 @@ namespace rf
         VideoSettings video;
         MusicSettings music;
         MusicSettings recorder;
+        NotepadSettings notepad;
+        SetupSettings setup;
         VoiceChain voice = DefaultVoiceChain();
         std::vector<VoicePreset> voicePresets;
         std::wstring micName;

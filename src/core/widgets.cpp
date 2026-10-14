@@ -750,6 +750,513 @@ namespace rf::ui
         }
     }
 
+    namespace
+    {
+        constexpr int AreaLineH = 13;
+    }
+
+    int TextArea::CharW(wchar_t ch) const
+    {
+        return TextW(std::wstring(1, ch), UiFont());
+    }
+
+    void TextArea::Layout()
+    {
+        const int avail = std::max(20, rect.w - 4 - 16 - 8);
+        lines_.clear();
+        const int n = int(text.size());
+        int ps = 0;
+        while (ps <= n)
+        {
+            int pe = ps;
+            while (pe < n && text[std::size_t(pe)] != L'\n')
+            {
+                ++pe;
+            }
+            int s0 = ps;
+            if (s0 == pe)
+            {
+                lines_.push_back(Line{s0, pe});
+            }
+            while (s0 < pe)
+            {
+                int w = 0;
+                int e = s0;
+                while (e < pe && w + CharW(text[std::size_t(e)]) <= avail)
+                {
+                    w += CharW(text[std::size_t(e)]);
+                    ++e;
+                }
+                if (e == s0)
+                {
+                    e = s0 + 1;
+                }
+                if (e < pe)
+                {
+                    int space = e;
+                    while (space > s0 && text[std::size_t(space - 1)] != L' ')
+                    {
+                        --space;
+                    }
+                    if (space > s0)
+                    {
+                        e = space;
+                    }
+                }
+                lines_.push_back(Line{s0, e});
+                s0 = e;
+            }
+            ps = pe + 1;
+        }
+        if (lines_.empty())
+        {
+            lines_.push_back(Line{0, 0});
+        }
+        bar_.area = Rect{rect.w - 2 - 16, 2, 16, rect.h - 4};
+        bar_.content = int(lines_.size()) * AreaLineH + 6;
+        bar_.view = rect.h - 4;
+        bar_.line = AreaLineH;
+        bar_.SetPos(bar_.pos);
+    }
+
+    int TextArea::LineCount()
+    {
+        Layout();
+        return int(lines_.size());
+    }
+
+    int TextArea::LineOf(int index) const
+    {
+        int found = 0;
+        for (int i = 0; i < int(lines_.size()); ++i)
+        {
+            if (lines_[std::size_t(i)].start <= index)
+            {
+                found = i;
+            }
+            else
+            {
+                break;
+            }
+        }
+        return found;
+    }
+
+    int TextArea::XOf(int index) const
+    {
+        const Line& l = lines_[std::size_t(LineOf(index))];
+        int x = 0;
+        for (int i = l.start; i < std::min(index, l.end); ++i)
+        {
+            x += CharW(text[std::size_t(i)]);
+        }
+        return x;
+    }
+
+    int TextArea::IndexAt(int x, int y) const
+    {
+        const int line = std::clamp((y - 3 + bar_.pos) / AreaLineH, 0, int(lines_.size()) - 1);
+        const Line& l = lines_[std::size_t(line)];
+        int cx = 4;
+        for (int i = l.start; i < l.end; ++i)
+        {
+            const int w = CharW(text[std::size_t(i)]);
+            if (x < cx + w / 2)
+            {
+                return i;
+            }
+            cx += w;
+        }
+        return l.end;
+    }
+
+    void TextArea::EnsureVisible()
+    {
+        Layout();
+        const int top = LineOf(caret_) * AreaLineH;
+        if (top < bar_.pos)
+        {
+            bar_.SetPos(top);
+        }
+        else if (top + AreaLineH + 6 > bar_.pos + bar_.view)
+        {
+            bar_.SetPos(top + AreaLineH + 6 - bar_.view);
+        }
+    }
+
+    void TextArea::SetText(const std::wstring& value)
+    {
+        text = value.substr(0, std::size_t(std::max(0, maxLength)));
+        caret_ = anchor_ = int(text.size());
+        bar_.pos = 0;
+        EnsureVisible();
+        Invalidate();
+    }
+
+    void TextArea::DeleteSelection()
+    {
+        const int a = std::min(caret_, anchor_);
+        const int b = std::max(caret_, anchor_);
+        text.erase(std::size_t(a), std::size_t(b - a));
+        caret_ = anchor_ = a;
+    }
+
+    void TextArea::Insert(const std::wstring& s)
+    {
+        if (HasSelection())
+        {
+            DeleteSelection();
+        }
+        std::wstring clean;
+        for (std::size_t i = 0; i < s.size(); ++i)
+        {
+            const wchar_t ch = s[i];
+            if (ch == L'\r')
+            {
+                if (i + 1 >= s.size() || s[i + 1] != L'\n')
+                {
+                    clean.push_back(L'\n');
+                }
+                continue;
+            }
+            if (ch == L'\n' || (ch >= 32 && ch != 127))
+            {
+                clean.push_back(ch);
+            }
+            else if (ch == L'\t')
+            {
+                clean.append(L"    ");
+            }
+        }
+        const int room = maxLength - int(text.size());
+        if (room <= 0)
+        {
+            return;
+        }
+        if (int(clean.size()) > room)
+        {
+            clean.resize(std::size_t(room));
+        }
+        text.insert(std::size_t(caret_), clean);
+        caret_ += int(clean.size());
+        anchor_ = caret_;
+    }
+
+    void TextArea::Changed()
+    {
+        wantX_ = -1;
+        EnsureVisible();
+        Blink();
+        Invalidate();
+        if (onChange)
+        {
+            auto cb = onChange;
+            const std::wstring v = text;
+            root->Post([cb, v]() { cb(v); });
+        }
+    }
+
+    void TextArea::Blink()
+    {
+        caretOn_ = true;
+        lastBlink_ = root != nullptr ? root->now : 0;
+    }
+
+    void TextArea::MoveTo(int index, bool shift, bool keepX)
+    {
+        caret_ = std::clamp(index, 0, int(text.size()));
+        if (!shift)
+        {
+            anchor_ = caret_;
+        }
+        if (!keepX)
+        {
+            wantX_ = -1;
+        }
+        EnsureVisible();
+        Blink();
+        Invalidate();
+    }
+
+    void TextArea::Paint(Painter& p)
+    {
+        Layout();
+        const Shades& sh = Sh();
+        const Color fill = enabled ? White : sh.face;
+        p.Sunken(Rect{0, 0, rect.w, rect.h}, sh, &fill);
+        const Rect inner{2, 2, rect.w - 4 - 16, rect.h - 4};
+        Painter c = p.Clipped(inner);
+        const int a = std::min(caret_, anchor_);
+        const int b = std::max(caret_, anchor_);
+        const bool focused = IsFocused();
+        for (int i = 0; i < int(lines_.size()); ++i)
+        {
+            const int y = 3 + i * AreaLineH - bar_.pos;
+            if (y + AreaLineH < 0 || y > rect.h)
+            {
+                continue;
+            }
+            const Line& l = lines_[std::size_t(i)];
+            const std::wstring part = text.substr(std::size_t(l.start), std::size_t(l.end - l.start));
+            if (!enabled)
+            {
+                c.TextEmbossed(4, y, part, UiFont(), sh);
+                continue;
+            }
+            c.Text(4, y, part, UiFont(), Black);
+            if (focused && b > a && b > l.start && a < l.end + 1)
+            {
+                const int sa = std::max(a, l.start);
+                const int sb = std::min(b, l.end);
+                int sx = 4;
+                for (int k = l.start; k < sa; ++k)
+                {
+                    sx += CharW(text[std::size_t(k)]);
+                }
+                int ex = sx;
+                for (int k = sa; k < sb; ++k)
+                {
+                    ex += CharW(text[std::size_t(k)]);
+                }
+                if (b > l.end && l.end < int(text.size()))
+                {
+                    ex += 4;
+                }
+                if (ex > sx)
+                {
+                    const Rect sel{sx, y, ex - sx, AreaLineH};
+                    c.Fill(sel, Navy);
+                    Painter q = c.Clipped(sel);
+                    q.Text(4, y, part, UiFont(), White);
+                }
+            }
+        }
+        if (focused && caretOn_ && enabled)
+        {
+            const int line = LineOf(caret_);
+            c.VLine(4 + XOf(caret_), 3 + line * AreaLineH - bar_.pos, AreaLineH, Black);
+        }
+        bar_.Paint(p, sh);
+    }
+
+    void TextArea::OnMouseDown(const MouseEvent& e)
+    {
+        Layout();
+        if (bar_.MouseDown(e.x, e.y))
+        {
+            barDrag_ = true;
+            Invalidate();
+            return;
+        }
+        MoveTo(IndexAt(e.x, e.y), e.shift, false);
+        dragging_ = true;
+    }
+
+    void TextArea::OnMouseMove(const MouseEvent& e)
+    {
+        if (barDrag_)
+        {
+            if (bar_.MouseMove(e.x, e.y))
+            {
+                Invalidate();
+            }
+            return;
+        }
+        if (!dragging_)
+        {
+            return;
+        }
+        const int c = IndexAt(e.x, e.y);
+        if (c != caret_)
+        {
+            MoveTo(c, true, false);
+        }
+    }
+
+    void TextArea::OnMouseUp(const MouseEvent&)
+    {
+        bar_.MouseUp();
+        barDrag_ = false;
+        dragging_ = false;
+        Invalidate();
+    }
+
+    void TextArea::OnWheel(int delta)
+    {
+        Layout();
+        if (bar_.SetPos(bar_.pos + (delta > 0 ? -3 : 3) * AreaLineH))
+        {
+            Invalidate();
+        }
+    }
+
+    bool TextArea::OnKey(const KeyEvent& e)
+    {
+        Layout();
+        const int line = LineOf(caret_);
+        const auto vertical = [&](int to) {
+            if (wantX_ < 0)
+            {
+                wantX_ = XOf(caret_);
+            }
+            to = std::clamp(to, 0, int(lines_.size()) - 1);
+            const int x = wantX_;
+            MoveTo(IndexAt(4 + x, 3 + to * AreaLineH - bar_.pos + 1), e.shift, true);
+        };
+        const int page = std::max(1, (rect.h - 4) / AreaLineH - 1);
+        switch (e.key)
+        {
+        case KeyCode::Left:
+            if (!e.shift && HasSelection())
+            {
+                MoveTo(std::min(caret_, anchor_), false, false);
+            }
+            else
+            {
+                MoveTo(caret_ - 1, e.shift, false);
+            }
+            return true;
+        case KeyCode::Right:
+            if (!e.shift && HasSelection())
+            {
+                MoveTo(std::max(caret_, anchor_), false, false);
+            }
+            else
+            {
+                MoveTo(caret_ + 1, e.shift, false);
+            }
+            return true;
+        case KeyCode::Up:
+            vertical(line - 1);
+            return true;
+        case KeyCode::Down:
+            vertical(line + 1);
+            return true;
+        case KeyCode::PageUp:
+            vertical(line - page);
+            return true;
+        case KeyCode::PageDown:
+            vertical(line + page);
+            return true;
+        case KeyCode::Home:
+            MoveTo(e.ctrl ? 0 : lines_[std::size_t(line)].start, e.shift, false);
+            return true;
+        case KeyCode::End:
+            MoveTo(e.ctrl ? int(text.size()) : lines_[std::size_t(line)].end, e.shift, false);
+            return true;
+        case KeyCode::Backspace:
+            if (HasSelection())
+            {
+                DeleteSelection();
+            }
+            else if (caret_ > 0)
+            {
+                text.erase(std::size_t(caret_ - 1), 1);
+                caret_ = anchor_ = caret_ - 1;
+            }
+            Changed();
+            return true;
+        case KeyCode::Delete:
+            if (HasSelection())
+            {
+                DeleteSelection();
+            }
+            else if (caret_ < int(text.size()))
+            {
+                text.erase(std::size_t(caret_), 1);
+            }
+            Changed();
+            return true;
+        case KeyCode::Enter:
+            Insert(L"\n");
+            Changed();
+            return true;
+        case KeyCode::Letter:
+            if (!e.ctrl)
+            {
+                return false;
+            }
+            if (e.letter == L'A')
+            {
+                anchor_ = 0;
+                caret_ = int(text.size());
+                EnsureVisible();
+                Invalidate();
+                return true;
+            }
+            if ((e.letter == L'C' || e.letter == L'X') && HasSelection())
+            {
+                const int a = std::min(caret_, anchor_);
+                const int b = std::max(caret_, anchor_);
+                if (GetPlatform() != nullptr)
+                {
+                    std::wstring copied;
+                    for (wchar_t ch : text.substr(std::size_t(a), std::size_t(b - a)))
+                    {
+                        if (ch == L'\n')
+                        {
+                            copied.push_back(L'\r');
+                        }
+                        copied.push_back(ch);
+                    }
+                    GetPlatform()->SetClipboardText(copied);
+                }
+                if (e.letter == L'X')
+                {
+                    DeleteSelection();
+                    Changed();
+                }
+                return true;
+            }
+            if (e.letter == L'V')
+            {
+                if (GetPlatform() != nullptr)
+                {
+                    Insert(GetPlatform()->ClipboardText());
+                    Changed();
+                }
+                return true;
+            }
+            return e.letter == L'C' || e.letter == L'X';
+        default:
+            return false;
+        }
+    }
+
+    bool TextArea::OnChar(wchar_t ch)
+    {
+        if (ch < 32 || ch == 127)
+        {
+            return false;
+        }
+        Insert(std::wstring(1, ch));
+        Changed();
+        return true;
+    }
+
+    void TextArea::OnFocus(bool focused)
+    {
+        if (focused)
+        {
+            Blink();
+        }
+        else
+        {
+            dragging_ = false;
+        }
+        Invalidate();
+    }
+
+    void TextArea::OnTick(unsigned long long ms)
+    {
+        if (ms - lastBlink_ >= 530)
+        {
+            caretOn_ = !caretOn_;
+            lastBlink_ = ms;
+            Invalidate();
+        }
+    }
+
     void ComboBox::Paint(Painter& p)
     {
         const Shades& sh = Sh();

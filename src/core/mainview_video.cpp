@@ -85,6 +85,14 @@ namespace rf
         playButton_->onClick = [this]() { TogglePlay(); };
         scrub_ = Place<ui::TrackBar>(r, 112, 414, 344, 24);
         scrub_->onChange = [this](double v) {
+            if (SceneMode())
+            {
+                StopPlay();
+                scenePos_ = std::clamp(v, 0.0, 1.0) * SceneLength();
+                SyncVideoControls();
+                UpdatePreview();
+                return;
+            }
             if (Media* m = Cur())
             {
                 StopPlay();
@@ -145,7 +153,7 @@ namespace rf
             rb->value = value;
             rb->group = &resultValue_;
             rb->onChange = [this](int v) {
-                (AudioMode() ? Audio().square : s_.video.square) = v == 1;
+                ResultSquare() = v == 1;
                 Changed();
             };
             return rb;
@@ -158,7 +166,7 @@ namespace rf
             canvas_->items.push_back(CanvasName(i));
         }
         canvas_->onChange = [this](int i) {
-            (AudioMode() ? Audio().canvas : s_.video.canvas) = std::clamp(i, 0, CanvasCount - 1);
+            ResultCanvas() = std::clamp(i, 0, CanvasCount - 1);
             Changed();
         };
         auto* l3 = AddLabel(r, 324, 490, 82, L"Фон:");
@@ -184,6 +192,10 @@ namespace rf
             if (AudioMode())
             {
                 Audio().fps = FpsChoices[std::clamp(i, 0, int(std::size(FpsChoices)) - 1)];
+            }
+            else if (SceneMode())
+            {
+                SceneOut().fps = FpsChoices[std::clamp(i, 0, int(std::size(FpsChoices)) - 1)];
             }
             else
             {
@@ -213,8 +225,9 @@ namespace rf
         auto* hint2 = AddLabel(r, 324, 570, 284, L"MP4 со звуком, GIF без звука и по кругу.");
         hint2->color = Rgb(0x40, 0x40, 0x40);
 
-        mediaOnly_ = {playButton_, scrub_, soundCheck_, timeLabel_, trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1,
-                      resultBox, r1, r2, canvas_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
+        playRow_ = {playButton_, scrub_, soundCheck_, timeLabel_};
+        trimOnly_ = {trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1};
+        resultOnly_ = {resultBox, r1, r2, canvas_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
         videoOnly_ = {l4, gifFps_, gifWidth_, hint2};
     }
 
@@ -224,6 +237,12 @@ namespace rf
         {
             format_->items = {L"MP4, высокое качество", L"MP4, среднее качество", L"MP4, низкое качество", L"GIF без звука"};
             format_->index = std::clamp(s_.video.format, 0, 3);
+        }
+        else if (SceneMode())
+        {
+            format_->items = {L"MP4, высокое качество", L"MP4, среднее качество", L"MP4, низкое качество", L"GIF без звука", L"PNG, один кадр"};
+            SceneOut().format = std::clamp(SceneOut().format, 0, 4);
+            format_->index = SceneOut().format;
         }
         else if (AudioMode())
         {
@@ -262,7 +281,7 @@ namespace rf
         }
         dirty_ = true;
         dirtyAt_ = host_.Ticks();
-        preview_->rect.w = AudioMode() ? 300 : 602;
+        preview_->rect.w = AudioMode() || SceneMode() ? 300 : 602;
         preview_->rect.h = mode_ == PhotoMode ? 350 : 296;
         UpdateFormatItems();
         SyncControls();
@@ -283,14 +302,24 @@ namespace rf
     void MainView::SyncVideoControls()
     {
         const bool media = mode_ == VideoMode || AudioMode();
-        for (ui::Widget* w : mediaOnly_)
+        const bool scene = SceneMode();
+        for (ui::Widget* w : playRow_)
+        {
+            w->visible = media || scene;
+        }
+        for (ui::Widget* w : resultOnly_)
+        {
+            w->visible = media || scene;
+        }
+        for (ui::Widget* w : trimOnly_)
         {
             w->visible = media;
         }
         for (ui::Widget* w : videoOnly_)
         {
-            w->visible = mode_ == VideoMode;
+            w->visible = mode_ == VideoMode || scene;
         }
+        SyncSceneControls();
         for (ui::Widget* w : musicOnly_)
         {
             w->visible = mode_ == MusicMode;
@@ -298,6 +327,11 @@ namespace rf
         for (ui::Widget* w : recorderOnly_)
         {
             w->visible = mode_ == RecorderMode;
+        }
+        if (scene)
+        {
+            SyncResult();
+            return;
         }
         if (!media)
         {
@@ -338,15 +372,7 @@ namespace rf
         fill(startField_, TrimStart());
         fill(endField_, TrimEnd());
         fragLabel_->text = has ? L"Длина фрагмента: " + FormatPrecise(TrimEnd() - TrimStart()) : std::wstring();
-        const bool square = AudioMode() ? Audio().square : s_.video.square;
-        resultValue_ = square ? 1 : 0;
-        canvas_->index = std::clamp(AudioMode() ? Audio().canvas : s_.video.canvas, 0, CanvasCount - 1);
-        canvas_->enabled = square;
-        bgSwatch_->color = s_.background;
-        bgSwatch_->enabled = square;
-        bgPicture_->checked = s_.backgroundPicture && !s_.backgroundImage.Empty();
-        bgPicture_->enabled = square;
-        bgLoad_->enabled = square;
+        SyncResult();
         fps_->items.clear();
         for (int fps : FpsChoices)
         {
@@ -370,6 +396,45 @@ namespace rf
         fps_->index = s_.video.fps <= 0 ? 0 : 1 + IndexOf(FpsChoices, int(std::size(FpsChoices)), s_.video.fps, 2);
         fps_->enabled = s_.video.format != 3;
         const bool gif = s_.video.format == 3;
+        gifFps_->index = IndexOf(GifFpsChoices, int(std::size(GifFpsChoices)), s_.video.gifFps, 2);
+        gifFps_->enabled = gif;
+        gifWidth_->index = IndexOf(GifWidthChoices, int(std::size(GifWidthChoices)), s_.video.gifWidth, 0);
+        gifWidth_->enabled = gif;
+    }
+
+    bool& MainView::ResultSquare()
+    {
+        return SceneMode() ? SceneOut().square : AudioMode() ? Audio().square : s_.video.square;
+    }
+
+    int& MainView::ResultCanvas()
+    {
+        return SceneMode() ? SceneOut().canvas : AudioMode() ? Audio().canvas : s_.video.canvas;
+    }
+
+    void MainView::SyncResult()
+    {
+        const bool square = ResultSquare();
+        resultValue_ = square ? 1 : 0;
+        canvas_->index = std::clamp(ResultCanvas(), 0, CanvasCount - 1);
+        canvas_->enabled = square;
+        bgSwatch_->color = s_.background;
+        bgSwatch_->enabled = square;
+        bgPicture_->checked = s_.backgroundPicture && !s_.backgroundImage.Empty();
+        bgPicture_->enabled = square;
+        bgLoad_->enabled = square;
+        if (!SceneMode())
+        {
+            return;
+        }
+        fps_->items.clear();
+        for (int fps : FpsChoices)
+        {
+            fps_->items.push_back(std::to_wstring(fps) + L" к/с");
+        }
+        fps_->index = IndexOf(FpsChoices, int(std::size(FpsChoices)), SceneOut().fps, 3);
+        fps_->enabled = SceneOut().format < 3;
+        const bool gif = SceneOut().format == 3;
         gifFps_->index = IndexOf(GifFpsChoices, int(std::size(GifFpsChoices)), s_.video.gifFps, 2);
         gifFps_->enabled = gif;
         gifWidth_->index = IndexOf(GifWidthChoices, int(std::size(GifWidthChoices)), s_.video.gifWidth, 0);
@@ -487,6 +552,7 @@ namespace rf
 
     void MainView::PollVideo(unsigned long long ms)
     {
+        PollScene(ms);
         for (Media* m : {track_.get(), recording_.get()})
         {
             if (m && m->reader && m->reader->Poll())
@@ -591,6 +657,11 @@ namespace rf
         {
             return;
         }
+        if (SceneMode())
+        {
+            StartScenePlay();
+            return;
+        }
         if (AudioMode() && Song())
         {
             double from = Song()->position;
@@ -653,6 +724,8 @@ namespace rf
         play_.reset();
         sound_.reset();
         musicPlay_ = false;
+        scenePlaying_ = false;
+        sceneAudio_.reset();
         SyncVideoControls();
         root.dirty = true;
     }

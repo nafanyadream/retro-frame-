@@ -389,6 +389,60 @@ namespace rf::ui
         int pressed_ = 0;
     };
 
+    class TextArea : public Widget
+    {
+    public:
+        std::wstring text;
+        int maxLength = 4000;
+        std::function<void(const std::wstring&)> onChange;
+
+        void SetText(const std::wstring& value);
+        int Caret() const { return caret_; }
+        int LineCount();
+
+        void Paint(Painter& p) override;
+        bool Focusable() const override { return enabled; }
+        void OnMouseDown(const MouseEvent& e) override;
+        void OnMouseMove(const MouseEvent& e) override;
+        void OnMouseUp(const MouseEvent& e) override;
+        void OnWheel(int delta) override;
+        bool OnKey(const KeyEvent& e) override;
+        bool OnChar(wchar_t ch) override;
+        void OnFocus(bool focused) override;
+        void OnTick(unsigned long long ms) override;
+        bool IBeam() const override { return true; }
+
+    private:
+        struct Line
+        {
+            int start = 0;
+            int end = 0;
+        };
+
+        void Layout();
+        int LineOf(int index) const;
+        int XOf(int index) const;
+        int IndexAt(int x, int y) const;
+        void EnsureVisible();
+        bool HasSelection() const { return caret_ != anchor_; }
+        void DeleteSelection();
+        void Insert(const std::wstring& s);
+        void Changed();
+        void Blink();
+        void MoveTo(int index, bool shift, bool keepX);
+        int CharW(wchar_t ch) const;
+
+        std::vector<Line> lines_;
+        ScrollBar bar_;
+        int caret_ = 0;
+        int anchor_ = 0;
+        int wantX_ = -1;
+        bool caretOn_ = true;
+        unsigned long long lastBlink_ = 0;
+        bool dragging_ = false;
+        bool barDrag_ = false;
+    };
+
     struct ListItem
     {
         Image icon;

@@ -121,6 +121,10 @@ namespace rf
             {
                 s_.video.format = i;
             }
+            else if (SceneMode())
+            {
+                SceneOut().format = i;
+            }
             else if (AudioMode())
             {
                 Audio().format = i;
@@ -136,7 +140,7 @@ namespace rf
         auto* page = Place<ui::Panel>(r, 8, 102, 618, 500);
         page->kind = ui::Panel::Kind::Raised;
         tabs_ = Place<ui::TabStrip>(r, 8, 82, 618, 21);
-        tabs_->tabs = {L"Фото", L"Видео", L"Музыка", L"Звукозапись"};
+        tabs_->tabs = {L"Фото", L"Видео", L"Музыка", L"Звукозапись", L"Блокнот", L"Установка"};
         tabs_->onChange = [this](int i) { SetMode(i); };
         preview_ = Place<ui::PreviewPane>(r, 16, 112, 602, 350);
         filesLabel_ = AddLabel(r, 18, 474, 200, L"Файлы:");
@@ -159,6 +163,7 @@ namespace rf
         BuildVideo();
         BuildMusic();
         BuildRecorder();
+        BuildScenes();
 
         const int gx = 636;
         const int gw = WindowW - 4 - 4 - gx;
@@ -455,7 +460,7 @@ namespace rf
         }
         mode_ = s_.mode;
         tabs_->index = mode_;
-        preview_->rect.w = AudioMode() ? 300 : 602;
+        preview_->rect.w = AudioMode() || SceneMode() ? 300 : 602;
         preview_->rect.h = mode_ == PhotoMode ? 350 : 296;
     }
 
@@ -504,15 +509,27 @@ namespace rf
         std::vector<std::wstring> images;
         std::vector<std::wstring> videos;
         std::vector<std::wstring> songs;
+        std::vector<std::wstring> texts;
         std::wstring lyrics;
+        bool withSong = mode_ == MusicMode && track_ != nullptr;
         for (const auto& path : paths)
         {
+            withSong = withSong || IsAudioFile(path);
+        }
+        for (const auto& path : paths)
+        {
+            const std::wstring lower = ToLower(path);
+            const bool txt = lower.size() >= 4 && lower.compare(lower.size() - 4, 4, L".txt") == 0;
+            if (txt && !withSong)
+            {
+                texts.push_back(path);
+                continue;
+            }
             if (IsLyricsFile(path))
             {
                 lyrics = path;
                 continue;
             }
-            const std::wstring lower = ToLower(path);
             const bool gif = lower.size() >= 4 && lower.compare(lower.size() - 4, 4, L".gif") == 0;
             if (IsVideoFile(path) || (gif && mode_ == VideoMode))
             {
@@ -530,6 +547,12 @@ namespace rf
         if (!videos.empty())
         {
             OpenMedia(VideoMode, videos);
+            return;
+        }
+        if (!texts.empty() && images.empty() && songs.empty())
+        {
+            SetMode(NotepadMode);
+            LoadSceneText(texts.front());
             return;
         }
         if (!songs.empty())
@@ -618,7 +641,7 @@ namespace rf
         queueLabel_->text = std::to_wstring(QueuePosition() + 1) + L" / " + std::to_wstring(QueueSize());
         removeButton_->enabled = current_ >= 0;
         sunken_->text = mode_ == VideoMode ? L"Видео во вдавленной области" : L"Фото во вдавленной области";
-        sunken_->enabled = !AudioMode();
+        sunken_->enabled = !AudioMode() && !SceneMode();
         SyncVideoControls();
         root.dirty = true;
     }
@@ -871,6 +894,11 @@ namespace rf
             UpdateMusicPreview();
             return;
         }
+        if (SceneMode())
+        {
+            UpdateScenePreview();
+            return;
+        }
         if (current_ < 0 || current_ >= int(photos_.size()))
         {
             preview_->image = Image();
@@ -928,6 +956,10 @@ namespace rf
         else if (AudioMode())
         {
             UpdateMusicStatus(first, second, third);
+        }
+        else if (SceneMode())
+        {
+            UpdateSceneStatus(first, second, third);
         }
         if (!flash_.empty())
         {
@@ -1079,6 +1111,11 @@ namespace rf
 
     void MainView::Open()
     {
+        if (SceneMode())
+        {
+            OpenSceneText();
+            return;
+        }
         if (mode_ == VideoMode)
         {
             const auto paths = host_.AskOpenVideo(s_.videoFolder.empty() ? s_.openFolder : s_.videoFolder);
@@ -1123,6 +1160,12 @@ namespace rf
             Warn(L"В буфере обмена нет песни.\nСкопируйте файл в Проводнике и вставьте снова.");
             return;
         }
+        if (SceneMode())
+        {
+            root.SetFocus(sceneText_);
+            sceneText_->OnKey(ui::KeyEvent{ui::KeyCode::Letter, L'V', false, true, false});
+            return;
+        }
         Image img;
         if (host_.ClipboardImage(img))
         {
@@ -1138,6 +1181,11 @@ namespace rf
         if (mode_ == VideoMode)
         {
             SaveVideo();
+            return;
+        }
+        if (SceneMode())
+        {
+            SaveScene();
             return;
         }
         if (AudioMode())
@@ -1368,6 +1416,11 @@ namespace rf
         if (mode_ == VideoMode)
         {
             Warn(L"Видео нельзя положить в буфер обмена: нажмите «Сохранить...».");
+            return;
+        }
+        if (SceneMode())
+        {
+            CopyScene();
             return;
         }
         if (AudioMode())
@@ -1647,7 +1700,7 @@ namespace rf
 
     bool MainView::HandleKey(const ui::KeyEvent& e)
     {
-        const bool textFocus = dynamic_cast<ui::TextField*>(root.focus) != nullptr;
+        const bool textFocus = dynamic_cast<ui::TextField*>(root.focus) != nullptr || dynamic_cast<ui::TextArea*>(root.focus) != nullptr;
         if (e.key == ui::KeyCode::Letter && e.ctrl)
         {
             switch (e.letter)

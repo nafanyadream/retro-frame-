@@ -176,6 +176,20 @@ namespace rf
             look.customTitle = L"Звук";
             look.menu = true;
         }
+        else if (mode == NotepadMode)
+        {
+            look.iconIndex = 3;
+            look.titleFromName = true;
+            look.customTitle = L"Безымянный - Блокнот";
+            look.menu = true;
+        }
+        else if (mode == SetupMode)
+        {
+            look.iconIndex = NoIconIndex;
+            look.titleFromName = true;
+            look.customTitle = L"Копирование...";
+            look.kind = WindowKind::Dialog;
+        }
         else
         {
             look.customTitle = L"Моё фото";
@@ -271,7 +285,7 @@ namespace rf
         o << "sunken=" << (f.sunken ? 1 : 0) << "\n";
         o << "scale=" << f.scale << "\n";
         o << "scheme=" << s.scheme << "\n";
-        const char* prefixes[] = {"", "video.", "music.", "recorder."};
+        const char* prefixes[] = {"", "video.", "music.", "recorder.", "notepad.", "setup."};
         for (int m = 0; m < ModeCount; ++m)
         {
             const ModeLook& l = s.looks[std::size_t(m)];
@@ -304,6 +318,33 @@ namespace rf
         o << "music.fps=" << s.music.fps << "\n";
         o << "music.equalizer=" << (s.music.equalizer ? 1 : 0) << "\n";
         o << "music.lyrics=" << (s.music.lyrics ? 1 : 0) << "\n";
+        const auto out = [&](const std::string& p, const SceneOutput& v) {
+            o << p << "format=" << v.format << "\n";
+            o << p << "square=" << (v.square ? 1 : 0) << "\n";
+            o << p << "canvas=" << v.canvas << "\n";
+            o << p << "fps=" << v.fps << "\n";
+        };
+        out("notepad.", s.notepad.out);
+        o << "notepad.text=" << Escape(s.notepad.text) << "\n";
+        o << "notepad.file=" << Escape(s.notepad.file) << "\n";
+        o << "notepad.russian=" << (s.notepad.russian ? 1 : 0) << "\n";
+        o << "notepad.font=" << s.notepad.font << "\n";
+        o << "notepad.speed=" << s.notepad.speed << "\n";
+        o << "notepad.typos=" << (s.notepad.typos ? 1 : 0) << "\n";
+        o << "notepad.caret=" << (s.notepad.caret ? 1 : 0) << "\n";
+        o << "notepad.sound=" << (s.notepad.sound ? 1 : 0) << "\n";
+        o << "notepad.size=" << s.notepad.size << "\n";
+        o << "notepad.hold=" << s.notepad.hold << "\n";
+        out("setup.", s.setup.out);
+        o << "setup.kind=" << s.setup.kind << "\n";
+        o << "setup.from=" << Escape(s.setup.from) << "\n";
+        o << "setup.to=" << Escape(s.setup.to) << "\n";
+        o << "setup.program=" << Escape(s.setup.program) << "\n";
+        o << "setup.files=" << Escape(s.setup.files) << "\n";
+        o << "setup.seconds=" << s.setup.seconds << "\n";
+        o << "setup.pace=" << s.setup.pace << "\n";
+        o << "setup.ending=" << s.setup.ending << "\n";
+        o << "setup.sound=" << (s.setup.sound ? 1 : 0) << "\n";
         o << "music.player=" << s.music.player << "\n";
         o << "music.winampEq=" << (s.music.winampEq ? 1 : 0) << "\n";
         o << "music.winampList=" << (s.music.winampList ? 1 : 0) << "\n";
@@ -495,7 +536,7 @@ namespace rf
         getBool("sunken", f.sunken);
         getInt("scale", f.scale, 0, 4);
         getInt("scheme", s.scheme, -1, SchemeCount() - 1);
-        const char* prefixes[] = {"", "video.", "music.", "recorder."};
+        const char* prefixes[] = {"", "video.", "music.", "recorder.", "notepad.", "setup."};
         for (int m = 0; m < ModeCount; ++m)
         {
             ModeLook& l = s.looks[std::size_t(m)];
@@ -548,6 +589,33 @@ namespace rf
         getBool("music.meter", s.music.meter);
         getBool("music.equalizer", s.music.equalizer);
         getBool("music.lyrics", s.music.lyrics);
+        const auto readOut = [&](const std::string& p, SceneOutput& v) {
+            getInt(p + "format", v.format, 0, 4);
+            getBool(p + "square", v.square);
+            getInt(p + "canvas", v.canvas, 0, CanvasCount - 1);
+            getInt(p + "fps", v.fps, 10, 60);
+        };
+        readOut("notepad.", s.notepad.out);
+        getText("notepad.text", s.notepad.text);
+        getText("notepad.file", s.notepad.file);
+        getBool("notepad.russian", s.notepad.russian);
+        getInt("notepad.font", s.notepad.font, 0, 2);
+        getInt("notepad.speed", s.notepad.speed, 0, 3);
+        getBool("notepad.typos", s.notepad.typos);
+        getBool("notepad.caret", s.notepad.caret);
+        getBool("notepad.sound", s.notepad.sound);
+        getInt("notepad.size", s.notepad.size, 0, 2);
+        getInt("notepad.hold", s.notepad.hold, 1, 10);
+        readOut("setup.", s.setup.out);
+        getInt("setup.kind", s.setup.kind, 0, 2);
+        getText("setup.from", s.setup.from);
+        getText("setup.to", s.setup.to);
+        getText("setup.program", s.setup.program);
+        getText("setup.files", s.setup.files);
+        getInt("setup.seconds", s.setup.seconds, 3, 120);
+        getInt("setup.pace", s.setup.pace, 0, 2);
+        getInt("setup.ending", s.setup.ending, 0, 2);
+        getBool("setup.sound", s.setup.sound);
         getInt("music.player", s.music.player, 0, 2);
         getBool("music.winampEq", s.music.winampEq);
         getBool("music.winampList", s.music.winampList);

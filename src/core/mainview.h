@@ -4,6 +4,7 @@
 #include "library.h"
 #include "media.h"
 #include "music.h"
+#include "scenes.h"
 #include "settings.h"
 #include "voice.h"
 
@@ -37,6 +38,8 @@ namespace rf
         }
         int ShownFormat() const;
         int ShownTab() const { return tabs_->index; }
+        double SceneLength() const;
+        double ScenePosition() const { return scenePos_; }
         bool Recording() const { return mic_ != nullptr; }
         bool RecordingIsVoice() const { return recording_ && recording_->voice; }
         std::wstring RecordingSound() const { return recording_ ? SoundOf(*recording_) : std::wstring(); }
@@ -131,7 +134,32 @@ namespace rf
         Media* Song() const { return mode_ == RecorderMode ? recording_.get() : track_.get(); }
         std::unique_ptr<Media>& SongSlot() { return mode_ == RecorderMode ? recording_ : track_; }
         void TakeLevels(Media& m);
-        bool Playing() const { return play_ != nullptr || musicPlay_; }
+        bool Playing() const { return play_ != nullptr || musicPlay_ || scenePlaying_; }
+        bool SceneMode() const { return mode_ == NotepadMode || mode_ == SetupMode; }
+        SceneOutput& SceneOut() { return mode_ == SetupMode ? s_.setup.out : s_.notepad.out; }
+        const SceneOutput& SceneOut() const { return mode_ == SetupMode ? s_.setup.out : s_.notepad.out; }
+        bool& ResultSquare();
+        int& ResultCanvas();
+        void SyncResult();
+        void BuildScenes();
+        void SyncSceneControls();
+        void UpdateScenePreview();
+        void UpdateSceneStatus(std::wstring& first, std::wstring& second, std::wstring& third);
+        FrameSettings SceneFrame() const;
+        std::wstring SceneName() const;
+        NotepadOptions NotepadOpts() const;
+        SetupOptions SetupOpts() const;
+        ScenePlan ScenePlanFor(const FrameSettings& frame) const;
+        SceneDraw SceneDrawer(const FrameSettings& frame) const;
+        std::vector<std::int16_t> SceneSound(double duration) const;
+        void StartScenePlay();
+        void PollScene(unsigned long long ms);
+        bool SceneStill(Image& out);
+        void SaveScene();
+        void CopyScene();
+        void OpenSceneText();
+        bool LoadSceneText(const std::wstring& path);
+        ExportResult ExportSceneFile(const std::wstring& path, const std::wstring& title, std::wstring& err);
         bool SoundPlaying() const { return sound_ != nullptr && sound_->Active(); }
         void BuildMusic();
         void SyncMusicControls();
@@ -275,7 +303,42 @@ namespace rf
         bool musicPlay_ = false;
         unsigned long long musicStart_ = 0;
         double musicFrom_ = 0.0;
-        std::vector<ui::Widget*> mediaOnly_;
+        std::vector<ui::Widget*> playRow_;
+        std::vector<ui::Widget*> trimOnly_;
+        std::vector<ui::Widget*> resultOnly_;
+        std::vector<ui::Widget*> sceneOnly_;
+        std::vector<ui::Widget*> notepadOnly_;
+        std::vector<ui::Widget*> setupOnly_;
+        std::vector<ui::Widget*> setupCopy_;
+        std::vector<ui::Widget*> setupTarget_;
+        std::vector<ui::Widget*> setupProgram_;
+        ui::GroupBox* sceneTextGroup_ = nullptr;
+        ui::TextArea* sceneText_ = nullptr;
+        ui::TextField* npFile_ = nullptr;
+        ui::ComboBox* npLanguage_ = nullptr;
+        ui::ComboBox* npFont_ = nullptr;
+        ui::ComboBox* npSpeed_ = nullptr;
+        ui::ComboBox* npSize_ = nullptr;
+        ui::ComboBox* npHold_ = nullptr;
+        ui::CheckBox* npTypos_ = nullptr;
+        ui::CheckBox* npCaret_ = nullptr;
+        ui::CheckBox* npSound_ = nullptr;
+        ui::ComboBox* stKind_ = nullptr;
+        ui::TextField* stFrom_ = nullptr;
+        ui::TextField* stTo_ = nullptr;
+        ui::TextField* stProgram_ = nullptr;
+        ui::ComboBox* stSeconds_ = nullptr;
+        ui::ComboBox* stPace_ = nullptr;
+        ui::ComboBox* stEnding_ = nullptr;
+        ui::CheckBox* stSound_ = nullptr;
+        double scenePos_ = 0.0;
+        bool scenePlaying_ = false;
+        unsigned long long sceneStart_ = 0;
+        unsigned long long sceneShown_ = 0;
+        double sceneFrom_ = 0.0;
+        std::unique_ptr<AudioOut> sceneAudio_;
+        std::vector<std::int16_t> sceneSamples_;
+        std::size_t sceneSamplePos_ = 0;
         std::vector<ui::Widget*> musicOnly_;
         std::vector<ui::Widget*> recorderOnly_;
         ui::ComboBox* recLanguage_ = nullptr;
