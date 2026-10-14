@@ -10,8 +10,11 @@ namespace rf
     {
         Win95 = 0,
         Win98 = 1,
-        Win2000 = 2
+        Win2000 = 2,
+        WinXP = 3
     };
+
+    constexpr int StyleCount = 4;
 
     struct FrameColors
     {
@@ -29,6 +32,8 @@ namespace rf
 
     bool HasGradient(Style style);
     FontFamily FamilyFor(Style style);
+    FontFamily TitleFamilyFor(Style style);
+    int TitleHeight(Style style);
     Shades ShadesFor(Color face, Style style);
 
     int SchemeCount();

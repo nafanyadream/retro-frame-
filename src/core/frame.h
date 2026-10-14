@@ -66,4 +66,5 @@ namespace rf
     Rect CloseButtonRect(const FrameSettings& settings, int frameWidth);
     int EffectiveScale(const FrameSettings& settings, int contentWidth, int contentHeight);
     Image ComposeFramed(const Image& content, const FrameSettings& settings, const FrameVars& vars, int scale, Rect* area = nullptr);
+    void DrawPushButton(Painter& p, const Rect& r, const FrameSettings& settings, const Shades& sh, bool isDefault);
 }

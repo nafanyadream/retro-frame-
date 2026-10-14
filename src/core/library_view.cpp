@@ -1,5 +1,7 @@
 #include "library_view.h"
 
+#include "icon_editor.h"
+
 #include "icons.h"
 #include "utf.h"
 
@@ -100,6 +102,7 @@ namespace rf
         AddButton(r, 10, 313, 190, L"Добавить папку...", [this]() { AddFolder(); });
         AddButton(r, 10, 340, 190, L"Добавить архив...", [this]() { AddArchive(); });
         remove_ = AddButton(r, 10, 367, 190, L"Убрать из библиотеки", [this]() { RemoveSource(); });
+        AddButton(r, 10, 394, 190, L"Нарисовать свой значок...", [this]() { DrawOwn(); });
 
         AddLabel(r, 212, 31, 40, L"Найти:");
         search_ = Place<ui::TextField>(r, 252, 27, 358, 21);
@@ -114,7 +117,7 @@ namespace rf
         where_ = AddLabel(r, 276, 358, 334, L"");
         size_ = AddLabel(r, 276, 376, 334, L"");
 
-        count_ = AddLabel(r, 12, 409, 300, L"Двойной щелчок по иконке выбирает её.");
+        count_ = AddLabel(r, 210, 409, 230, L"Двойной щелчок по иконке выбирает её.");
         count_->color = Rgb(0x40, 0x40, 0x40);
         ok_ = AddButton(r, root.width - 14 - 75 - 6 - 75, root.height - 3 - 10 - 23, 75, L"OK", [this]() { Accept(); });
         ok_->isDefault = true;
@@ -412,6 +415,19 @@ namespace rf
         }
         ShowSource(std::min(current_, 1 + int(sources_.size())));
         list_->EnsureVisible(current_);
+    }
+
+    void LibraryView::DrawOwn()
+    {
+        const int sel = grid_->selected;
+        const Image start = sel >= 0 && sel < int(shown_.size()) ? shown_[std::size_t(sel)]->icon : Image();
+        IconEditorView editor(host_, start);
+        if (host_.RunModal(editor) != 1)
+        {
+            return;
+        }
+        drawn_ = editor.Result();
+        Close(2);
     }
 
     void LibraryView::Accept()

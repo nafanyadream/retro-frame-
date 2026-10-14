@@ -30,14 +30,15 @@ int main(int argc, char** argv)
     };
     std::vector<Case> cases;
 
-    for (int st = 0; st < 3; ++st)
+    for (int st = 0; st < rf::StyleCount; ++st)
     {
         rf::FrameSettings s;
         s.style = static_cast<rf::Style>(st);
         s.colors = rf::SchemeColors(0, s.style);
         s.title = L"закат.jpg";
         s.icon = rf::BuiltinIcon(rf::IconId::Picture);
-        cases.push_back({st == 0 ? "style95" : st == 1 ? "style98" : "style2000", s});
+        const char* names[] = {"style95", "style98", "style2000", "styleXP"};
+        cases.push_back({names[st], s});
     }
     {
         rf::FrameSettings s;
@@ -83,6 +84,18 @@ int main(int argc, char** argv)
         s.menu = true;
         s.status = true;
         cases.push_back({"contrast", s});
+    }
+
+    {
+        rf::FrameSettings s;
+        s.style = rf::Style::WinXP;
+        s.colors = rf::SchemeColors(2, s.style);
+        s.title = L"Оливковое окно";
+        s.icon = rf::BuiltinIcon(rf::IconId::Picture);
+        s.menu = true;
+        s.status = true;
+        s.active = false;
+        cases.push_back({"olivexp", s});
     }
 
     for (const Case& c : cases)

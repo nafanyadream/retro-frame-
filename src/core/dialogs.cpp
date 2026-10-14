@@ -305,9 +305,11 @@ namespace rf
         label(left, 254, 80, L"Текст:");
         line1_ = field(254, first);
         line2_ = field(280, second);
-        group(328, 48, L"Экран");
+        group(328, 48, L"Экран (только картинка внутри окна)");
         label(left, 346, 80, L"Вид:");
-        screen_ = combo(fieldX, 346, 150, {L"обычный", L"ЭЛТ-монитор", L"VHS-кассета"}, e.screen);
+        screen_ = combo(fieldX, 346, 120, {L"обычный", L"ЭЛТ-монитор", L"VHS-кассета"}, e.screen);
+        label(fieldX + 128, 346, 46, L"Цвета:");
+        palette_ = combo(fieldX + 174, 346, fieldW - 174, {L"все", L"256 цветов", L"16 цветов"}, e.palette);
         auto* ok = root.Add<ui::Button>();
         ok->rect = Rect{root.width - 14 - 75 - 6 - 75, root.height - 3 - 10 - 23, 75, 23};
         ok->text = L"OK";
@@ -333,6 +335,7 @@ namespace rf
         e.popupTitle = title_->text;
         e.popupText = line2_->text.empty() ? line1_->text : line1_->text + L"\n" + line2_->text;
         e.screen = screen_->index;
+        e.palette = palette_->index;
         return e;
     }
 

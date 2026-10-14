@@ -9,8 +9,13 @@ namespace rf
     enum class FontFamily
     {
         SansSerif,
-        Tahoma
+        Tahoma,
+        Trebuchet,
+        Fixedsys,
+        Lucida
     };
+
+    constexpr int FontFamilyCount = 5;
 
     struct Font
     {

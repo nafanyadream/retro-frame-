@@ -2,6 +2,7 @@
 
 #include "glyphs.h"
 #include "icons.h"
+#include "icon_editor.h"
 #include "library_view.h"
 #include "utf.h"
 
@@ -163,9 +164,9 @@ namespace rf
 
         int y = 80;
         Place<ui::GroupBox>(r, gx, y, gw, 58)->text = L"Стиль";
-        const wchar_t* styleNames[] = {L"Windows 95", L"Windows 98", L"Windows 2000"};
-        const int radioPos[3][2] = {{gx + 10, y + 16}, {gx + 132, y + 16}, {gx + 10, y + 36}};
-        for (int i = 0; i < 3; ++i)
+        const wchar_t* styleNames[] = {L"Windows 95", L"Windows 98", L"Windows 2000", L"Windows XP"};
+        const int radioPos[4][2] = {{gx + 10, y + 16}, {gx + 132, y + 16}, {gx + 10, y + 36}, {gx + 132, y + 36}};
+        for (int i = 0; i < 4; ++i)
         {
             auto* rb = Place<ui::RadioButton>(r, radioPos[i][0], radioPos[i][1], 110, 16);
             rb->text = styleNames[i];
@@ -378,13 +379,13 @@ namespace rf
         view.items.push_back(MenuItem{L"Стиль Windows 95", L"", [this]() { SetStyle(Style::Win95); }, true, false});
         view.items.push_back(MenuItem{L"Стиль Windows 98", L"", [this]() { SetStyle(Style::Win98); }, true, false});
         view.items.push_back(MenuItem{L"Стиль Windows 2000", L"", [this]() { SetStyle(Style::Win2000); }, true, false});
+        view.items.push_back(MenuItem{L"Стиль Windows XP", L"", [this]() { SetStyle(Style::WinXP); }, true, false});
         view.items.push_back(sep);
-        view.items.push_back(MenuItem{L"Предыдущий файл", L"←", [this]() { StepQueue(-1); }, true, false});
-        view.items.push_back(MenuItem{L"Следующий файл", L"→", [this]() { StepQueue(1); }, true, false});
-        view.items[4].shortcut = L"Влево";
-        view.items[5].shortcut = L"Вправо";
+        view.items.push_back(MenuItem{L"Предыдущий файл", L"Влево", [this]() { StepQueue(-1); }, true, false});
+        view.items.push_back(MenuItem{L"Следующий файл", L"Вправо", [this]() { StepQueue(1); }, true, false});
         view.items.push_back(sep);
         view.items.push_back(MenuItem{L"Эффекты...", L"", [this]() { EditEffects(); }, true, false});
+        view.items.push_back(MenuItem{L"Нарисовать значок...", L"", [this]() { DrawIcon(); }, true, false});
         Menu sets{L"Наборы", {}};
         for (int i = 0; i < int(s_.presets.size()); ++i)
         {
@@ -1449,6 +1450,29 @@ namespace rf
         if (answer == 1 && view.HasPick())
         {
             SetCustomIcon(view.Picked().icon);
+        }
+        else if (answer == 2 && view.HasDrawn())
+        {
+            SetCustomIcon(view.Drawn());
+        }
+    }
+
+    void MainView::DrawIcon()
+    {
+        const ModeLook& look = Look();
+        Image start;
+        if (look.iconIndex == CustomIconIndex)
+        {
+            start = s_.customIcon;
+        }
+        else if (look.iconIndex >= 0 && look.iconIndex < FrameIconCount())
+        {
+            start = BuiltinIcon(FrameIconAt(look.iconIndex));
+        }
+        IconEditorView editor(host_, start);
+        if (host_.RunModal(editor) == 1)
+        {
+            SetCustomIcon(editor.Result());
         }
     }
 

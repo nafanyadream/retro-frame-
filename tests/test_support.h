@@ -66,8 +66,9 @@ namespace rftest
     private:
         static const TestGlyph& Find(wchar_t ch, const rf::Font& font)
         {
-            const TestGlyph* table = font.family == rf::FontFamily::Tahoma ? kFont1 : kFont0;
-            const std::size_t n = font.family == rf::FontFamily::Tahoma ? sizeof(kFont1) / sizeof(kFont1[0]) : sizeof(kFont0) / sizeof(kFont0[0]);
+            const bool second = font.family == rf::FontFamily::Tahoma || font.family == rf::FontFamily::Trebuchet || font.family == rf::FontFamily::Lucida;
+            const TestGlyph* table = second ? kFont1 : kFont0;
+            const std::size_t n = second ? sizeof(kFont1) / sizeof(kFont1[0]) : sizeof(kFont0) / sizeof(kFont0[0]);
             for (std::size_t i = 0; i < n; ++i)
             {
                 if (table[i].code == int(ch))

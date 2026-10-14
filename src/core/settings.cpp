@@ -329,6 +329,7 @@ namespace rf
         o << "fx.popupTitle=" << Escape(s.effects.popupTitle) << "\n";
         o << "fx.popupText=" << Escape(s.effects.popupText) << "\n";
         o << "fx.screen=" << s.effects.screen << "\n";
+        o << "fx.palette=" << s.effects.palette << "\n";
         o << "background=" << Hex(s.background) << "\n";
         o << "backgroundPicture=" << (s.backgroundPicture ? 1 : 0) << "\n";
         o << "previewSound=" << (s.previewSound ? 1 : 0) << "\n";
@@ -453,7 +454,7 @@ namespace rf
         FrameSettings& f = s.frame;
         getInt("mode", s.mode, 0, ModeCount - 1);
         int style = int(f.style);
-        getInt("style", style, 0, 2);
+        getInt("style", style, 0, StyleCount - 1);
         f.style = static_cast<Style>(style);
         getBool("active", f.active);
         getColor("face", f.colors.face);
@@ -597,6 +598,7 @@ namespace rf
         getText("fx.popupTitle", s.effects.popupTitle);
         getText("fx.popupText", s.effects.popupText);
         getInt("fx.screen", s.effects.screen, 0, 2);
+        getInt("fx.palette", s.effects.palette, 0, 2);
         getColor("background", s.background);
         getBool("backgroundPicture", s.backgroundPicture);
         getBool("previewSound", s.previewSound);
@@ -624,7 +626,7 @@ namespace rf
                 LookPreset pr;
                 getText(p + "name", pr.name);
                 int presetStyle = int(pr.style);
-                getInt(p + "style", presetStyle, 0, 2);
+                getInt(p + "style", presetStyle, 0, StyleCount - 1);
                 pr.style = static_cast<Style>(presetStyle);
                 getInt(p + "scheme", pr.scheme, -1, SchemeCount() - 1);
                 pr.colors = SchemeColors(std::max(0, pr.scheme), pr.style);

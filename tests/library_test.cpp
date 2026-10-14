@@ -1,5 +1,6 @@
 #include "test_support.h"
 
+#include "../src/core/icon_editor.h"
 #include "../src/core/library_view.h"
 #include "../src/core/mainview.h"
 #include "../src/core/utf.h"
@@ -209,6 +210,58 @@ int main(int argc, char** argv)
         rf::Image photo(320, 200, rf::Rgb(90, 140, 200));
         main.AddImage(photo, L"", L"диск.png", true);
         Shot(main, out + "/main_disc.ppm");
+    }
+    {
+        rf::IconEditorView editor(host, rf::Image());
+        const auto cell = [&](int x, int y) {
+            Click(editor, 12 + 2 + x * 16 + 7, 32 + 2 + y * 16 + 7);
+        };
+        cell(0, 0);
+        Check(editor.Result().Get(0, 0) == rf::Rgb(0, 0, 0) && rf::Alpha(editor.Result().Get(1, 0)) == 0, "editor: pencil paints black");
+        editor.root.MouseDown(12 + 2 + 2 * 16 + 7, 32 + 2 + 5 * 16 + 7, false, false, 1);
+        for (int x = 3; x <= 8; ++x)
+        {
+            editor.root.MouseMove(12 + 2 + x * 16 + 7, 32 + 2 + 5 * 16 + 7);
+        }
+        editor.root.MouseUp(12 + 2 + 8 * 16 + 7, 32 + 2 + 5 * 16 + 7);
+        bool line = true;
+        for (int x = 2; x <= 8; ++x)
+        {
+            line = line && editor.Result().Get(x, 5) == rf::Rgb(0, 0, 0);
+        }
+        Check(line, "editor: drag draws a line");
+        Click(editor, 330 + 16 * 12 / 12 * 2 * 0 + 2 * 12 + 4, 126 + 18 + 8);
+        Check(editor.Current() == rf::Rgb(0xFF, 0x00, 0x00), "editor: palette picks red");
+        editor.SetTool(rf::IconTool::Fill);
+        cell(10, 10);
+        Check(editor.Result().Get(15, 15) == rf::Rgb(0xFF, 0, 0) && editor.Result().Get(0, 0) == rf::Rgb(0, 0, 0), "editor: fill floods empty area");
+        editor.Undo();
+        Check(rf::Alpha(editor.Result().Get(15, 15)) == 0, "editor: undo");
+        editor.SetTool(rf::IconTool::Picker);
+        cell(0, 0);
+        Check(editor.Current() == rf::Rgb(0, 0, 0) && editor.Tool() == rf::IconTool::Pencil, "editor: picker takes the color back to pencil");
+        editor.SetTool(rf::IconTool::Eraser);
+        cell(0, 0);
+        Check(rf::Alpha(editor.Result().Get(0, 0)) == 0, "editor: eraser makes transparent");
+        Shot(editor, out + "/icon_editor.ppm");
+    }
+    {
+        std::vector<rf::LibrarySource> none;
+        std::wstring last;
+        rf::LibraryView view(host, none, last, 1);
+        host.onModal = [](rf::View& v) {
+            auto* editor = dynamic_cast<rf::IconEditorView*>(&v);
+            if (editor == nullptr)
+            {
+                return 0;
+            }
+            editor->SetColor(rf::Rgb(0, 0, 0xFF));
+            editor->Touch(3, 3, true);
+            return 1;
+        };
+        Click(view, 100, 405);
+        Check(view.closeRequested && view.result == 2 && view.HasDrawn() && view.Drawn().Get(3, 3) == rf::Rgb(0, 0, 0xFF), "library: draw own icon");
+        host.onModal = nullptr;
     }
     std::printf(failures == 0 ? "ALL OK\n" : "FAILURES: %d\n", failures);
     return failures == 0 ? 0 : 2;

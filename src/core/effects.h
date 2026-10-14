@@ -18,6 +18,7 @@ namespace rf
         std::wstring popupTitle = L"Ошибка";
         std::wstring popupText = L"Программа выполнила недопустимую операцию\nи будет закрыта.";
         int screen = 0;
+        int palette = 0;
     };
 
     constexpr double IntroSeconds = 0.6;
@@ -35,6 +36,7 @@ namespace rf
     bool HasOverlays(const EffectSettings& e);
     Image RenderPopup(const EffectSettings& e, const FrameSettings& frame, bool active, Rect* firstButton);
     void ApplyScreen(Image& img, int kind, int seed, int scale);
+    void ApplyPalette(Image& img, int kind, int scale);
 
     class EffectsLayer
     {

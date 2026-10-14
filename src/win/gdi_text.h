@@ -25,8 +25,8 @@ namespace rf::win
         void EnsureScratch(int w, int h);
 
         HDC dc_ = nullptr;
-        HFONT fonts_[2][2] = {{nullptr, nullptr}, {nullptr, nullptr}};
-        TEXTMETRICW metrics_[2][2]{};
+        HFONT fonts_[FontFamilyCount][2] = {};
+        TEXTMETRICW metrics_[FontFamilyCount][2]{};
         HBITMAP scratch_ = nullptr;
         HGDIOBJ oldBitmap_ = nullptr;
         void* bits_ = nullptr;

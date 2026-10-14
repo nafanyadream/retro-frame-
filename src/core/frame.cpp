@@ -59,7 +59,7 @@ namespace rf
             L.inset = s.sunken ? 2 : 0;
             L.width = cw + 2 * L.border + 2 * L.inset;
             const bool rebar = s.toolbar || s.address;
-            int cur = L.border + 18 + 1;
+            int cur = L.border + TitleHeight(s.style) + 1;
             if (s.menu && !rebar)
             {
                 L.bands.push_back(BandItem{Band::PlainMenu, cur, 18});
@@ -125,6 +125,153 @@ namespace rf
         {
             p.Raised(Rect{x, y, 16, 14}, sh);
             p.DrawGlyph(x + gx, y + gy, g, ink);
+        }
+
+        constexpr int XpButton = 21;
+
+        void XpCaptionButton(Painter& p, int x, int y, int kind, bool active)
+        {
+            const Color white = Rgb(0xFF, 0xFF, 0xFF);
+            Color top = kind == 0 ? Rgb(0xEB, 0x8E, 0x6E) : Rgb(0x5A, 0x9C, 0xF8);
+            Color bottom = kind == 0 ? Rgb(0xC1, 0x34, 0x0B) : Rgb(0x1A, 0x52, 0xD5);
+            if (!active)
+            {
+                top = Mix(top, white, 0.45);
+                bottom = Mix(bottom, white, 0.45);
+            }
+            const int n = XpButton;
+            for (int row = 1; row < n - 1; ++row)
+            {
+                p.HLine(x + 1, y + row, n - 2, Mix(top, bottom, double(row - 1) / double(n - 3)));
+            }
+            p.HLine(x + 2, y, n - 4, white);
+            p.HLine(x + 2, y + n - 1, n - 4, white);
+            p.VLine(x, y + 2, n - 4, white);
+            p.VLine(x + n - 1, y + 2, n - 4, white);
+            for (int cx : {x + 1, x + n - 2})
+            {
+                for (int cy : {y + 1, y + n - 2})
+                {
+                    p.Pixel(cx, cy, white);
+                }
+            }
+            if (kind == 0)
+            {
+                for (int i = 0; i < 9; ++i)
+                {
+                    p.Fill(x + 5 + i, y + 5 + i, 2, 2, white);
+                    p.Fill(x + 14 - i, y + 5 + i, 2, 2, white);
+                }
+            }
+            else if (kind == 1)
+            {
+                p.Fill(x + 5, y + 5, 11, 3, white);
+                p.Frame(Rect{x + 5, y + 5, 11, 11}, white);
+            }
+            else if (kind == 2)
+            {
+                p.Fill(x + 5, y + 13, 7, 3, white);
+            }
+            else
+            {
+                const Glyph& g = glyphs::Help;
+                p.DrawGlyph(x + (n - GlyphWidth(g)) / 2, y + (n - GlyphHeight(g)) / 2, g, white);
+                p.DrawGlyph(x + (n - GlyphWidth(g)) / 2 + 1, y + (n - GlyphHeight(g)) / 2, g, white);
+            }
+        }
+
+        void DrawTitleXp(Painter& p, const FrameSettings& s, int width, int border)
+        {
+            const FrameColors& c = s.colors;
+            const Color base = s.active ? c.active1 : c.inactive1;
+            const Color hi = s.active ? c.active2 : c.inactive2;
+            const Color white = Rgb(0xFF, 0xFF, 0xFF);
+            const Color black = Rgb(0, 0, 0);
+            const int titleH = TitleHeight(s.style);
+            const int top = border + titleH;
+            for (int row = 0; row < top; ++row)
+            {
+                const double t = double(row) / double(top - 1);
+                Color col = base;
+                if (row == 0)
+                {
+                    col = Mix(hi, white, 0.4);
+                }
+                else if (row < 3)
+                {
+                    col = hi;
+                }
+                else if (t < 0.45)
+                {
+                    col = Mix(hi, base, std::clamp((t - 0.1) / 0.35, 0.0, 1.0));
+                }
+                else if (t > 0.85)
+                {
+                    col = Mix(base, black, 0.18);
+                }
+                p.HLine(0, row, width, col);
+            }
+            const Color edge = Mix(base, black, 0.4);
+            p.VLine(0, 0, top, edge);
+            p.VLine(width - 1, 0, top, edge);
+            int tx = border + 5;
+            if (!s.icon.Empty())
+            {
+                p.Draw(s.icon, border + 3, border + (titleH - 16) / 2);
+                tx = border + 24;
+            }
+            const int bx = width - border - 2 - XpButton;
+            const int by = border + (titleH - XpButton) / 2;
+            int left = width - border - 2;
+            if (s.kind != WindowKind::Bare)
+            {
+                XpCaptionButton(p, bx, by, 0, s.active);
+                left = bx;
+            }
+            if (s.kind == WindowKind::Normal)
+            {
+                XpCaptionButton(p, bx - XpButton - 2, by, 1, s.active);
+                XpCaptionButton(p, bx - 2 * (XpButton + 2), by, 2, s.active);
+                left = bx - 2 * (XpButton + 2);
+            }
+            else if (s.kind == WindowKind::Help)
+            {
+                XpCaptionButton(p, bx - XpButton - 2, by, 3, s.active);
+                left = bx - XpButton - 2;
+            }
+            const Font fb{TitleFamilyFor(s.style), true};
+            const std::wstring title = Ellipsize(s.title, fb, left - tx - 6);
+            const int baseline = border + (titleH + Text().Ascent(fb)) / 2 - 1;
+            TextAt(p, tx + 1, baseline + 1, title, fb, Mix(base, black, 0.55));
+            TextAt(p, tx, baseline, title, fb, s.active ? c.titleText : c.inactiveText);
+        }
+
+        void DrawEdgesXp(Painter& p, const FrameSettings& s, int width, int height, int border)
+        {
+            const Color base = s.active ? s.colors.active1 : s.colors.inactive1;
+            const Color edge = Mix(base, Rgb(0, 0, 0), 0.4);
+            const Color inner = Mix(base, Rgb(0xFF, 0xFF, 0xFF), 0.12);
+            const int top = border + TitleHeight(s.style);
+            for (int i = 0; i < border; ++i)
+            {
+                const Color c = i == 0 ? edge : i == border - 1 ? inner : base;
+                p.VLine(i, top, height - top, c);
+                p.VLine(width - 1 - i, top, height - top, c);
+                p.HLine(i, height - 1 - i, width - 2 * i, c);
+            }
+        }
+
+        void CutCornersXp(Image& img)
+        {
+            const int skip[] = {5, 3, 2, 1, 1};
+            for (int row = 0; row < 5 && row < img.height; ++row)
+            {
+                for (int i = 0; i < skip[row] && i < img.width; ++i)
+                {
+                    img.Set(i, row, Color(0));
+                    img.Set(img.width - 1 - i, row, Color(0));
+                }
+            }
         }
 
         void DrawTitle(Painter& p, const FrameSettings& s, const Shades& sh, int x, int y, int w)
@@ -444,8 +591,17 @@ namespace rf
         const Shades sh = ShadesFor(s.colors.face, s.style);
         Image img(L.width, L.height, sh.face);
         Painter p(img);
-        p.WindowEdge(Rect{0, 0, L.width, L.height}, sh);
-        DrawTitle(p, s, sh, L.border, L.border, L.width - 2 * L.border);
+        const bool xp = s.style == Style::WinXP;
+        if (xp)
+        {
+            DrawEdgesXp(p, s, L.width, L.height, L.border);
+            DrawTitleXp(p, s, L.width, L.border);
+        }
+        else
+        {
+            p.WindowEdge(Rect{0, 0, L.width, L.height}, sh);
+            DrawTitle(p, s, sh, L.border, L.border, L.width - 2 * L.border);
+        }
         const int left = L.border;
         const int right = L.width - L.border;
         const bool hasCorner = s.corner && !s.cornerImage.Empty();
@@ -503,6 +659,10 @@ namespace rf
         {
             DrawStatus(p, s, sh, statusTexts, left, L.statusY, right - left);
         }
+        if (xp)
+        {
+            CutCornersXp(img);
+        }
         if (client != nullptr)
         {
             *client = L.client;
@@ -510,9 +670,56 @@ namespace rf
         return img;
     }
 
+    void DrawPushButton(Painter& p, const Rect& r, const FrameSettings& s, const Shades& sh, bool isDefault)
+    {
+        if (s.style != Style::WinXP)
+        {
+            if (isDefault)
+            {
+                p.Frame(r, Rgb(0, 0, 0));
+                p.Raised(r.Inflate(-1), sh);
+                p.Dotted(r.Inflate(-4), s.colors.text);
+            }
+            else
+            {
+                p.Raised(r, sh);
+            }
+            return;
+        }
+        const Color border = Rgb(0x00, 0x3C, 0x74);
+        for (int row = 1; row < r.h - 1; ++row)
+        {
+            const double t = double(row) / double(std::max(1, r.h - 2));
+            const Color c = t > 0.8 ? Mix(Rgb(0xE3, 0xE3, 0xDB), Rgb(0xD6, 0xD0, 0xC5), (t - 0.8) / 0.2) : Mix(Rgb(0xFF, 0xFF, 0xFF), Rgb(0xEC, 0xEB, 0xE6), t / 0.8);
+            p.HLine(r.x + 1, r.y + row, r.w - 2, c);
+        }
+        p.HLine(r.x + 2, r.y, r.w - 4, border);
+        p.HLine(r.x + 2, r.Bottom() - 1, r.w - 4, border);
+        p.VLine(r.x, r.y + 2, r.h - 4, border);
+        p.VLine(r.Right() - 1, r.y + 2, r.h - 4, border);
+        p.Pixel(r.x + 1, r.y + 1, border);
+        p.Pixel(r.Right() - 2, r.y + 1, border);
+        p.Pixel(r.x + 1, r.Bottom() - 2, border);
+        p.Pixel(r.Right() - 2, r.Bottom() - 2, border);
+        if (isDefault)
+        {
+            const Rect in = r.Inflate(-1);
+            p.HLine(in.x + 1, in.y, in.w - 2, Rgb(0xCE, 0xE7, 0xFF));
+            p.HLine(in.x + 1, in.Bottom() - 1, in.w - 2, Rgb(0x69, 0x82, 0xEE));
+            p.VLine(in.x, in.y + 1, in.h - 2, Rgb(0xBC, 0xD4, 0xF6));
+            p.VLine(in.Right() - 1, in.y + 1, in.h - 2, Rgb(0x89, 0xAD, 0xE4));
+            p.VLine(in.x + 1, in.y + 1, in.h - 2, Rgb(0xBC, 0xD4, 0xF6));
+            p.VLine(in.Right() - 2, in.y + 1, in.h - 2, Rgb(0x89, 0xAD, 0xE4));
+        }
+    }
+
     Rect CloseButtonRect(const FrameSettings& settings, int frameWidth)
     {
         const int border = settings.kind == WindowKind::Normal ? 4 : 3;
+        if (settings.style == Style::WinXP)
+        {
+            return Rect{frameWidth - border - 2 - XpButton, border + (TitleHeight(settings.style) - XpButton) / 2, XpButton, XpButton};
+        }
         return Rect{frameWidth - border - 2 - 16, border + 2, 16, 14};
     }
 

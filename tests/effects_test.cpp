@@ -6,6 +6,7 @@
 #include "../src/core/music.h"
 #include "test_host.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -169,6 +170,34 @@ namespace
             }
         }
         Check(outsideSame && insideChanged, "crt only inside the picture, title and frame stay clean");
+        rf::Image smooth(96, 64);
+        for (int y = 0; y < 64; ++y)
+        {
+            for (int x = 0; x < 96; ++x)
+            {
+                smooth.Set(x, y, rf::Rgb(x * 255 / 95, y * 255 / 63, 128));
+            }
+        }
+        rf::Image p256 = smooth;
+        rf::ApplyPalette(p256, 1, 1);
+        bool cube = true;
+        for (auto c : p256.pixels)
+        {
+            cube = cube && rf::Red(c) % 51 == 0 && rf::Green(c) % 51 == 0 && rf::Blue(c) % 51 == 0;
+        }
+        rf::Image p16 = smooth;
+        rf::ApplyPalette(p16, 2, 2);
+        std::vector<rf::Color> seen;
+        for (auto c : p16.pixels)
+        {
+            if (std::find(seen.begin(), seen.end(), c) == seen.end())
+            {
+                seen.push_back(c);
+            }
+        }
+        Check(cube && p256.pixels != smooth.pixels && seen.size() <= 16 && seen.size() >= 4, "palette: 256 colors cube and 16 VGA colors");
+        rftest::WritePpm(out + "/fx_256.ppm", p256);
+        rftest::WritePpm(out + "/fx_16.ppm", p16);
         rf::FrameSettings pf = Window(rf::Style::Win98);
         pf.player = true;
         const rf::VideoPlan pp = rf::PlanVideo(pf, 320, 240, rf::VideoTarget{});
@@ -218,11 +247,12 @@ namespace
         s.effects.popupTitle = L"Внимание | важно";
         s.effects.popupText = L"Строка один\nСтрока два";
         s.effects.screen = 2;
+        s.effects.palette = 2;
         rf::AppSettings back = rf::DefaultSettings();
         rf::ParseSettings(rf::SerializeSettings(s), back);
         const rf::EffectSettings& b = back.effects;
         Check(b.intro && b.cursor == 3 && b.cursorPlace == 2 && b.popups == 2 && b.popupIcon == 3 && b.popupButtons == 2 && b.popupTitle == s.effects.popupTitle &&
-                  b.popupText == s.effects.popupText && b.screen == 2,
+                  b.popupText == s.effects.popupText && b.screen == 2 && b.palette == 2,
               "effects settings round trip");
         const rf::EffectSettings d = rf::DefaultSettings().effects;
         Check(!d.intro && d.cursor == 0 && d.popups == 0 && d.screen == 0 && !rf::HasOverlays(d), "effects are off by default");

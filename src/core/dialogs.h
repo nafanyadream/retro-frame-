@@ -63,6 +63,7 @@ namespace rf
         ui::TextField* line1_ = nullptr;
         ui::TextField* line2_ = nullptr;
         ui::ComboBox* screen_ = nullptr;
+        ui::ComboBox* palette_ = nullptr;
     };
 
     class PresetsView : public View

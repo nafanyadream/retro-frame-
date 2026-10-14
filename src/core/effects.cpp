@@ -298,7 +298,7 @@ namespace rf
 
     bool HasOverlays(const EffectSettings& e)
     {
-        return e.cursor > 0 || e.popups > 0 || e.screen > 0;
+        return e.cursor > 0 || e.popups > 0 || e.screen > 0 || e.palette > 0;
     }
 
     Image RenderPopup(const EffectSettings& e, const FrameSettings& base, bool active, Rect* firstButton)
@@ -354,25 +354,87 @@ namespace rf
         for (int i = 0; i < n; ++i)
         {
             const Rect r{bx, by, bw, bh};
-            if (i == 0)
+            DrawPushButton(c, r, f, sh, i == 0);
+            if (i == 0 && firstButton != nullptr)
             {
-                c.Frame(r, Rgb(0, 0, 0));
-                c.Raised(r.Inflate(-1), sh);
-                c.Dotted(r.Inflate(-4), f.colors.text);
-                if (firstButton != nullptr)
-                {
-                    *firstButton = r.Offset(client.x, client.y);
-                }
-            }
-            else
-            {
-                c.Raised(r, sh);
+                *firstButton = r.Offset(client.x, client.y);
             }
             const int tw = Text().Width(labels[std::size_t(i)], font);
             c.Text(r.x + (bw - tw) / 2, r.y + (bh - Text().Height(font)) / 2, labels[std::size_t(i)], font, f.colors.text);
             bx += bw + gap;
         }
         return img;
+    }
+
+    void ApplyPalette(Image& img, int kind, int scale)
+    {
+        if (img.Empty() || kind <= 0)
+        {
+            return;
+        }
+        static const int bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+        const int k = std::max(1, scale);
+        if (kind == 1)
+        {
+            for (int y = 0; y < img.height; ++y)
+            {
+                Color* row = img.Row(y);
+                for (int x = 0; x < img.width; ++x)
+                {
+                    const double d = (bayer[(y / k) & 3][(x / k) & 3] + 0.5) / 16.0 - 0.5;
+                    const auto level = [d](int v) { return std::clamp(int(std::lround(v / 51.0 + d)), 0, 5) * 51; };
+                    const Color c = row[x];
+                    row[x] = Argb(Alpha(c), level(Red(c)), level(Green(c)), level(Blue(c)));
+                }
+            }
+            return;
+        }
+        static const Color vga[16] = {Rgb(0, 0, 0),       Rgb(0x80, 0, 0),    Rgb(0, 0x80, 0),       Rgb(0x80, 0x80, 0),    Rgb(0, 0, 0x80),    Rgb(0x80, 0, 0x80),
+                                      Rgb(0, 0x80, 0x80), Rgb(0xC0, 0xC0, 0xC0), Rgb(0x80, 0x80, 0x80), Rgb(0xFF, 0, 0),    Rgb(0, 0xFF, 0),    Rgb(0xFF, 0xFF, 0),
+                                      Rgb(0, 0, 0xFF),    Rgb(0xFF, 0, 0xFF),    Rgb(0, 0xFF, 0xFF),    Rgb(0xFF, 0xFF, 0xFF)};
+        static std::vector<unsigned char> nearest;
+        if (nearest.empty())
+        {
+            nearest.resize(32 * 32 * 32);
+            for (int r = 0; r < 32; ++r)
+            {
+                for (int g = 0; g < 32; ++g)
+                {
+                    for (int b = 0; b < 32; ++b)
+                    {
+                        int best = 0;
+                        long bestDist = 1L << 30;
+                        for (int i = 0; i < 16; ++i)
+                        {
+                            const long dr = r * 8 + 4 - Red(vga[i]);
+                            const long dg = g * 8 + 4 - Green(vga[i]);
+                            const long db = b * 8 + 4 - Blue(vga[i]);
+                            const long dist = dr * dr * 3 + dg * dg * 4 + db * db * 2;
+                            if (dist < bestDist)
+                            {
+                                bestDist = dist;
+                                best = i;
+                            }
+                        }
+                        nearest[std::size_t((r * 32 + g) * 32 + b)] = static_cast<unsigned char>(best);
+                    }
+                }
+            }
+        }
+        for (int y = 0; y < img.height; ++y)
+        {
+            Color* row = img.Row(y);
+            for (int x = 0; x < img.width; ++x)
+            {
+                const int d = int(((bayer[(y / k) & 3][(x / k) & 3] + 0.5) / 16.0 - 0.5) * 96.0);
+                const Color c = row[x];
+                const int r = std::clamp(Red(c) + d, 0, 255) >> 3;
+                const int g = std::clamp(Green(c) + d, 0, 255) >> 3;
+                const int b = std::clamp(Blue(c) + d, 0, 255) >> 3;
+                const Color q = vga[nearest[std::size_t((r * 32 + g) * 32 + b)]];
+                row[x] = Argb(Alpha(c), Red(q), Green(q), Blue(q));
+            }
+        }
     }
 
     void ApplyScreen(Image& img, int kind, int seed, int scale)
@@ -494,13 +556,14 @@ namespace rf
         Outline(out, r, k, Rgb(0x80, 0x80, 0x80));
         Painter painter(out);
         const FrameColors& c = frame_.colors;
-        painter.GradientH(r.x, r.y, r.w, std::min(r.h, 18 * k), c.active1, HasGradient(frame_.style) ? c.active2 : c.active1);
+        painter.GradientH(r.x, r.y, r.w, std::min(r.h, TitleHeight(frame_.style) * k), frame_.style == Style::WinXP ? c.active2 : c.active1,
+                          HasGradient(frame_.style) ? (frame_.style == Style::WinXP ? c.active1 : c.active2) : c.active1);
     }
 
     void EffectsLayer::Apply(Image& out, double t, int seed, bool animate) const
     {
         const int k = stage_.scale;
-        if (e_.screen > 0)
+        if (e_.screen > 0 || e_.palette > 0)
         {
             const Rect& c = stage_.content;
             const int x0 = std::clamp(c.x, 0, out.width);
@@ -509,11 +572,13 @@ namespace rf
             const int y1 = std::clamp(c.y + c.h, 0, out.height);
             if (c.w <= 0 || c.h <= 0)
             {
+                ApplyPalette(out, e_.palette, k);
                 ApplyScreen(out, e_.screen, seed, k);
             }
             else if (x1 > x0 && y1 > y0)
             {
                 Image part = Crop(out, Rect{x0, y0, x1 - x0, y1 - y0});
+                ApplyPalette(part, e_.palette, k);
                 ApplyScreen(part, e_.screen, seed, k);
                 Painter(out).DrawOpaque(part, x0, y0);
             }

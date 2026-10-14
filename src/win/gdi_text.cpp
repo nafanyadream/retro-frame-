@@ -1,15 +1,26 @@
 #include "gdi_text.h"
 
+#include <algorithm>
 #include <cstdint>
 
 namespace rf::win
 {
     namespace
     {
-        HFONT MakeFont(const wchar_t* face, bool bold, BYTE charset)
+        HFONT MakeFont(const wchar_t* face, bool bold, BYTE charset, int height = -11, DWORD pitch = DEFAULT_PITCH | FF_SWISS)
         {
-            return CreateFontW(-11, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE, charset, OUT_DEFAULT_PRECIS,
-                               CLIP_DEFAULT_PRECIS, NONANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, face);
+            return CreateFontW(height, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE, charset, OUT_DEFAULT_PRECIS,
+                               CLIP_DEFAULT_PRECIS, NONANTIALIASED_QUALITY, pitch, face);
+        }
+
+        bool HasCyrillic(HDC dc, HFONT font)
+        {
+            HGDIOBJ old = SelectObject(dc, font);
+            WORD index = 0xFFFF;
+            const wchar_t probe = 0x0436;
+            const bool ok = GetGlyphIndicesW(dc, &probe, 1, &index, GGI_MARK_NONEXISTING_GLYPHS) != GDI_ERROR && index != 0xFFFF;
+            SelectObject(dc, old);
+            return ok;
         }
     }
 
@@ -20,7 +31,19 @@ namespace rf::win
         fonts_[0][1] = MakeFont(L"MS Sans Serif", true, RUSSIAN_CHARSET);
         fonts_[1][0] = MakeFont(L"Tahoma", false, DEFAULT_CHARSET);
         fonts_[1][1] = MakeFont(L"Tahoma", true, DEFAULT_CHARSET);
-        for (int f = 0; f < 2; ++f)
+        fonts_[2][0] = MakeFont(L"Trebuchet MS", false, DEFAULT_CHARSET, -13);
+        fonts_[2][1] = MakeFont(L"Trebuchet MS", true, DEFAULT_CHARSET, -13);
+        for (int b = 0; b < 2; ++b)
+        {
+            fonts_[3][b] = MakeFont(L"Fixedsys", b == 1, RUSSIAN_CHARSET, 15, FIXED_PITCH | FF_MODERN);
+            if (!HasCyrillic(dc_, fonts_[3][b]))
+            {
+                DeleteObject(fonts_[3][b]);
+                fonts_[3][b] = MakeFont(L"Lucida Console", b == 1, DEFAULT_CHARSET, -12, FIXED_PITCH | FF_MODERN);
+            }
+            fonts_[4][b] = MakeFont(L"Lucida Console", b == 1, DEFAULT_CHARSET, -12, FIXED_PITCH | FF_MODERN);
+        }
+        for (int f = 0; f < FontFamilyCount; ++f)
         {
             for (int b = 0; b < 2; ++b)
             {
@@ -60,12 +83,12 @@ namespace rf::win
 
     HFONT GdiTextEngine::Pick(const Font& font) const
     {
-        return fonts_[font.family == FontFamily::Tahoma ? 1 : 0][font.bold ? 1 : 0];
+        return fonts_[std::clamp(int(font.family), 0, FontFamilyCount - 1)][font.bold ? 1 : 0];
     }
 
     const TEXTMETRICW& GdiTextEngine::Metrics(const Font& font) const
     {
-        return metrics_[font.family == FontFamily::Tahoma ? 1 : 0][font.bold ? 1 : 0];
+        return metrics_[std::clamp(int(font.family), 0, FontFamilyCount - 1)][font.bold ? 1 : 0];
     }
 
     void GdiTextEngine::EnsureScratch(int w, int h)

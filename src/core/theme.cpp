@@ -37,7 +37,17 @@ namespace rf
 
     FontFamily FamilyFor(Style style)
     {
-        return style == Style::Win2000 ? FontFamily::Tahoma : FontFamily::SansSerif;
+        return style == Style::Win2000 || style == Style::WinXP ? FontFamily::Tahoma : FontFamily::SansSerif;
+    }
+
+    FontFamily TitleFamilyFor(Style style)
+    {
+        return style == Style::WinXP ? FontFamily::Trebuchet : FamilyFor(style);
+    }
+
+    int TitleHeight(Style style)
+    {
+        return style == Style::WinXP ? 25 : 18;
     }
 
     Shades ClassicShades()
@@ -58,6 +68,10 @@ namespace rf
         {
             return Shades{face, white, face, Rgb(0x80, 0x80, 0x80), Rgb(0x40, 0x40, 0x40)};
         }
+        if (face == Rgb(0xEC, 0xE9, 0xD8))
+        {
+            return Shades{face, white, Rgb(0xF1, 0xEF, 0xE2), Rgb(0xAC, 0xA8, 0x99), Rgb(0x71, 0x6F, 0x64)};
+        }
         if (Luminance(face) < 64)
         {
             return Shades{face, white, Rgb(0xC0, 0xC0, 0xC0), Rgb(0x80, 0x80, 0x80), white};
@@ -65,9 +79,10 @@ namespace rf
         Shades s;
         s.face = face;
         s.hilite = Mix(face, white, 0.70);
-        s.light = style == Style::Win2000 ? face : Mix(face, white, 0.35);
-        s.shadow = Mix(face, black, 0.45);
-        s.dark = style == Style::Win2000 ? Mix(face, black, 0.75) : black;
+        const bool modern = style == Style::Win2000 || style == Style::WinXP;
+        s.light = modern ? face : Mix(face, white, 0.35);
+        s.shadow = Mix(face, black, style == Style::WinXP ? 0.3 : 0.45);
+        s.dark = modern ? Mix(face, black, style == Style::WinXP ? 0.5 : 0.75) : black;
         return s;
     }
 
@@ -116,6 +131,15 @@ namespace rf
                 c.inactive2 = Rgb(0xC0, 0xC0, 0xC0);
                 c.inactiveText = Rgb(0xD4, 0xD0, 0xC8);
                 c.select = Rgb(0x0A, 0x24, 0x6A);
+                break;
+            case Style::WinXP:
+                c.face = Rgb(0xEC, 0xE9, 0xD8);
+                c.active1 = Rgb(0x00, 0x54, 0xE3);
+                c.active2 = Rgb(0x3D, 0x95, 0xFF);
+                c.inactive1 = Rgb(0x7A, 0x96, 0xDF);
+                c.inactive2 = Rgb(0xA6, 0xBE, 0xF2);
+                c.inactiveText = Rgb(0xD8, 0xE4, 0xF8);
+                c.select = Rgb(0x31, 0x6A, 0xC5);
                 break;
             }
             return c;

@@ -790,7 +790,7 @@ namespace rf
             }
             const int wx = plan.windowX / k;
             const int wy = plan.windowY / k;
-            Painter(square).DrawOpaque(window, wx, wy);
+            Painter(square).Draw(window, wx, wy);
             const Rect video{wx + client.x + (client.w - vw) / 2, wy + client.y + (client.h - vh) / 2, vw, vh};
             ApplyEffects(square, f, Rect{wx, wy, window.width, window.height}, video, 1, rel, int(rel * 15.0));
             preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;

@@ -185,6 +185,7 @@ namespace rf
         void LoadCustomIcon();
         void SetCustomIcon(const Image& picked);
         void OpenLibrary();
+        void DrawIcon();
         void SyncLibrary();
         void LoadCorner();
         void EditTexts();

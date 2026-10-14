@@ -18,6 +18,9 @@ namespace rf
         int CurrentSource() const { return current_; }
         bool HasPick() const { return picked_ >= 0 && picked_ < int(shown_.size()); }
         const LibraryIcon& Picked() const { return *shown_[std::size_t(picked_)]; }
+        bool HasDrawn() const { return !drawn_.Empty(); }
+        const Image& Drawn() const { return drawn_; }
+        void DrawOwn();
 
     private:
         void FillSources();
@@ -42,6 +45,7 @@ namespace rf
         std::vector<int> shownOwners_;
         int current_ = 0;
         int picked_ = -1;
+        Image drawn_;
 
         ui::ListBox* list_ = nullptr;
         ui::TextField* search_ = nullptr;

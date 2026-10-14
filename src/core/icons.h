@@ -26,7 +26,9 @@ namespace rf
         Speaker,
         Disc,
         Archive,
-        Microphone
+        Microphone,
+        RecycleBin,
+        StartFlag
     };
 
     const Image& BuiltinIcon(IconId id);

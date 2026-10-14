@@ -163,7 +163,18 @@ namespace rf
             {
                 const Color* s = src.Row(y - y0) + (r.x - x0);
                 Color* d = dst.Row(y) + r.x;
-                std::memcpy(d, s, std::size_t(r.w) * sizeof(Color));
+                for (int x = 0; x < r.w; ++x)
+                {
+                    d[x] = Alpha(s[x]) == 255 ? s[x] : Opaque(Over(d[x], s[x]));
+                }
+            }
+        }
+
+        void Flatten(Image& img)
+        {
+            for (Color& c : img.pixels)
+            {
+                c = Alpha(c) == 255 ? c : Opaque(Over(Rgb(0, 0, 0), c));
             }
         }
 
@@ -1334,6 +1345,7 @@ namespace rf
         if (!plan_.square)
         {
             out_ = std::move(window);
+            Flatten(out_);
             if (fxOn_)
             {
                 fx_.Apply(out_, t, seed, animate);
