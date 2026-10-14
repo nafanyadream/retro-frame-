@@ -297,7 +297,8 @@ int main(int argc, char** argv)
         Check(back.notepad.text == s.notepad.text && back.notepad.file == L"письмо" && !back.notepad.russian && back.notepad.font == 2 && back.notepad.speed == 3 &&
                   !back.notepad.typos && back.notepad.hold == 5 && back.notepad.out.format == 3 && back.notepad.out.square && back.setup.kind == 2 &&
                   back.setup.program == L"Игра 2000" && back.setup.files == L"a.dll\nb.exe" && back.setup.seconds == 30 && back.setup.pace == 2 &&
-                  back.setup.ending == 2 && back.setup.out.canvas == 3 && back.looks[rf::NotepadMode].customTitle == L"Мой блокнот",
+                  back.setup.ending == 2 && back.setup.out.canvas == 3 && back.looks[rf::NotepadMode].customTitle == L"Мой блокнот" &&
+                  back.looks[rf::SetupMode].kind == rf::WindowKind::Dialog,
               "notepad and setup settings round trip");
         Check(rf::DefaultSettings().looks[rf::NotepadMode].menu && rf::DefaultSettings().looks[rf::SetupMode].kind == rf::WindowKind::Dialog,
               "notepad has a menu, the copy window is a dialog");

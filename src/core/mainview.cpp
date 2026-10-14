@@ -19,7 +19,7 @@ namespace rf
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
         constexpr int PreviewLimit = 2400;
-        const wchar_t* const AppVersion = L"0.6.0";
+        const wchar_t* const AppVersion = L"0.7.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
@@ -1664,7 +1664,7 @@ namespace rf
     {
         ShowMessage(host_, L"О программе",
                     std::wstring(L"Ретро-рамка, версия ") + AppVersion +
-                        L"\n\nОформляет фото, видео и музыку в окна в стиле Windows 95, 98 и 2000.",
+                        L"\n\nОформляет фото, видео, музыку, звукозапись, Блокнот и окна установки\nв стиле Windows 95, 98, 2000 и XP.",
                     MessageKind::Info);
     }
 

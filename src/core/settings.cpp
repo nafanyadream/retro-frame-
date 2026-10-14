@@ -336,7 +336,7 @@ namespace rf
         o << "notepad.size=" << s.notepad.size << "\n";
         o << "notepad.hold=" << s.notepad.hold << "\n";
         out("setup.", s.setup.out);
-        o << "setup.kind=" << s.setup.kind << "\n";
+        o << "setup.action=" << s.setup.kind << "\n";
         o << "setup.from=" << Escape(s.setup.from) << "\n";
         o << "setup.to=" << Escape(s.setup.to) << "\n";
         o << "setup.program=" << Escape(s.setup.program) << "\n";
@@ -607,7 +607,7 @@ namespace rf
         getInt("notepad.size", s.notepad.size, 0, 2);
         getInt("notepad.hold", s.notepad.hold, 1, 10);
         readOut("setup.", s.setup.out);
-        getInt("setup.kind", s.setup.kind, 0, 2);
+        getInt("setup.action", s.setup.kind, 0, 2);
         getText("setup.from", s.setup.from);
         getText("setup.to", s.setup.to);
         getText("setup.program", s.setup.program);
