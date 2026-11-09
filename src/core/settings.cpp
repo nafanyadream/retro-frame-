@@ -309,6 +309,7 @@ namespace rf
         o << "video.gifFps=" << s.video.gifFps << "\n";
         o << "video.gifWidth=" << s.video.gifWidth << "\n";
         o << "video.fps=" << s.video.fps << "\n";
+        o << "video.skin=" << s.video.skin << "\n";
         o << "music.format=" << s.music.format << "\n";
         o << "music.square=" << (s.music.square ? 1 : 0) << "\n";
         o << "music.canvas=" << s.music.canvas << "\n";
@@ -352,6 +353,9 @@ namespace rf
         o << "music.wmpTasks=" << (s.music.wmpTasks ? 1 : 0) << "\n";
         o << "music.wmpList=" << (s.music.wmpList ? 1 : 0) << "\n";
         o << "music.wmpCover=" << (s.music.wmpCover ? 1 : 0) << "\n";
+        o << "music.wmp12Title=" << (s.music.wmp12Title ? 1 : 0) << "\n";
+        o << "music.wmp12Bars=" << (s.music.wmp12Bars ? 1 : 0) << "\n";
+        o << "music.wmp12Modern=" << (s.music.wmp12Modern ? 1 : 0) << "\n";
         o << "recorder.format=" << s.recorder.format << "\n";
         o << "recorder.square=" << (s.recorder.square ? 1 : 0) << "\n";
         o << "recorder.canvas=" << s.recorder.canvas << "\n";
@@ -581,6 +585,7 @@ namespace rf
         getInt("video.gifFps", s.video.gifFps, 5, 50);
         getInt("video.gifWidth", s.video.gifWidth, 0, 4000);
         getInt("video.fps", s.video.fps, 0, 60);
+        getInt("video.skin", s.video.skin, 0, 2);
         getInt("music.format", s.music.format, 0, 3);
         getBool("music.square", s.music.square);
         getCanvas("music.", s.music.canvas);
@@ -616,13 +621,16 @@ namespace rf
         getInt("setup.pace", s.setup.pace, 0, 2);
         getInt("setup.ending", s.setup.ending, 0, 2);
         getBool("setup.sound", s.setup.sound);
-        getInt("music.player", s.music.player, 0, 2);
+        getInt("music.player", s.music.player, 0, 3);
         getBool("music.winampEq", s.music.winampEq);
         getBool("music.winampList", s.music.winampList);
         getBool("music.winampScope", s.music.winampScope);
         getBool("music.wmpTasks", s.music.wmpTasks);
         getBool("music.wmpList", s.music.wmpList);
         getBool("music.wmpCover", s.music.wmpCover);
+        getBool("music.wmp12Title", s.music.wmp12Title);
+        getBool("music.wmp12Bars", s.music.wmp12Bars);
+        getBool("music.wmp12Modern", s.music.wmp12Modern);
         getInt("recorder.format", s.recorder.format, 0, 5);
         getBool("recorder.square", s.recorder.square);
         getInt("recorder.canvas", s.recorder.canvas, 0, CanvasCount - 1);

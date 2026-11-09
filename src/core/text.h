@@ -12,15 +12,18 @@ namespace rf
         Tahoma,
         Trebuchet,
         Fixedsys,
-        Lucida
+        Lucida,
+        Segoe
     };
 
-    constexpr int FontFamilyCount = 5;
+    constexpr int FontFamilyCount = 6;
 
     struct Font
     {
         FontFamily family = FontFamily::SansSerif;
         bool bold = false;
+        int size = 0;
+        bool smooth = false;
     };
 
     class TextEngine

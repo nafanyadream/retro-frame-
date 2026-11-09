@@ -1,8 +1,10 @@
 #pragma once
 
 #include "../src/core/image.h"
+#include "../src/core/paint.h"
 #include "../src/core/text.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -21,6 +23,8 @@ namespace rftest
     class TestTextEngine : public rf::TextEngine
     {
     public:
+        static int Zoom(const rf::Font& font) { return font.size > 0 ? std::max(1, (font.size + 5) / 11) : 1; }
+
         int Width(const std::wstring& text, const rf::Font& font) override
         {
             int w = 0;
@@ -28,15 +32,16 @@ namespace rftest
             {
                 w += Find(ch, font).advance + (font.bold ? 1 : 0);
             }
-            return w;
+            return w * Zoom(font);
         }
 
-        int Height(const rf::Font&) override { return 13; }
-        int Ascent(const rf::Font&) override { return 11; }
+        int Height(const rf::Font& font) override { return 13 * Zoom(font); }
+        int Ascent(const rf::Font& font) override { return 11 * Zoom(font); }
 
         void Draw(rf::Image& target, const rf::Rect& clip, int x, int y, const std::wstring& text, const rf::Font& font, rf::Color color) override
         {
             int cx = x;
+            const int z = Zoom(font);
             for (wchar_t ch : text)
             {
                 const TestGlyph& g = Find(ch, font);
@@ -49,24 +54,32 @@ namespace rftest
                         {
                             if (row[i] == 'x')
                             {
-                                const int px = cx + i + pass;
-                                const int py = y + j;
-                                if (clip.Contains(px, py))
+                                for (int zy = 0; zy < z; ++zy)
                                 {
-                                    target.Set(px, py, color);
+                                    for (int zx = 0; zx < z; ++zx)
+                                    {
+                                        const int px = cx + (i + pass) * z + zx;
+                                        const int py = y + j * z + zy;
+                                        if (clip.Contains(px, py))
+                                        {
+                                            const unsigned a = rf::Alpha(color);
+                                            target.Set(px, py, a == 255u || a == 0u ? color : rf::Over(target.Get(px, py), color));
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                cx += g.advance + (font.bold ? 1 : 0);
+                cx += (g.advance + (font.bold ? 1 : 0)) * z;
             }
         }
 
     private:
         static const TestGlyph& Find(wchar_t ch, const rf::Font& font)
         {
-            const bool second = font.family == rf::FontFamily::Tahoma || font.family == rf::FontFamily::Trebuchet || font.family == rf::FontFamily::Lucida;
+            const bool second = font.family == rf::FontFamily::Tahoma || font.family == rf::FontFamily::Trebuchet || font.family == rf::FontFamily::Lucida ||
+                                font.family == rf::FontFamily::Segoe;
             const TestGlyph* table = second ? kFont1 : kFont0;
             const std::size_t n = second ? sizeof(kFont1) / sizeof(kFont1[0]) : sizeof(kFont0) / sizeof(kFont0[0]);
             for (std::size_t i = 0; i < n; ++i)

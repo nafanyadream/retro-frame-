@@ -13,10 +13,11 @@ namespace rf
     {
         Classic = 0,
         Winamp = 1,
-        MediaPlayer = 2
+        MediaPlayer = 2,
+        Wmp12 = 3
     };
 
-    constexpr int PlayerSkinCount = 3;
+    constexpr int PlayerSkinCount = 4;
     constexpr int WinampWidth = 275;
     constexpr int WinampPart = 116;
 
@@ -28,6 +29,9 @@ namespace rf
         bool wmpTasks = true;
         bool wmpList = true;
         bool wmpCover = false;
+        bool wmp12Title = true;
+        bool wmp12Bars = false;
+        bool wmp12Modern = false;
     };
 
     struct SkinSpots

@@ -4,6 +4,9 @@
 
 #include <windows.h>
 
+#include <cstdint>
+#include <map>
+
 namespace rf::win
 {
     class GdiTextEngine : public TextEngine
@@ -25,8 +28,17 @@ namespace rf::win
         void EnsureScratch(int w, int h);
 
         HDC dc_ = nullptr;
+        struct Sized
+        {
+            HFONT font = nullptr;
+            TEXTMETRICW metrics{};
+        };
+
+        const Sized& Find(const Font& font) const;
+
         HFONT fonts_[FontFamilyCount][2] = {};
         TEXTMETRICW metrics_[FontFamilyCount][2]{};
+        mutable std::map<std::uint32_t, Sized> sized_;
         HBITMAP scratch_ = nullptr;
         HGDIOBJ oldBitmap_ = nullptr;
         void* bits_ = nullptr;

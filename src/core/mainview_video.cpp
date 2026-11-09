@@ -224,11 +224,20 @@ namespace rf
         };
         auto* hint2 = AddLabel(r, 324, 570, 284, L"MP4 со звуком, GIF без звука и по кругу.");
         hint2->color = Rgb(0x40, 0x40, 0x40);
+        sceneHint_ = hint2;
+        auto* l6 = AddLabel(r, 324, 570, 54, L"Плеер:");
+        skinCombo_ = Place<ui::ComboBox>(r, 380, 566, 228, 21);
+        skinCombo_->items = {L"окно Windows (настройки справа)", L"Media Player — Windows 7", L"Media Player — Windows 10/11"};
+        skinCombo_->onChange = [this](int i) {
+            s_.video.skin = std::clamp(i, 0, 2);
+            Changed();
+        };
+        videoSkinRow_ = {l6, skinCombo_};
 
         playRow_ = {playButton_, scrub_, soundCheck_, timeLabel_};
         trimOnly_ = {trim, wholeCheck_, l1, startField_, startHere_, l2, endField_, endHere_, fragLabel_, hint1};
         resultOnly_ = {resultBox, r1, r2, canvas_, l3, bgSwatch_, bgPicture_, bgLoad_, l5, fps_};
-        videoOnly_ = {l4, gifFps_, gifWidth_, hint2};
+        videoOnly_ = {l4, gifFps_, gifWidth_};
     }
 
     void MainView::UpdateFormatItems()
@@ -319,6 +328,12 @@ namespace rf
         {
             w->visible = mode_ == VideoMode || scene;
         }
+        sceneHint_->visible = scene;
+        for (ui::Widget* w : videoSkinRow_)
+        {
+            w->visible = mode_ == VideoMode;
+        }
+        skinCombo_->index = std::clamp(s_.video.skin, 0, 2);
         SyncSceneControls();
         for (ui::Widget* w : musicOnly_)
         {
@@ -448,6 +463,11 @@ namespace rf
         f.statusFields = {s_.playerStatus, s_.playerTime ? std::wstring(L"{время}") : std::wstring()};
         f.statusIcon = false;
         f.player = true;
+        if (s_.video.skin > 0)
+        {
+            f.title = L"Windows Media Player";
+            f.icon = SkinIcon(PlayerSkin::MediaPlayer);
+        }
         return f;
     }
 
@@ -460,6 +480,7 @@ namespace rf
         t.canvasH = c.height;
         t.width = s_.video.format == 3 ? s_.video.gifWidth : 0;
         t.reserve = Reserve(VideoFrame(), t.square);
+        t.skin = std::clamp(s_.video.skin, 0, 2);
         return t;
     }
 
@@ -817,6 +838,49 @@ namespace rf
         Changed();
     }
 
+    Image MainView::VideoWindow(const FrameSettings& f, const VideoPlan& plan, const FrameVars& vars, double position, Stage& stage, Rect& close, Rect& minimize) const
+    {
+        const int k = std::max(1, plan.scale);
+        const int vw = std::max(2, plan.videoW / k);
+        const int vh = std::max(2, plan.videoH / k);
+        Image window;
+        Rect area;
+        if (plan.skin > 0)
+        {
+            Wmp12Look look;
+            look.frame = plan.skin - 1;
+            look.title = StemOf(vars.name);
+            const std::size_t slash = vars.time.find(L" / ");
+            look.elapsed = slash == std::wstring::npos ? vars.time : vars.time.substr(0, slash);
+            look.total = slash == std::wstring::npos ? std::wstring() : vars.time.substr(slash + 3);
+            look.position = position;
+            look.playing = position > 0.002;
+            look.active = f.active;
+            Wmp12Spots spots;
+            window = DrawWmp12(look, plan.clientW, plan.clientH, 1, &area, &spots);
+            Painter(window).Fill(Rect{area.x + (area.w - vw) / 2, area.y + (area.h - vh) / 2, vw, vh}, Rgb(0, 0, 0));
+            stage.play = spots.play;
+            stage.seek = spots.seek;
+            close = spots.close;
+            minimize = spots.minimize;
+        }
+        else
+        {
+            window = RenderFrame(f, plan.clientW, plan.clientH, vars, &area);
+            PlayerHotspots(f, plan.clientW, plan.clientH, &stage.play, &stage.seek);
+            close = Rect{};
+            minimize = Rect{};
+        }
+        if (!clip_->frame.Empty())
+        {
+            DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), area);
+        }
+        stage.window = Rect{0, 0, window.width, window.height};
+        stage.scale = 1;
+        stage.content = Rect{area.x + (area.w - vw) / 2, area.y + (area.h - vh) / 2, vw, vh};
+        return window;
+    }
+
     void MainView::UpdateVideoPreview()
     {
         preview_->message.clear();
@@ -838,50 +902,33 @@ namespace rf
         const int availW = preview_->rect.w - 4 - 12;
         const int availH = preview_->rect.h - 4 - 12;
         const MediaInfo& info = clip_->info;
+        const VideoPlan plan = PlanVideo(f, info.width, info.height, Target());
+        Stage stage;
+        stage.duration = length;
+        Rect close;
+        Rect minimize;
+        Image window = VideoWindow(f, plan, vars, rel / length, stage, close, minimize);
+        const int seed = int(rel * 15.0);
         if (s_.video.square)
         {
-            const VideoPlan plan = PlanVideo(f, info.width, info.height, Target());
             const int k = plan.scale;
             const int w = plan.outW / k;
             const int h = plan.outH / k;
             Image square = PreviewBackdrop(w, h, f, FrameVars{clip_->name, info.width, info.height, L""});
-            Rect client;
-            Image window = RenderFrame(f, plan.clientW, plan.clientH, vars, &client);
-            const int vw = std::max(2, plan.videoW / k);
-            const int vh = std::max(2, plan.videoH / k);
-            if (!clip_->frame.Empty())
-            {
-                DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), client);
-            }
             const int wx = plan.windowX / k;
             const int wy = plan.windowY / k;
-            const int seed = int(rel * 15.0);
             const Spot m = PreviewMotion(Rect{wx, wy, window.width, window.height}, w, h, plan.reserve / k, rel, seed);
             Painter(square).Draw(window, wx + m.x, wy + m.y);
-            const Rect video{wx + client.x + (client.w - vw) / 2, wy + client.y + (client.h - vh) / 2, vw, vh};
-            Stage stage{Rect{wx, wy, window.width, window.height}, 1, video, Rect{}, Rect{}, length};
-            PlayerHotspots(f, plan.clientW, plan.clientH, &stage.play, &stage.seek);
+            stage.window = stage.window.Offset(wx, wy);
+            stage.content = stage.content.Offset(wx, wy);
             stage.play = stage.play.Offset(wx, wy);
             stage.seek = stage.seek.Offset(wx, wy);
-            ApplyEffects(square, f, stage, rel, seed, rel / length, m);
+            ApplyEffects(square, f, stage, rel, seed, rel / length, m, close.Empty() ? close : close.Offset(wx, wy), minimize.Empty() ? minimize : minimize.Offset(wx, wy));
             preview_->image = w > availW || h > availH ? FitInside(square, availW, availH, false) : square;
         }
         else
         {
-            const VideoPlan plan = PlanVideo(f, info.width, info.height, Target());
-            const int k = plan.scale;
-            Rect client;
-            Image window = RenderFrame(f, plan.clientW, plan.clientH, vars, &client);
-            const int vw = std::max(2, plan.videoW / k);
-            const int vh = std::max(2, plan.videoH / k);
-            if (!clip_->frame.Empty())
-            {
-                DrawCentered(window, ResizeSmooth(clip_->frame, vw, vh), client);
-            }
-            const Rect video{client.x + (client.w - vw) / 2, client.y + (client.h - vh) / 2, vw, vh};
-            Stage stage{Rect{0, 0, window.width, window.height}, 1, video, Rect{}, Rect{}, length};
-            PlayerHotspots(f, plan.clientW, plan.clientH, &stage.play, &stage.seek);
-            ApplyEffects(window, f, stage, rel, int(rel * 15.0), rel / length);
+            ApplyEffects(window, f, stage, rel, seed, rel / length, Spot{}, close, minimize);
             preview_->image = window.width > availW || window.height > availH ? FitInside(window, availW, availH, false) : std::move(window);
         }
         root.dirty = true;

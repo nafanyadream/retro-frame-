@@ -229,7 +229,9 @@ namespace rf
         bool SavePreset(const std::wstring& name);
         void DeletePreset(int index);
         std::vector<ui::ListItem> PresetItems() const;
-        void ApplyEffects(Image& img, const FrameSettings& frame, const Stage& stage, double t, int seed, double progress = -1.0, Spot shift = Spot{}) const;
+        void ApplyEffects(Image& img, const FrameSettings& frame, const Stage& stage, double t, int seed, double progress = -1.0, Spot shift = Spot{},
+                          Rect close = Rect{}, Rect minimize = Rect{}) const;
+        Image VideoWindow(const FrameSettings& f, const VideoPlan& plan, const FrameVars& vars, double position, Stage& stage, Rect& close, Rect& minimize) const;
         Spot PreviewMotion(const Rect& window, int outW, int outH, int reserve, double t, int seed) const;
         Image Backdrop(int w, int h, int k, const FrameSettings& frame, const FrameVars& vars, int ending) const;
         const Image& PreviewBackdrop(int w, int h, const FrameSettings& frame, const FrameVars& vars);
@@ -364,6 +366,9 @@ namespace rf
         ui::Button* coverLoad_ = nullptr;
         ui::Button* coverReset_ = nullptr;
         ui::ComboBox* playerCombo_ = nullptr;
+        ui::ComboBox* skinCombo_ = nullptr;
+        ui::Label* sceneHint_ = nullptr;
+        std::vector<ui::Widget*> videoSkinRow_;
         ui::CheckBox* recMonitor_ = nullptr;
         std::unique_ptr<VoiceMonitor> monitor_;
         std::unique_ptr<AudioOut> monitorOut_;

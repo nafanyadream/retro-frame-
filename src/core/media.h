@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effects.h"
+#include "wmp12.h"
 #include "frame.h"
 #include "host.h"
 
@@ -125,6 +126,7 @@ namespace rf
         int canvasH = 1080;
         int width = 0;
         int reserve = 0;
+        int skin = 0;
     };
 
     struct VideoPlan
@@ -142,6 +144,7 @@ namespace rf
         int outW = 0;
         int outH = 0;
         int reserve = 0;
+        int skin = 0;
     };
 
     VideoPlan PlanVideo(const FrameSettings& frame, int sourceW, int sourceH, const VideoTarget& target);
@@ -158,6 +161,8 @@ namespace rf
         const Image& Outro(double u, int seed);
 
     private:
+        Wmp12Look SkinLook(double position, const std::wstring& time) const;
+
         FrameSettings frame_;
         FrameVars vars_;
         VideoPlan plan_;

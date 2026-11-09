@@ -57,6 +57,7 @@ namespace rf
         int gifFps = 15;
         int gifWidth = 0;
         int fps = 0;
+        int skin = 0;
     };
 
     struct MusicSettings
@@ -78,6 +79,9 @@ namespace rf
         bool wmpTasks = true;
         bool wmpList = true;
         bool wmpCover = false;
+        bool wmp12Title = true;
+        bool wmp12Bars = false;
+        bool wmp12Modern = false;
     };
 
     struct SceneOutput

@@ -2,6 +2,8 @@
 
 #include "glyphs.h"
 #include "icons.h"
+#include "utf.h"
+#include "wmp12.h"
 
 #include <cmath>
 #include <cstring>
@@ -527,8 +529,33 @@ namespace rf
     {
     }
 
+    Image MusicComposer::ModernWindow(const MusicFrame& f, int scale, Rect& content) const
+    {
+        const SkinOptions& o = plan_.skinOptions;
+        Wmp12Look look;
+        look.frame = o.wmp12Modern ? 1 : 0;
+        look.title = title_.empty() ? StemOf(vars_.name) : title_;
+        look.elapsed = FormatClock(f.now);
+        look.total = FormatClock(f.length);
+        look.position = f.position;
+        look.playing = f.now > 0.05;
+        look.active = frame_.active;
+        Image img = DrawWmp12(look, Wmp12MusicW, Wmp12MusicH, scale, &content, nullptr);
+        DrawWmp12Art(img, content, scale, f, cover_, title_.empty() ? StemOf(vars_.name) : title_, artist_, o.wmp12Title, o.wmp12Bars);
+        return img;
+    }
+
     Rect MusicComposer::ClientRect() const
     {
+        if (Modern())
+        {
+            int cw = 0;
+            int ch = 0;
+            int cx = 0;
+            int cy = 0;
+            Wmp12Chrome(plan_.skinOptions.wmp12Modern ? 1 : 0, &cw, &ch, &cx, &cy);
+            return Rect{cx, cy, Wmp12MusicW, Wmp12MusicH};
+        }
         if (Skinned())
         {
             return Rect{0, 0, plan_.clientW, plan_.clientH};
@@ -542,6 +569,10 @@ namespace rf
         {
             return Rect{};
         }
+        if (plan_.skin == PlayerSkin::Wmp12)
+        {
+            return Rect{};
+        }
         if (plan_.skin != PlayerSkin::Classic)
         {
             return SkinCoverRect(plan_.skin, plan_.skinOptions);
@@ -551,6 +582,10 @@ namespace rf
 
     Image MusicComposer::Window(const MusicFrame& f, Rect& client) const
     {
+        if (Modern())
+        {
+            return ModernWindow(f, 1, client);
+        }
         if (Skinned())
         {
             client = Rect{0, 0, plan_.clientW, plan_.clientH};
@@ -647,9 +682,18 @@ namespace rf
     const Image& MusicComposer::Compose(const MusicFrame& f, int seed, bool animate)
     {
         Rect client;
-        const Image small = Window(f, client);
         const int k = plan_.scale;
-        Image window = ScaleNearest(small, k);
+        Image window;
+        if (Modern())
+        {
+            window = ModernWindow(f, k, client);
+            client = Rect{client.x / k, client.y / k, client.w / k, client.h / k};
+        }
+        else
+        {
+            const Image small = Window(f, client);
+            window = ScaleNearest(small, k);
+        }
         const Rect slot = CoverSlot();
         if (!slot.Empty())
         {

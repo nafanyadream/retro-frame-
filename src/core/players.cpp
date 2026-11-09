@@ -2,6 +2,7 @@
 
 #include "glyphs.h"
 #include "music.h"
+#include "wmp12.h"
 
 #include <cmath>
 #include <tuple>
@@ -847,6 +848,17 @@ namespace rf
 
     void SkinSize(PlayerSkin skin, const SkinOptions& o, int* width, int* height)
     {
+        if (skin == PlayerSkin::Wmp12)
+        {
+            int cw = 0;
+            int ch = 0;
+            int cx = 0;
+            int cy = 0;
+            Wmp12Chrome(o.wmp12Modern ? 1 : 0, &cw, &ch, &cx, &cy);
+            *width = Wmp12MusicW + cw;
+            *height = Wmp12MusicH + ch;
+            return;
+        }
         if (skin == PlayerSkin::Winamp)
         {
             *width = WinampWidth;
@@ -886,6 +898,18 @@ namespace rf
     SkinSpots SkinHotspots(PlayerSkin skin, const SkinOptions& o)
     {
         SkinSpots s;
+        if (skin == PlayerSkin::Wmp12)
+        {
+            Wmp12Look look;
+            look.frame = o.wmp12Modern ? 1 : 0;
+            Wmp12Spots spots;
+            DrawWmp12(look, Wmp12MusicW, Wmp12MusicH, 1, nullptr, &spots);
+            s.play = spots.play;
+            s.seek = spots.seek;
+            s.close = spots.close;
+            s.minimize = spots.minimize;
+            return s;
+        }
         if (skin == PlayerSkin::MediaPlayer)
         {
             const WmpLayout l = MeasureWmp(o);

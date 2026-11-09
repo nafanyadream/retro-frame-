@@ -19,7 +19,7 @@ namespace rf
         constexpr int PreviewMaxW = 598;
         constexpr int PreviewMaxH = 346;
         constexpr int PreviewLimit = 2400;
-        const wchar_t* const AppVersion = L"0.7.0";
+        const wchar_t* const AppVersion = L"0.8.0";
 
         template <class T>
         T* Place(ui::Root& root, int x, int y, int w, int h)
@@ -686,13 +686,18 @@ namespace rf
         return f;
     }
 
-    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Stage& stage, double t, int seed, double progress, Spot shift) const
+    void MainView::ApplyEffects(Image& img, const FrameSettings& frame, const Stage& stage, double t, int seed, double progress, Spot shift, Rect close,
+                                Rect minimize) const
     {
         if (!HasOverlays(s_.effects))
         {
             return;
         }
         EffectsLayer layer(s_.effects, frame, stage);
+        if (!close.Empty())
+        {
+            layer.SetButtons(close, minimize);
+        }
         layer.Shift(shift.x, shift.y);
         layer.Apply(img, t, seed, false, progress);
     }

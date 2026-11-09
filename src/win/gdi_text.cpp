@@ -1,5 +1,7 @@
 #include "gdi_text.h"
 
+#include "../core/paint.h"
+
 #include <algorithm>
 #include <cstdint>
 
@@ -7,10 +9,10 @@ namespace rf::win
 {
     namespace
     {
-        HFONT MakeFont(const wchar_t* face, bool bold, BYTE charset, int height = -11, DWORD pitch = DEFAULT_PITCH | FF_SWISS)
+        HFONT MakeFont(const wchar_t* face, bool bold, BYTE charset, int height = -11, DWORD pitch = DEFAULT_PITCH | FF_SWISS, DWORD quality = NONANTIALIASED_QUALITY)
         {
             return CreateFontW(height, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE, charset, OUT_DEFAULT_PRECIS,
-                               CLIP_DEFAULT_PRECIS, NONANTIALIASED_QUALITY, pitch, face);
+                               CLIP_DEFAULT_PRECIS, quality, pitch, face);
         }
 
         bool HasCyrillic(HDC dc, HFONT font)
@@ -42,6 +44,7 @@ namespace rf::win
                 fonts_[3][b] = MakeFont(L"Lucida Console", b == 1, DEFAULT_CHARSET, -12, FIXED_PITCH | FF_MODERN);
             }
             fonts_[4][b] = MakeFont(L"Lucida Console", b == 1, DEFAULT_CHARSET, -12, FIXED_PITCH | FF_MODERN);
+            fonts_[5][b] = MakeFont(L"Segoe UI", b == 1, DEFAULT_CHARSET, -12);
         }
         for (int f = 0; f < FontFamilyCount; ++f)
         {
@@ -75,19 +78,64 @@ namespace rf::win
                 }
             }
         }
+        for (auto& entry : sized_)
+        {
+            if (entry.second.font != nullptr)
+            {
+                DeleteObject(entry.second.font);
+            }
+        }
         if (dc_ != nullptr)
         {
             DeleteDC(dc_);
         }
     }
 
+    const GdiTextEngine::Sized& GdiTextEngine::Find(const Font& font) const
+    {
+        const int family = std::clamp(int(font.family), 0, FontFamilyCount - 1);
+        const int size = std::clamp(font.size, 0, 400);
+        const std::uint32_t key = std::uint32_t(family) | (font.bold ? 16u : 0u) | (font.smooth ? 32u : 0u) | (std::uint32_t(size) << 8);
+        const auto it = sized_.find(key);
+        if (it != sized_.end())
+        {
+            return it->second;
+        }
+        static const wchar_t* const faces[FontFamilyCount] = {L"Microsoft Sans Serif", L"Tahoma", L"Trebuchet MS", L"Lucida Console", L"Lucida Console", L"Segoe UI"};
+        static const int heights[FontFamilyCount] = {-11, -11, -13, -12, -12, -12};
+        const bool fixed = family == 3 || family == 4;
+        Sized s;
+        s.font = MakeFont(faces[family], font.bold, DEFAULT_CHARSET, size > 0 ? -size : heights[family], fixed ? FIXED_PITCH | FF_MODERN : DEFAULT_PITCH | FF_SWISS,
+                          font.smooth ? ANTIALIASED_QUALITY : NONANTIALIASED_QUALITY);
+        HGDIOBJ old = SelectObject(dc_, s.font);
+        GetTextMetricsW(dc_, &s.metrics);
+        SelectObject(dc_, old);
+        if (sized_.size() > 64)
+        {
+            for (auto& entry : sized_)
+            {
+                DeleteObject(entry.second.font);
+            }
+            sized_.clear();
+        }
+        return sized_.emplace(key, s).first->second;
+    }
+
     HFONT GdiTextEngine::Pick(const Font& font) const
     {
+        if (font.size > 0 || font.smooth)
+        {
+            return Find(font).font;
+        }
         return fonts_[std::clamp(int(font.family), 0, FontFamilyCount - 1)][font.bold ? 1 : 0];
     }
 
     const TEXTMETRICW& GdiTextEngine::Metrics(const Font& font) const
     {
+        if (font.size > 0 || font.smooth)
+        {
+            return Find(font).metrics;
+        }
         return metrics_[std::clamp(int(font.family), 0, FontFamilyCount - 1)][font.bold ? 1 : 0];
     }
 
@@ -177,6 +225,7 @@ namespace rf::win
         SelectObject(dc_, old);
         GdiFlush();
         const auto* src = static_cast<const std::uint32_t*>(bits_);
+        const unsigned alpha = Alpha(color) == 0 ? 255u : Alpha(color);
         for (int yy = area.y; yy < area.Bottom(); ++yy)
         {
             const std::uint32_t* row = src + std::size_t(yy - y) * std::size_t(scratchW_);
@@ -184,7 +233,16 @@ namespace rf::win
             for (int xx = area.x; xx < area.Right(); ++xx)
             {
                 const std::uint32_t v = row[xx - x];
-                if (((v >> 16) & 255u) > 127u || ((v >> 8) & 255u) > 127u)
+                if (font.smooth)
+                {
+                    const unsigned cover = std::max({(v >> 16) & 255u, (v >> 8) & 255u, v & 255u});
+                    if (cover > 0)
+                    {
+                        const unsigned a = cover * alpha / 255u;
+                        dst[xx] = Over(dst[xx], (color & 0x00FFFFFFu) | (Color(a) << 24));
+                    }
+                }
+                else if (((v >> 16) & 255u) > 127u || ((v >> 8) & 255u) > 127u)
                 {
                     dst[xx] = Opaque(color);
                 }

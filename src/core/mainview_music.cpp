@@ -76,7 +76,7 @@ namespace rf
         coverReset_->onClick = [this]() { ResetCover(); };
         auto* l5 = AddLabel(r, 334, 212, 82, L"Плеер:");
         playerCombo_ = Place<ui::ComboBox>(r, 418, 208, 190, 21);
-        playerCombo_->items = {L"Как CD-плеер Windows", L"Winamp 2", L"Windows Media Player 7"};
+        playerCombo_->items = {L"Как CD-плеер Windows", L"Winamp 2", L"Windows Media Player 7", L"Windows Media Player 12 (Win 7)"};
         playerCombo_->onChange = [this](int i) {
             s_.music.player = std::clamp(i, 0, PlayerSkinCount - 1);
             Changed();
@@ -278,7 +278,8 @@ namespace rf
         static const wchar_t* const labels[PlayerSkinCount][4] = {
             {L"Диск крутится", L"Шкала громкости прыгает под музыку", L"Эквалайзер вместо диска", L"Текст песни под плеером"},
             {L"Окно эквалайзера", L"Окно плейлиста", L"Осциллограф вместо спектра", L"Текст бегущей строкой"},
-            {L"Панель слева (Now Playing...)", L"Список песен справа", L"Обложка вместо визуализации", L"Текст поверх картинки"}};
+            {L"Панель слева (Now Playing...)", L"Список песен справа", L"Обложка вместо визуализации", L"Текст поверх картинки"},
+            {L"Название и исполнитель под обложкой", L"Столбики вместо обложки", L"Окно Windows 10/11 вместо Windows 7", L"Текст песни над полоской"}};
         for (int i = 0; i < 3; ++i)
         {
             musicOption_[i]->text = labels[player][i];
@@ -308,7 +309,10 @@ namespace rf
     bool& MainView::MusicOption(int i)
     {
         MusicSettings& m = s_.music;
-        bool* options[PlayerSkinCount][3] = {{&m.spin, &m.meter, &m.equalizer}, {&m.winampEq, &m.winampList, &m.winampScope}, {&m.wmpTasks, &m.wmpList, &m.wmpCover}};
+        bool* options[PlayerSkinCount][3] = {{&m.spin, &m.meter, &m.equalizer},
+                                             {&m.winampEq, &m.winampList, &m.winampScope},
+                                             {&m.wmpTasks, &m.wmpList, &m.wmpCover},
+                                             {&m.wmp12Title, &m.wmp12Bars, &m.wmp12Modern}};
         return *options[std::clamp(m.player, 0, PlayerSkinCount - 1)][std::clamp(i, 0, 2)];
     }
 
@@ -326,6 +330,9 @@ namespace rf
         o.wmpTasks = s_.music.wmpTasks;
         o.wmpList = s_.music.wmpList;
         o.wmpCover = s_.music.wmpCover;
+        o.wmp12Title = s_.music.wmp12Title;
+        o.wmp12Bars = s_.music.wmp12Bars;
+        o.wmp12Modern = s_.music.wmp12Modern;
         return o;
     }
 

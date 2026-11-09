@@ -85,6 +85,8 @@ namespace rf
         Image Window(const MusicFrame& f, Rect& client) const;
         void BuildEffects();
         bool Skinned() const { return plan_.skin != PlayerSkin::Classic && !recorder_; }
+        bool Modern() const { return plan_.skin == PlayerSkin::Wmp12 && !recorder_; }
+        Image ModernWindow(const MusicFrame& f, int scale, Rect& content) const;
         Rect ClientRect() const;
         Rect CoverSlot() const;
 

@@ -1,6 +1,7 @@
 #include "media.h"
 
 #include "utf.h"
+#include "wmp12.h"
 
 #include <cctype>
 #include <cmath>
@@ -1170,8 +1171,19 @@ namespace rf
         FrameSettings f = frame;
         f.player = true;
         const FrameGeometry g = MeasureFrame(f, 100, 100);
-        const int chromeW = g.width - 100;
-        const int chromeH = g.height - 100;
+        int chromeW = g.width - 100;
+        int chromeH = g.height - 100;
+        int minW = PlayerMinWidth;
+        int comfortW = PlayerComfortWidth;
+        p.skin = std::clamp(target.skin, 0, 2);
+        if (p.skin > 0)
+        {
+            int cx = 0;
+            int cy = 0;
+            Wmp12Chrome(p.skin - 1, &chromeW, &chromeH, &cx, &cy);
+            minW = Wmp12MinWidth;
+            comfortW = std::max(comfortW, 420);
+        }
         const int sw = std::max(2, sourceW);
         const int sh = std::max(2, sourceH);
         const double aspect = double(sw) / double(sh);
@@ -1218,7 +1230,7 @@ namespace rf
             const auto roomFor = [&](int cand) { return (outH - target.reserve * cand) * 92 / 100; };
             int k = fixed;
             const int tallEnough[] = {chromeH * 3 / 2, 40};
-            const int wideEnough[] = {PlayerComfortWidth, PlayerMinWidth};
+            const int wideEnough[] = {comfortW, minW};
             for (int tier = 0; tier < 2; ++tier)
             {
                 for (int cand = 4; cand >= 1 && k == 0; --cand)
@@ -1238,9 +1250,9 @@ namespace rf
             int cw = 0;
             int ch = 0;
             fit(roomW / k - chromeW, roomFor(k) / k - chromeH, cw, ch);
-            if (cw < PlayerMinWidth)
+            if (cw < minW)
             {
-                cw = PlayerMinWidth;
+                cw = minW;
                 ch = std::min(std::max(2, int(std::lround(cw / aspect))), std::max(2, (outH - p.reserve) / k - chromeH));
             }
             p.clientW = cw;
@@ -1260,14 +1272,14 @@ namespace rf
             {
                 k = AutoScale(std::min(sw, target.width), std::min(sh, target.width));
             }
-            vw = std::min(vw, std::max(PlayerMinWidth, target.width / k - chromeW) * k);
+            vw = std::min(vw, std::max(minW, target.width / k - chromeW) * k);
         }
         else if (k == 0)
         {
             k = AutoScale(sw, sh);
         }
         p.scale = k;
-        p.clientW = std::max(PlayerMinWidth, int(std::lround(double(vw) / k)));
+        p.clientW = std::max(minW, int(std::lround(double(vw) / k)));
         p.clientH = std::max(2, int(std::lround(p.clientW / aspect)));
         if (((p.clientW + chromeW) * k) % 2 != 0)
         {
@@ -1313,6 +1325,20 @@ namespace rf
         frame_.player = true;
     }
 
+    Wmp12Look PlayerComposer::SkinLook(double position, const std::wstring& time) const
+    {
+        Wmp12Look look;
+        look.frame = plan_.skin - 1;
+        look.title = StemOf(vars_.name);
+        const std::size_t slash = time.find(L" / ");
+        look.elapsed = slash == std::wstring::npos ? time : time.substr(0, slash);
+        look.total = slash == std::wstring::npos ? std::wstring() : time.substr(slash + 3);
+        look.position = position;
+        look.playing = position > 0.002;
+        look.active = frame_.active;
+        return look;
+    }
+
     void PlayerComposer::SetEffects(const EffectSettings& effects, double duration)
     {
         effects_ = effects;
@@ -1323,6 +1349,18 @@ namespace rf
         }
         const Rect window = plan_.square ? Rect{plan_.windowX, plan_.windowY, plan_.windowW, plan_.windowH} : Rect{0, 0, plan_.outW, plan_.outH};
         const int k = plan_.scale;
+        if (plan_.skin > 0)
+        {
+            Rect content;
+            Wmp12Spots spots;
+            DrawWmp12(SkinLook(0.0, L"00:00"), plan_.clientW, plan_.clientH, k, &content, &spots);
+            const Rect video{window.x + content.x + (content.w - plan_.videoW) / 2, window.y + content.y + (content.h - plan_.videoH) / 2, plan_.videoW, plan_.videoH};
+            const Stage stage{window, k, video, spots.play.Offset(window.x, window.y), spots.seek.Offset(window.x, window.y), duration};
+            fx_ = EffectsLayer(effects_, frame_, stage);
+            fx_.SetButtons(spots.close.Offset(window.x, window.y), spots.minimize.Offset(window.x, window.y));
+            fxOn_ = HasOverlays(effects_);
+            return;
+        }
         const Rect client = MeasureFrame(frame_, plan_.clientW, plan_.clientH).client;
         const Rect video{window.x + client.x * k + (plan_.clientW * k - plan_.videoW) / 2, window.y + client.y * k + (plan_.clientH * k - plan_.videoH) / 2,
                          plan_.videoW, plan_.videoH};
@@ -1367,13 +1405,24 @@ namespace rf
     {
         frame_.playerPosition = position;
         vars_.time = time;
-        Rect client;
-        const Image chrome = RenderFrame(frame_, plan_.clientW, plan_.clientH, vars_, &client);
         const int k = plan_.scale;
-        Image window = ScaleNearest(chrome, k);
-        const int vx = client.x * k + (plan_.clientW * k - video.width) / 2;
-        const int vy = client.y * k + (plan_.clientH * k - video.height) / 2;
-        BlitVideo(window, video, vx, vy);
+        Image window;
+        if (plan_.skin > 0)
+        {
+            Rect content;
+            window = DrawWmp12(SkinLook(position, time), plan_.clientW, plan_.clientH, k, &content, nullptr);
+            Painter(window).Fill(Rect{content.x + (content.w - plan_.videoW) / 2, content.y + (content.h - plan_.videoH) / 2, plan_.videoW, plan_.videoH}, Rgb(0, 0, 0));
+            BlitVideo(window, video, content.x + (content.w - video.width) / 2, content.y + (content.h - video.height) / 2);
+        }
+        else
+        {
+            Rect client;
+            const Image chrome = RenderFrame(frame_, plan_.clientW, plan_.clientH, vars_, &client);
+            window = ScaleNearest(chrome, k);
+            const int vx = client.x * k + (plan_.clientW * k - video.width) / 2;
+            const int vy = client.y * k + (plan_.clientH * k - video.height) / 2;
+            BlitVideo(window, video, vx, vy);
+        }
         if (!plan_.square)
         {
             out_ = std::move(window);
