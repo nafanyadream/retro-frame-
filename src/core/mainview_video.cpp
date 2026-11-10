@@ -857,7 +857,17 @@ namespace rf
             look.playing = position > 0.002;
             look.active = f.active;
             Wmp12Spots spots;
-            window = DrawWmp12(look, plan.clientW, plan.clientH, 1, &area, &spots);
+            const std::wstring key = std::to_wstring(plan.skin) + L"/" + std::to_wstring(plan.clientW) + L"x" + std::to_wstring(plan.clientH) + L"/" +
+                                     std::to_wstring(int(look.active)) + L"/" + look.title;
+            if (key != skinKey_)
+            {
+                skinBase_ = DrawWmp12Base(look, plan.clientW, plan.clientH, 1, &skinArea_, &skinSpots_);
+                skinKey_ = key;
+            }
+            window = skinBase_;
+            area = skinArea_;
+            spots = skinSpots_;
+            DrawWmp12Live(window, look, plan.clientW, plan.clientH, 1);
             Painter(window).Fill(Rect{area.x + (area.w - vw) / 2, area.y + (area.h - vh) / 2, vw, vh}, Rgb(0, 0, 0));
             stage.play = spots.play;
             stage.seek = spots.seek;

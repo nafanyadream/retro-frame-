@@ -369,6 +369,10 @@ namespace rf
         ui::ComboBox* skinCombo_ = nullptr;
         ui::Label* sceneHint_ = nullptr;
         std::vector<ui::Widget*> videoSkinRow_;
+        mutable Image skinBase_;
+        mutable Rect skinArea_;
+        mutable Wmp12Spots skinSpots_;
+        mutable std::wstring skinKey_;
         ui::CheckBox* recMonitor_ = nullptr;
         std::unique_ptr<VoiceMonitor> monitor_;
         std::unique_ptr<AudioOut> monitorOut_;

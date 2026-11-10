@@ -31,6 +31,7 @@ namespace rftest
             {
                 return nullptr;
             }
+            signal(SIGPIPE, SIG_IGN);
             char logName[] = "/tmp/rftest-log-XXXXXX";
             const int logFd = mkstemp(logName);
             std::vector<std::string> argv8 = {exe};
@@ -55,6 +56,7 @@ namespace rftest
                 {
                     close(fd);
                 }
+                signal(SIGPIPE, SIG_DFL);
                 execvp(argv[0], argv.data());
                 _exit(127);
             }

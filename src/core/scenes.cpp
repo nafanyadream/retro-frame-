@@ -38,16 +38,7 @@ namespace rf
 
         void Blit(Image& dst, const Image& src, int x0, int y0)
         {
-            const Rect r = Rect{x0, y0, src.width, src.height}.Intersect(Rect{0, 0, dst.width, dst.height});
-            for (int y = r.y; y < r.Bottom(); ++y)
-            {
-                const Color* s = src.Row(y - y0) + (r.x - x0);
-                Color* d = dst.Row(y) + r.x;
-                for (int x = 0; x < r.w; ++x)
-                {
-                    d[x] = Alpha(s[x]) == 255 ? s[x] : Opaque(Over(d[x], s[x]));
-                }
-            }
+            BlitOver(dst, src, x0, y0);
         }
 
         int CharWidth(wchar_t ch, const Font& f)

@@ -111,6 +111,9 @@ namespace rf
         bool russian_ = false;
         double songLength_ = 0.0;
         std::shared_ptr<const std::vector<std::int16_t>> samples_;
+        mutable Image modernBase_;
+        mutable Rect modernContent_;
+        mutable int modernScale_ = 0;
     };
 
     struct MusicJob

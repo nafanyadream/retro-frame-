@@ -119,9 +119,30 @@ namespace rf
         }
     }
 
+    void FillRoundRows(Image& img, const Box& b, double radius, const std::function<Color(double fy)>& rowColor)
+    {
+        int ax = 0;
+        int ay = 0;
+        int bx = 0;
+        int by = 0;
+        Bounds(img, b.x, b.y, b.x + b.w, b.y + b.h, ax, ay, bx, by);
+        for (int y = ay; y < by; ++y)
+        {
+            const Color c = rowColor(b.h > 0.0 ? std::clamp((y + 0.5 - b.y) / b.h, 0.0, 1.0) : 0.0);
+            for (int x = ax; x < bx; ++x)
+            {
+                const double cover = std::clamp(0.5 - RoundDistance(x + 0.5, y + 0.5, b, radius), 0.0, 1.0);
+                if (cover > 0.0)
+                {
+                    BlendPixel(img, x, y, c, cover);
+                }
+            }
+        }
+    }
+
     void FillRound(Image& img, const Box& b, double radius, Color c)
     {
-        FillRound(img, b, radius, [c](double, double) { return c; });
+        FillRoundRows(img, b, radius, [c](double) { return c; });
     }
 
     void StrokeRound(Image& img, const Box& b, double radius, double width, Color c)

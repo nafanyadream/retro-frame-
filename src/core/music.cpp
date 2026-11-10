@@ -37,16 +37,7 @@ namespace rf
 
         void Blit(Image& dst, const Image& src, int x0, int y0)
         {
-            const Rect r = Rect{x0, y0, src.width, src.height}.Intersect(Rect{0, 0, dst.width, dst.height});
-            for (int y = r.y; y < r.Bottom(); ++y)
-            {
-                const Color* s = src.Row(y - y0) + (r.x - x0);
-                Color* d = dst.Row(y) + r.x;
-                for (int x = 0; x < r.w; ++x)
-                {
-                    d[x] = Alpha(s[x]) == 255 ? s[x] : Opaque(Over(d[x], s[x]));
-                }
-            }
+            BlitOver(dst, src, x0, y0);
         }
 
         void Glyphed(Painter& p, const Rect& r, const Glyph& g, Color ink, int offset)
@@ -540,8 +531,17 @@ namespace rf
         look.position = f.position;
         look.playing = f.now > 0.05;
         look.active = frame_.active;
-        Image img = DrawWmp12(look, Wmp12MusicW, Wmp12MusicH, scale, &content, nullptr);
-        DrawWmp12Art(img, content, scale, f, cover_, title_.empty() ? StemOf(vars_.name) : title_, artist_, o.wmp12Title, o.wmp12Bars);
+        const std::wstring title = title_.empty() ? StemOf(vars_.name) : title_;
+        if (modernBase_.Empty() || modernScale_ != scale)
+        {
+            modernBase_ = DrawWmp12Base(look, Wmp12MusicW, Wmp12MusicH, scale, &modernContent_, nullptr);
+            DrawWmp12Art(modernBase_, modernContent_, scale, f, cover_, title, artist_, o.wmp12Title, o.wmp12Bars, true, false);
+            modernScale_ = scale;
+        }
+        Image img = modernBase_;
+        content = modernContent_;
+        DrawWmp12Live(img, look, Wmp12MusicW, Wmp12MusicH, scale);
+        DrawWmp12Art(img, content, scale, f, cover_, title, artist_, o.wmp12Title, o.wmp12Bars, false, true);
         return img;
     }
 

@@ -40,7 +40,9 @@ namespace rf
 
     void Wmp12Chrome(int frame, int* chromeW, int* chromeH, int* contentX, int* contentY);
     Image DrawWmp12(const Wmp12Look& look, int contentW, int contentH, int scale, Rect* content, Wmp12Spots* spots);
+    Image DrawWmp12Base(const Wmp12Look& look, int contentW, int contentH, int scale, Rect* content, Wmp12Spots* spots);
+    void DrawWmp12Live(Image& img, const Wmp12Look& look, int contentW, int contentH, int scale);
     void DrawWmp12Art(Image& img, const Rect& area, int scale, const MusicFrame& m, const Image& cover, const std::wstring& title, const std::wstring& artist,
-                      bool titleOn, bool bars);
+                      bool titleOn, bool bars, bool base = true, bool live = true);
     void DrawWmp12Icon(Image& img, double x, double y, double size);
 }

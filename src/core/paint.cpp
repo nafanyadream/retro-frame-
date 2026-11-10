@@ -155,16 +155,53 @@ namespace rf
             return src;
         }
         Image out(src.width * factor, src.height * factor);
-        for (int y = 0; y < out.height; ++y)
+        const std::size_t rowBytes = std::size_t(out.width) * sizeof(Color);
+        for (int y = 0; y < src.height; ++y)
         {
-            const Color* s = src.Row(y / factor);
-            Color* d = out.Row(y);
-            for (int x = 0; x < out.width; ++x)
+            const Color* s = src.Row(y);
+            Color* first = out.Row(y * factor);
+            Color* d = first;
+            for (int x = 0; x < src.width; ++x)
             {
-                d[x] = s[x / factor];
+                const Color c = s[x];
+                for (int k = 0; k < factor; ++k)
+                {
+                    *d++ = c;
+                }
+            }
+            for (int k = 1; k < factor; ++k)
+            {
+                std::memcpy(out.Row(y * factor + k), first, rowBytes);
             }
         }
         return out;
+    }
+
+    void BlitOver(Image& dst, const Image& src, int x0, int y0)
+    {
+        const Rect r = Rect{x0, y0, src.width, src.height}.Intersect(Rect{0, 0, dst.width, dst.height});
+        for (int y = r.y; y < r.Bottom(); ++y)
+        {
+            const Color* s = src.Row(y - y0) + (r.x - x0);
+            Color* d = dst.Row(y) + r.x;
+            int x = 0;
+            while (x < r.w)
+            {
+                int e = x;
+                while (e < r.w && Alpha(s[e]) == 255)
+                {
+                    ++e;
+                }
+                if (e > x)
+                {
+                    std::memcpy(d + x, s + x, std::size_t(e - x) * sizeof(Color));
+                    x = e;
+                    continue;
+                }
+                d[x] = Opaque(Over(d[x], s[x]));
+                ++x;
+            }
+        }
     }
 
     Image ResizeSmooth(const Image& src, int width, int height)

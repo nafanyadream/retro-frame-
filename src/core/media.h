@@ -104,6 +104,7 @@ namespace rf
         bool Poll(Image& out);
         bool Next(Image& out);
         bool Ended() const { return ended_; }
+        void Interrupt();
         void Stop();
         std::string Log();
 
@@ -162,6 +163,9 @@ namespace rf
 
     private:
         Wmp12Look SkinLook(double position, const std::wstring& time) const;
+
+        Image skinBase_;
+        Rect skinContent_;
 
         FrameSettings frame_;
         FrameVars vars_;

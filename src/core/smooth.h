@@ -23,6 +23,7 @@ namespace rf
     void BlendPixel(Image& img, int x, int y, Color c, double cover);
     void FillRound(Image& img, const Box& b, double radius, const Shade& shade);
     void FillRound(Image& img, const Box& b, double radius, Color c);
+    void FillRoundRows(Image& img, const Box& b, double radius, const std::function<Color(double fy)>& rowColor);
     void StrokeRound(Image& img, const Box& b, double radius, double width, Color c);
     void FillDisc(Image& img, double cx, double cy, double r, const Shade& shade);
     void FillDisc(Image& img, double cx, double cy, double r, Color c);

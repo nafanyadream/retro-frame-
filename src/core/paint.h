@@ -24,6 +24,7 @@ namespace rf
     int Luminance(Color c);
 
     Image ScaleNearest(const Image& src, int factor);
+    void BlitOver(Image& dst, const Image& src, int x0, int y0);
     Image ResizeSmooth(const Image& src, int width, int height);
     Image FitInside(const Image& src, int maxWidth, int maxHeight, bool allowUpscale);
     Image Crop(const Image& src, const Rect& r);

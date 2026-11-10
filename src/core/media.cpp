@@ -4,6 +4,10 @@
 #include "wmp12.h"
 
 #include <cctype>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -159,16 +163,7 @@ namespace rf
 
         void Blit(Image& dst, const Image& src, int x0, int y0)
         {
-            const Rect r = Rect{x0, y0, src.width, src.height}.Intersect(Rect{0, 0, dst.width, dst.height});
-            for (int y = r.y; y < r.Bottom(); ++y)
-            {
-                const Color* s = src.Row(y - y0) + (r.x - x0);
-                Color* d = dst.Row(y) + r.x;
-                for (int x = 0; x < r.w; ++x)
-                {
-                    d[x] = Alpha(s[x]) == 255 ? s[x] : Opaque(Over(d[x], s[x]));
-                }
-            }
+            BlitOver(dst, src, x0, y0);
         }
 
         void Flatten(Image& img)
@@ -179,6 +174,177 @@ namespace rf
             }
         }
 
+        class FrameWriter
+        {
+        public:
+            explicit FrameWriter(Process& process) : process_(process), worker_([this]() { Run(); }) {}
+
+            ~FrameWriter() { Stop(); }
+
+            bool Push(const std::vector<Color>& pixels)
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                changed_.wait(lock, [&]() { return queue_.size() < 2 || failed_; });
+                if (failed_)
+                {
+                    return false;
+                }
+                std::vector<Color> copy;
+                if (!spare_.empty())
+                {
+                    copy = std::move(spare_.back());
+                    spare_.pop_back();
+                }
+                copy.assign(pixels.begin(), pixels.end());
+                queue_.push_back(std::move(copy));
+                changed_.notify_all();
+                return true;
+            }
+
+            bool Drain()
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                changed_.wait(lock, [&]() { return (queue_.empty() && !busy_) || failed_; });
+                return !failed_;
+            }
+
+            void Cancel()
+            {
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    stop_ = true;
+                    queue_.clear();
+                }
+                changed_.notify_all();
+            }
+
+            void Stop()
+            {
+                Cancel();
+                if (worker_.joinable())
+                {
+                    worker_.join();
+                }
+            }
+
+        private:
+            void Run()
+            {
+                for (;;)
+                {
+                    std::vector<Color> item;
+                    {
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        changed_.wait(lock, [&]() { return !queue_.empty() || stop_; });
+                        if (stop_ || queue_.empty())
+                        {
+                            return;
+                        }
+                        item = std::move(queue_.front());
+                        queue_.pop_front();
+                        busy_ = true;
+                    }
+                    const bool ok = process_.Write(item.data(), item.size() * sizeof(Color));
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        busy_ = false;
+                        if (!ok)
+                        {
+                            failed_ = true;
+                            queue_.clear();
+                        }
+                        else if (spare_.size() < 2)
+                        {
+                            spare_.push_back(std::move(item));
+                        }
+                    }
+                    changed_.notify_all();
+                    if (!ok)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            Process& process_;
+            std::mutex mutex_;
+            std::condition_variable changed_;
+            std::deque<std::vector<Color>> queue_;
+            std::vector<std::vector<Color>> spare_;
+            bool busy_ = false;
+            bool failed_ = false;
+            bool stop_ = false;
+            std::thread worker_;
+        };
+
+        class FramePrefetch
+        {
+        public:
+            explicit FramePrefetch(FrameStream& stream) : stream_(stream), worker_([this]() { Run(); }) {}
+
+            ~FramePrefetch()
+            {
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    stop_ = true;
+                }
+                changed_.notify_all();
+                stream_.Interrupt();
+                if (worker_.joinable())
+                {
+                    worker_.join();
+                }
+            }
+
+            bool Next(Image& out)
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                changed_.wait(lock, [&]() { return !queue_.empty() || ended_; });
+                if (queue_.empty())
+                {
+                    return false;
+                }
+                out = std::move(queue_.front());
+                queue_.pop_front();
+                changed_.notify_all();
+                return true;
+            }
+
+        private:
+            void Run()
+            {
+                for (;;)
+                {
+                    Image img;
+                    const bool ok = stream_.Next(img);
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    if (!ok || stop_)
+                    {
+                        ended_ = true;
+                        changed_.notify_all();
+                        return;
+                    }
+                    changed_.wait(lock, [&]() { return queue_.size() < 4 || stop_; });
+                    if (stop_)
+                    {
+                        ended_ = true;
+                        changed_.notify_all();
+                        return;
+                    }
+                    queue_.push_back(std::move(img));
+                    changed_.notify_all();
+                }
+            }
+
+            FrameStream& stream_;
+            std::mutex mutex_;
+            std::condition_variable changed_;
+            std::deque<Image> queue_;
+            bool ended_ = false;
+            bool stop_ = false;
+            std::thread worker_;
+        };
+
         void BlitVideo(Image& dst, const Image& src, int x0, int y0)
         {
             const Rect r = Rect{x0, y0, src.width, src.height}.Intersect(Rect{0, 0, dst.width, dst.height});
@@ -186,10 +352,13 @@ namespace rf
             {
                 const Color* s = src.Row(y - y0) + (r.x - x0);
                 Color* d = dst.Row(y) + r.x;
+                std::memcpy(d, s, std::size_t(r.w) * sizeof(Color));
                 for (int x = 0; x < r.w; ++x)
                 {
-                    const Color c = s[x];
-                    d[x] = Alpha(c) == 255 ? c : Opaque(Over(Rgb(0, 0, 0), c));
+                    if (Alpha(d[x]) != 255)
+                    {
+                        d[x] = Opaque(Over(Rgb(0, 0, 0), d[x]));
+                    }
                 }
             }
         }
@@ -1146,6 +1315,14 @@ namespace rf
         return Finish(out);
     }
 
+    void FrameStream::Interrupt()
+    {
+        if (proc_)
+        {
+            proc_->Kill();
+        }
+    }
+
     void FrameStream::Stop()
     {
         if (proc_)
@@ -1409,8 +1586,13 @@ namespace rf
         Image window;
         if (plan_.skin > 0)
         {
-            Rect content;
-            window = DrawWmp12(SkinLook(position, time), plan_.clientW, plan_.clientH, k, &content, nullptr);
+            if (skinBase_.Empty())
+            {
+                skinBase_ = DrawWmp12Base(SkinLook(0.0, std::wstring()), plan_.clientW, plan_.clientH, k, &skinContent_, nullptr);
+            }
+            window = skinBase_;
+            DrawWmp12Live(window, SkinLook(position, time), plan_.clientW, plan_.clientH, k);
+            const Rect content = skinContent_;
             Painter(window).Fill(Rect{content.x + (content.w - plan_.videoW) / 2, content.y + (content.h - plan_.videoH) / 2, plan_.videoW, plan_.videoH}, Rgb(0, 0, 0));
             BlitVideo(window, video, content.x + (content.w - video.width) / 2, content.y + (content.h - video.height) / 2);
         }
@@ -1498,8 +1680,8 @@ namespace rf
                     args.insert(args.end(), {L"-af", filters});
                 }
             }
-            const wchar_t* crf[] = {L"18", L"23", L"28"};
-            args.insert(args.end(), {L"-c:v", L"libx264", L"-preset", L"medium", L"-crf", crf[std::clamp(spec.quality, 0, 2)], L"-pix_fmt", L"yuv420p"});
+            const wchar_t* crf[] = {L"16", L"21", L"26"};
+            args.insert(args.end(), {L"-c:v", L"libx264", L"-preset", L"veryfast", L"-crf", crf[std::clamp(spec.quality, 0, 2)], L"-pix_fmt", L"yuv420p"});
             if (spec.audio)
             {
                 args.insert(args.end(), {L"-c:a", L"aac", L"-b:a", L"192k", L"-shortest"});
@@ -1512,8 +1694,11 @@ namespace rf
             error = L"не удалось запустить ffmpeg";
             return ExportResult::Failed;
         }
+        FrameWriter pipe(*writer);
         const auto abort = [&](ExportResult result) {
+            pipe.Cancel();
             writer->Kill();
+            pipe.Stop();
             int code = 0;
             writer->Finish(code, []() { return true; });
             host.RemoveFile(spec.output);
@@ -1532,7 +1717,7 @@ namespace rf
             {
                 break;
             }
-            if (frame->pixels.size() * sizeof(Color) != bytes || !writer->Write(frame->pixels.data(), bytes))
+            if (frame->pixels.size() * sizeof(Color) != bytes || !pipe.Push(frame->pixels))
             {
                 error = FromUtf8(LastLines(writer->Log(), 3));
                 if (error.empty())
@@ -1542,6 +1727,15 @@ namespace rf
                 return abort(ExportResult::Failed);
             }
             ++written;
+        }
+        if (!pipe.Drain())
+        {
+            error = FromUtf8(LastLines(writer->Log(), 3));
+            if (error.empty())
+            {
+                error = L"ffmpeg прервал запись";
+            }
+            return abort(ExportResult::Failed);
         }
         if (written == 0)
         {
@@ -1666,6 +1860,7 @@ namespace rf
         const std::wstring length = FormatClock(job.duration);
         Image frame;
         int outroAt = -1;
+        auto ahead = std::make_unique<FramePrefetch>(reader);
         const ExportResult result = Encode(host, spec, total, [&](int i) -> const Image* {
             if (i < intro)
             {
@@ -1677,7 +1872,7 @@ namespace rf
             }
             if (outroAt < 0)
             {
-                if (reader.Next(frame))
+                if (ahead->Next(frame))
                 {
                     const double t = (i - intro) / fps;
                     return &composer.Compose(frame, job.duration > 0.0 ? t / job.duration : 0.0, FormatClock(t) + L" / " + length, t, i, true);
@@ -1703,6 +1898,7 @@ namespace rf
             }
             return &composer.Outro((i - outroAt) / fps, i);
         }, step, error);
+        ahead.reset();
         reader.Stop();
         return result;
     }
